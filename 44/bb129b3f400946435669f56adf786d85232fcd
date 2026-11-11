@@ -1,0 +1,20 @@
+Cargo.lock
+  h_a09932ba751076 1773
+helix-view/Cargo.toml
+  h_a09932ba751076 53
+helix-view/src/editor.rs
+  h_a09932ba751076 13,1364-1365,1495
+helix-view/src/session.rs
+  h_a09932ba751076 1-2,6,140-224,229,272-308
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44bb129b3f400946435669f56adf786d85232fcd",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
