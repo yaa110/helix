@@ -209,4 +209,22 @@ mod tests {
         let default_keys = Config::default().keys;
         assert_eq!(default_keys, keymap::default());
     }
+
+    #[test]
+    fn parses_session_and_sidebar_config() {
+        let config = Config::load_test(
+            r#"
+            [editor]
+            restore-session = false
+            [editor.sidebar]
+            width = 24
+            min-width = 18
+            max-width = 40
+            "#,
+        );
+        assert!(!config.editor.restore_session);
+        assert_eq!(config.editor.sidebar.width, 24);
+        assert_eq!(config.editor.sidebar.min_width, 18);
+        assert_eq!(config.editor.sidebar.max_width, 40);
+    }
 }

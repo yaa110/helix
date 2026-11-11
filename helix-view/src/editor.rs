@@ -10,6 +10,7 @@ use crate::{
     info::Info,
     input::KeyEvent,
     register::Registers,
+    sidebar::{SidebarConfig, SidebarState},
     theme::{self, Theme},
     tree::{self, Tree},
     view::Jump,
@@ -435,6 +436,11 @@ pub struct Config {
     pub buffer_picker: BufferPickerConfig,
     /// Workspace-trust configuration.
     pub workspace_trust: WorkspaceTrustConfig,
+    /// Restore the previous buffer set, selections, and scroll positions when
+    /// starting in a workspace. Defaults to `true`.
+    pub restore_session: bool,
+    /// Left sidebar layout configuration.
+    pub sidebar: SidebarConfig,
 }
 
 /// User-facing configuration for `[editor.workspace-trust]`.
@@ -1216,6 +1222,8 @@ impl Default for Config {
             kitty_keyboard_protocol: Default::default(),
             buffer_picker: BufferPickerConfig::default(),
             workspace_trust: WorkspaceTrustConfig::default(),
+            restore_session: true,
+            sidebar: SidebarConfig::default(),
         }
     }
 }
@@ -1319,6 +1327,15 @@ pub struct Editor {
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
     pub workspace_trust: WorkspaceTrust,
+    /// Root used for the file tree, search, and session identity.
+    pub workspace_root: PathBuf,
+    /// Shared sidebar state (mode, focus, width, expansion, search inputs).
+    pub sidebar: SidebarState,
+    /// Set by document/focus events; the application persists the session when
+    /// this is set and the idle/exit conditions allow.
+    pub session_dirty: bool,
+    /// Whether session restore/save is active for this launch.
+    pub session_active: bool,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1444,6 +1461,10 @@ impl Editor {
             cursor_cache: CursorCache::default(),
             dir_stack: VecDeque::with_capacity(DIR_STACK_CAP),
             workspace_trust,
+            workspace_root: PathBuf::new(),
+            sidebar: SidebarState::default(),
+            session_dirty: false,
+            session_active: false,
         }
     }
 
