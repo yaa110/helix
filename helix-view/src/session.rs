@@ -1,11 +1,14 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use helix_core::RopeSlice;
+use helix_core::{Range, RopeSlice, Selection, SmallVec};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::editor::Action;
 use crate::sidebar::{SearchInputs, SidebarConfig, SidebarMode};
+use crate::view::ViewPosition;
+use crate::{DocumentId, Editor};
 
 pub const SESSION_VERSION: u32 = 1;
 
@@ -220,6 +223,209 @@ impl SessionStore {
             Err(err) => Err(err.into()),
         }
     }
+}
+
+fn encode_path(root: &Path, path: &Path) -> PathBuf {
+    path.strip_prefix(root)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn decode_path(root: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    }
+}
+
+/// Snapshot the current editor state for session persistence.
+pub fn collect(editor: &Editor) -> Session {
+    let workspace = editor.workspace_root.clone();
+    let (view_id, focused) = {
+        let (view, doc) = crate::current_ref!(editor);
+        (
+            view.id,
+            doc.path().map(|path| encode_path(&workspace, path)),
+        )
+    };
+
+    let mut buffers = Vec::new();
+    for doc in editor.documents() {
+        let Some(path) = doc.path() else {
+            continue;
+        };
+        let text = doc.text().slice(..);
+        let (selections, primary, scroll) = match doc.selections().get(&view_id) {
+            Some(selection) => {
+                let selections = selection
+                    .ranges()
+                    .iter()
+                    .map(|range| SelectionState {
+                        anchor: encode_point(text, range.anchor),
+                        head: encode_point(text, range.head),
+                    })
+                    .collect();
+                let offset = doc.view_offset(view_id);
+                let anchor_line = text.char_to_line(offset.anchor.min(text.len_chars()));
+                (
+                    selections,
+                    selection.primary_index(),
+                    ScrollState {
+                        anchor_line,
+                        vertical_offset: offset.vertical_offset,
+                        horizontal_offset: offset.horizontal_offset,
+                    },
+                )
+            }
+            None => (
+                vec![SelectionState {
+                    anchor: Point { line: 0, col: 0 },
+                    head: Point { line: 0, col: 0 },
+                }],
+                0,
+                ScrollState::default(),
+            ),
+        };
+
+        buffers.push(BufferState {
+            path: encode_path(&workspace, path),
+            selections,
+            primary,
+            scroll,
+        });
+    }
+
+    Session {
+        version: SESSION_VERSION,
+        workspace,
+        focused,
+        buffers,
+        sidebar: SidebarSession {
+            mode: editor.sidebar.mode,
+            width: editor.sidebar.width,
+            expanded: editor
+                .sidebar
+                .expanded
+                .iter()
+                .map(|path| encode_path(&editor.workspace_root, path))
+                .collect(),
+            selected: editor
+                .sidebar
+                .selected
+                .as_ref()
+                .map(|path| encode_path(&editor.workspace_root, path)),
+        },
+        search: editor.sidebar.search.clone(),
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RestoreOutcome {
+    pub restored: usize,
+    pub skipped: Vec<PathBuf>,
+}
+
+/// Restore buffers, selections, scroll, and sidebar state from a session.
+pub fn restore(editor: &mut Editor, session: &Session) -> RestoreOutcome {
+    let mut outcome = RestoreOutcome::default();
+    let mut restored: Vec<(DocumentId, &BufferState)> = Vec::new();
+
+    // `restore` may run before Application creates the initial scratch view.
+    let scratch = if editor.tree.views().next().is_none() {
+        Some(editor.new_file(Action::VerticalSplit))
+    } else {
+        None
+    };
+
+    for buffer in &session.buffers {
+        let path = decode_path(&editor.workspace_root, &buffer.path);
+        if !path.exists() {
+            outcome.skipped.push(path);
+            continue;
+        }
+        match editor.open(&path, Action::Load) {
+            Ok(doc_id) => {
+                outcome.restored += 1;
+                restored.push((doc_id, buffer));
+            }
+            Err(_) => outcome.skipped.push(path),
+        }
+    }
+
+    if outcome.restored > 0 {
+        if let Some(scratch) = scratch {
+            let _ = editor.close_document(scratch, true);
+        }
+    }
+
+    let view_id = crate::view!(editor).id;
+    for (doc_id, buffer) in &restored {
+        let doc = crate::doc_mut!(editor, doc_id);
+        let (selection, offset) = {
+            let text = doc.text().slice(..);
+            let ranges: SmallVec<[Range; 1]> = buffer
+                .selections
+                .iter()
+                .map(|selection| {
+                    Range::new(
+                        decode_point(text, selection.anchor),
+                        decode_point(text, selection.head),
+                    )
+                })
+                .collect();
+            let primary = buffer
+                .primary
+                .min(ranges.len().saturating_sub(1));
+            let anchor = text.line_to_char(
+                buffer
+                    .scroll
+                    .anchor_line
+                    .min(text.len_lines().saturating_sub(1)),
+            );
+            (
+                Selection::new(ranges, primary),
+                ViewPosition {
+                    anchor,
+                    vertical_offset: buffer.scroll.vertical_offset,
+                    horizontal_offset: buffer.scroll.horizontal_offset,
+                },
+            )
+        };
+        doc.set_selection(view_id, selection);
+        doc.set_view_offset(view_id, offset);
+    }
+
+    let focused_id = session
+        .focused
+        .as_ref()
+        .map(|path| decode_path(&editor.workspace_root, path))
+        .and_then(|path| editor.document_id_by_path(&path))
+        .or_else(|| restored.first().map(|(id, _)| *id));
+    if let Some(doc_id) = focused_id {
+        editor.switch(doc_id, Action::Load);
+    }
+
+    editor.sidebar.mode = session.sidebar.mode;
+    editor.sidebar.width = session.sidebar.width;
+    editor.sidebar.expanded = session
+        .sidebar
+        .expanded
+        .iter()
+        .map(|path| decode_path(&editor.workspace_root, path))
+        .collect();
+    editor.sidebar.selected = session
+        .sidebar
+        .selected
+        .as_ref()
+        .map(|path| decode_path(&editor.workspace_root, path));
+    editor.sidebar.search = session.search.clone();
+
+    // Do not call `ensure_cursor_in_view` here: it would re-scroll to satisfy
+    // scrolloff and override the saved viewport. The saved selection and
+    // viewport were captured together and are consistent.
+
+    outcome
 }
 
 #[cfg(test)]

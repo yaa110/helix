@@ -13,6 +13,7 @@ use helix_view::{
     current_ref, doc,
     editor::{LspConfig, WordCompletion, WorkspaceTrustConfig},
     input::parse_macro,
+    session::SessionStore,
     Editor,
 };
 use tempfile::NamedTempFile;
@@ -322,6 +323,8 @@ pub fn test_editor_config() -> helix_view::editor::Config {
             level: helix_loader::workspace_trust::ImplicitTrustLevel::Insecure,
             ..Default::default()
         },
+        // Tests must not read or write the developer's real session store.
+        restore_session: false,
         ..Default::default()
     }
 }
@@ -354,6 +357,7 @@ pub struct AppBuilder {
     config: Config,
     syn_loader: helix_core::syntax::Loader,
     input: Option<(String, Selection)>,
+    session_store: Option<SessionStore>,
 }
 
 impl Default for AppBuilder {
@@ -363,6 +367,7 @@ impl Default for AppBuilder {
             config: test_config(),
             syn_loader: test_syntax_loader(None),
             input: None,
+            session_store: None,
         }
     }
 }
@@ -398,6 +403,18 @@ impl AppBuilder {
         self
     }
 
+    pub fn with_session_store(mut self, store: SessionStore) -> Self {
+        self.session_store = Some(store);
+        self
+    }
+
+    /// Treat `dir` as the workspace root by passing it as the first CLI file
+    /// argument (Helix's "open a directory" path).
+    pub fn with_workspace_dir<P: Into<PathBuf>>(mut self, dir: P) -> Self {
+        self.args.files.insert(dir.into(), Vec::new());
+        self
+    }
+
     pub fn with_lang_loader(mut self, syn_loader: helix_core::syntax::Loader) -> Self {
         self.syn_loader = syn_loader;
         self
@@ -408,16 +425,21 @@ impl AppBuilder {
             bail!("Changing the working directory to {path:?} is not yet supported for integration tests");
         }
 
-        if let Some((path, _)) = self.args.files.first().filter(|p| p.0.is_dir()) {
-            bail!("Having the directory {path:?} in args.files[0] is not yet supported for integration tests");
-        }
-
-        let mut app = Application::new(
-            self.args,
-            self.config,
-            self.syn_loader,
-            WorkspaceTrust::fully_trusted(),
-        )?;
+        let mut app = match self.session_store {
+            Some(store) => Application::new_with_session_store(
+                self.args,
+                self.config,
+                self.syn_loader,
+                WorkspaceTrust::fully_trusted(),
+                store,
+            )?,
+            None => Application::new(
+                self.args,
+                self.config,
+                self.syn_loader,
+                WorkspaceTrust::fully_trusted(),
+            )?,
+        };
 
         if let Some((text, selection)) = self.input {
             let (view, doc) = helix_view::current!(app.editor);

@@ -12,6 +12,7 @@ use helix_view::{
     document::{DocumentOpenError, DocumentSavedEventResult},
     editor::{ConfigEvent, EditorEvent},
     graphics::Rect,
+    session::SessionStore,
     theme,
     tree::Layout,
     Align, Editor,
@@ -90,6 +91,16 @@ fn setup_integration_logging() {
     crate::logging::init_stdout(level);
 }
 
+fn workspace_root_from_args(args: &Args) -> std::path::PathBuf {
+    if let Some(dir) = args.files.keys().next().filter(|path| path.is_dir()) {
+        return helix_stdx::path::canonicalize(dir);
+    }
+    if let Some(dir) = &args.working_directory {
+        return helix_stdx::path::canonicalize(dir);
+    }
+    helix_loader::find_workspace().0
+}
+
 impl Application {
     pub fn new(
         args: Args,
@@ -97,10 +108,31 @@ impl Application {
         lang_loader: syntax::Loader,
         workspace_trust: helix_loader::workspace_trust::WorkspaceTrust,
     ) -> Result<Self, Error> {
+        Self::new_with_session_store(
+            args,
+            config,
+            lang_loader,
+            workspace_trust,
+            SessionStore::default(),
+        )
+    }
+
+    pub fn new_with_session_store(
+        args: Args,
+        config: Config,
+        lang_loader: syntax::Loader,
+        workspace_trust: helix_loader::workspace_trust::WorkspaceTrust,
+        session_store: SessionStore,
+    ) -> Result<Self, Error> {
         #[cfg(feature = "integration")]
         setup_integration_logging();
 
         use helix_view::editor::Action;
+
+        let workspace_root = workspace_root_from_args(&args);
+        let session_active =
+            args.files.is_empty() || args.files.keys().next().is_some_and(|path| path.is_dir());
+        let restore_enabled = config.editor.restore_session && !args.load_tutor;
 
         let mut theme_parent_dirs = vec![helix_loader::config_dir()];
         theme_parent_dirs.extend(helix_loader::runtime_dirs().iter().cloned());
@@ -133,6 +165,30 @@ impl Application {
         );
         Self::load_configured_theme(&mut editor, &config.load(), &mut terminal, theme_mode);
 
+        editor.workspace_root = workspace_root;
+        editor.session_store = session_store;
+        editor.session_active = session_active;
+
+        let mut restored_buffers = 0;
+        let mut session_loaded = false;
+        if session_active && restore_enabled {
+            if let Some(session) = editor.session_store.load(&editor.workspace_root) {
+                session_loaded = true;
+                let outcome = helix_view::session::restore(&mut editor, &session);
+                restored_buffers = outcome.restored;
+                if !outcome.skipped.is_empty() {
+                    editor.set_status(format!(
+                        "restored {} buffers ({} missing files skipped)",
+                        outcome.restored,
+                        outcome.skipped.len()
+                    ));
+                } else if outcome.restored > 0 {
+                    editor.set_status(format!("restored {} buffers", outcome.restored));
+                }
+            }
+            editor.session_dirty = false;
+        }
+
         let keys = Box::new(Map::new(Arc::clone(&config), |config: &Config| {
             &config.keys
         }));
@@ -149,10 +205,13 @@ impl Application {
         } else if !args.files.is_empty() {
             let mut files_it = args.files.into_iter().peekable();
 
-            // If the first file is a directory, skip it and open a picker
+            // If the first file is a directory, skip it and open a picker.
+            // When a session restored buffers, keep the restored workspace instead.
             if let Some((first, _)) = files_it.next_if(|(p, _)| p.is_dir()) {
-                let picker = ui::file_picker(&editor, first);
-                compositor.push(Box::new(overlaid(picker)));
+                if restored_buffers == 0 {
+                    let picker = ui::file_picker(&editor, first);
+                    compositor.push(Box::new(overlaid(picker)));
+                }
             }
 
             // If there are any more files specified, open them
@@ -221,12 +280,12 @@ impl Application {
                     let (view, doc) = current!(editor);
                     align_view(doc, view, Align::Center);
                 }
-            } else {
+            } else if restored_buffers == 0 && !session_loaded {
                 editor.new_file(Action::VerticalSplit);
             }
-        } else if stdin().is_terminal() || cfg!(feature = "integration") {
+        } else if !session_loaded && (stdin().is_terminal() || cfg!(feature = "integration")) {
             editor.new_file(Action::VerticalSplit);
-        } else {
+        } else if !session_loaded {
             editor
                 .new_file_from_stdin(Action::VerticalSplit)
                 .unwrap_or_else(|_| editor.new_file(Action::VerticalSplit));

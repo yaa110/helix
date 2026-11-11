@@ -10,7 +10,7 @@ use crate::{
     info::Info,
     input::KeyEvent,
     register::Registers,
-    session::SessionStore,
+    session::{self, SessionStore},
     sidebar::{SidebarConfig, SidebarState},
     theme::{self, Theme},
     tree::{self, Tree},
@@ -1516,6 +1516,28 @@ impl Editor {
             old: old_config,
             new: &config,
         })
+    }
+
+    /// Persist this workspace's session using the configured store.
+    pub fn save_session(&self) -> anyhow::Result<()> {
+        if !self.session_active || self.workspace_root.as_os_str().is_empty() {
+            return Ok(());
+        }
+        self.session_store.save(&session::collect(self))
+    }
+
+    /// Remove the saved session for this workspace.
+    pub fn clear_session(&self) -> anyhow::Result<()> {
+        self.session_store.clear(&self.workspace_root)
+    }
+
+    /// Automatic save path: only writes when `restore-session` is enabled.
+    pub fn save_session_if_active(&self) -> anyhow::Result<()> {
+        if self.config().restore_session {
+            self.save_session()
+        } else {
+            Ok(())
+        }
     }
 
     pub fn clear_idle_timer(&mut self) {
