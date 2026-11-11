@@ -1,0 +1,14 @@
+docs/superpowers/specs/2026-11-11-helix-vscode-parity-design.md
+  h_a09932ba751076 1-598
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e74971e4ae20b2965a170ee36025e12a2f819000",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
