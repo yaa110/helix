@@ -80,6 +80,7 @@ pub struct Application {
     lsp_progress: LspProgressMap,
 
     theme_mode: Option<theme::Mode>,
+    last_session_save: std::time::Instant,
 }
 
 #[cfg(feature = "integration")]
@@ -312,6 +313,7 @@ impl Application {
             jobs,
             lsp_progress: LspProgressMap::new(),
             theme_mode,
+            last_session_save: std::time::Instant::now(),
         };
 
         Ok(app)
@@ -642,6 +644,15 @@ impl Application {
             scroll: None,
         };
         let should_render = self.compositor.handle_event(&Event::IdleTimeout, &mut cx);
+
+        if self.editor.session_dirty && self.last_session_save.elapsed().as_secs() >= 5 {
+            if let Err(err) = self.editor.save_session_if_active() {
+                log::warn!("failed to save session: {err}");
+            }
+            self.editor.session_dirty = false;
+            self.last_session_save = std::time::Instant::now();
+        }
+
         if should_render || self.editor.needs_redraw {
             self.render().await;
         }
@@ -1419,6 +1430,10 @@ impl Application {
         }
 
         self.editor.close_language_servers(None).await;
+
+        if let Err(err) = self.editor.save_session_if_active() {
+            log::warn!("failed to save session: {err}");
+        }
 
         errs
     }

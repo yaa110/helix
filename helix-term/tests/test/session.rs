@@ -57,3 +57,33 @@ async fn restore_round_trip_preserves_buffers_and_positions() -> anyhow::Result<
     );
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn close_writes_session_and_explicit_files_do_not() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("one.txt");
+    std::fs::write(&file, "one\n")?;
+    let store = SessionStore::new(dir.path().join("state"));
+
+    let mut app = helpers::AppBuilder::new()
+        .with_session_store(store.clone())
+        .with_workspace_dir(dir.path())
+        .with_config(session_config())
+        .build()?;
+    app.editor.open(&file, Action::Load)?;
+    app.close().await;
+    assert!(store.load(dir.path()).is_some());
+
+    let other = tempfile::tempdir()?;
+    let file = other.path().join("two.txt");
+    std::fs::write(&file, "two\n")?;
+    let store2 = SessionStore::new(other.path().join("state"));
+    let mut app = helpers::AppBuilder::new()
+        .with_session_store(store2.clone())
+        .with_file(&file, None)
+        .with_config(session_config())
+        .build()?;
+    app.close().await;
+    assert!(store2.load(other.path()).is_none());
+    Ok(())
+}
