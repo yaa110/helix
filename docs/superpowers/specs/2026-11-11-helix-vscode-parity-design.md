@@ -43,7 +43,7 @@ Application (helix-term)
  │    ├── sidebar: SidebarState        // mode, width, focus, expanded dirs, search inputs
  │    └── reload_conflicts: map<DocumentId, ReloadConflict>
  ├── FileWatcher service (helix-term)  // one OS watcher, debounced, ref-counted dirs
- ├── SessionStore (helix-term)         // load on startup, save on exit/focus/doc events
+ ├── SessionStore (helix-view)         // owned by Editor; load on startup, save on exit/focus/doc events
  └── Compositor
       └── EditorView (helix-term)
            ├── Sidebar component        // Files | Search | Hidden
@@ -179,10 +179,11 @@ Saving never runs when explicit file arguments were used, to avoid clobbering th
 
 ### Files
 
-- New: `helix-term/src/session.rs` (schema, hashing, atomic read/write, collect/restore).
-- `helix-term/src/application.rs`: workspace-root capture, startup restore, exit/signal save.
-- `helix-view/src/editor.rs`: `workspace_root`, `sidebar` state (empty until phase 3), session-related helpers.
-- `helix-term/Cargo.toml`: `sha2`, `tempfile` (workspace deps).
+- New: `helix-view/src/session.rs` (schema, store, hashing, atomic read/write, collect/restore). It lives in `helix-view` because typed commands reach it through `Editor`.
+- `helix-view/src/editor.rs`: `workspace_root`, `session_store`, `session_active`, `session_dirty`, session-related helpers.
+- `helix-view/Cargo.toml`: `sha2` (`tempfile` is already a dependency).
+- `helix-term/src/application.rs`: workspace-root capture, startup restore, exit/signal save, test-injectable session store.
+- `helix-term/src/events.rs`: mark `session_dirty` on open/close/focus-loss.
 - `book/src/configuration.md`, `book/src/commands.md`: document the config and commands.
 
 ### Tests
@@ -398,7 +399,7 @@ Persist `mode` (if not `Hidden`), `width`, `expanded`, and `selected` in the ses
 - `helix-view/src/editor.rs`: `SidebarState`, `SidebarConfig`, workspace root usage.
 - `helix-term/src/commands.rs`: toggle/focus commands, `<space>B` buffer picker.
 - `helix-term/src/keymap/default.rs`: bindings.
-- `helix-term/src/session.rs`: sidebar fields.
+- `helix-view/src/session.rs`: sidebar fields.
 - `runtime/themes` and `theme.toml`: documented theme keys with fallbacks.
 - Docs: keymap, configuration.
 
@@ -519,7 +520,7 @@ Results are a snapshot of the text at query time. External file changes do not l
 - New: `helix-term/src/ui/text_input.rs` (reusable single-line input for the search fields).
 - `helix-term/src/commands.rs`: replace current match, replace all, next/previous, open-at-match helpers; typed commands `:search-replace-all` and `:search-replace-current`; repurpose `<space>/` from the picker to the sidebar Search pane. The old picker remains available as `:global-search`.
 - `helix-term/src/keymap/default.rs`: bindings; `<space>B` buffer picker.
-- `helix-term/src/session.rs`: search fields.
+- `helix-view/src/session.rs`: search fields.
 - `helix-term/Cargo.toml`: `regex` if not already a direct dependency.
 - Docs: keymap, commands, configuration.
 
