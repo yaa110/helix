@@ -1,3 +1,4 @@
+use helix_term::application::Application;
 use helix_view::editor::Action;
 use helix_view::session::{self, SessionStore};
 use helix_view::view::ViewPosition;
@@ -85,5 +86,32 @@ async fn close_writes_session_and_explicit_files_do_not() -> anyhow::Result<()> 
         .build()?;
     app.close().await;
     assert!(store2.load(other.path()).is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn session_commands_save_and_clear() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let store = SessionStore::new(dir.path().join("state"));
+    let mut app = helpers::AppBuilder::new()
+        .with_session_store(store.clone())
+        .with_config(session_config())
+        .build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+    app.editor.session_active = true;
+
+    let check_saved = |_app: &Application| assert!(store.load(dir.path()).is_some());
+    let check_cleared = |_app: &Application| assert!(store.load(dir.path()).is_none());
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (Some(":session-save<ret>"), Some(&check_saved)),
+            (Some(":session-clear<ret>"), Some(&check_cleared)),
+            (Some(":q!<ret>"), None),
+        ],
+        true,
+    )
+    .await?;
     Ok(())
 }

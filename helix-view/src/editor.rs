@@ -1520,7 +1520,10 @@ impl Editor {
 
     /// Persist this workspace's session using the configured store.
     pub fn save_session(&self) -> anyhow::Result<()> {
-        if !self.session_active || self.workspace_root.as_os_str().is_empty() {
+        if !self.session_active
+            || self.workspace_root.as_os_str().is_empty()
+            || self.tree.views().next().is_none()
+        {
             return Ok(());
         }
         self.session_store.save(&session::collect(self))

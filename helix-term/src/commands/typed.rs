@@ -121,6 +121,7 @@ fn quit(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow
     }
 
     cx.block_try_flush_writes()?;
+    cx.editor.save_session_if_active()?;
     cx.editor.close(view!(cx.editor).id);
 
     Ok(())
@@ -132,6 +133,7 @@ fn force_quit(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
     }
 
     cx.block_try_flush_writes()?;
+    cx.editor.save_session_if_active()?;
     cx.editor.close(view!(cx.editor).id);
 
     Ok(())
@@ -1039,6 +1041,7 @@ fn quit_all_impl(cx: &mut compositor::Context, force: bool) -> anyhow::Result<()
     if !force {
         buffers_remaining_impl(cx.editor)?;
     }
+    cx.editor.save_session_if_active()?;
 
     // close all views
     let views: Vec<_> = cx.editor.tree.views().map(|(view, _)| view.id).collect();
@@ -1573,6 +1576,26 @@ fn get_character_info(
     cx.editor
         .set_status(format!("\"{printable}\"{unicode}{dec} Hex{hex}"));
 
+    Ok(())
+}
+
+/// Persist the current workspace session.
+fn session_save(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    cx.editor.save_session()?;
+    cx.editor.set_status("session saved");
+    Ok(())
+}
+
+/// Remove the saved session for the current workspace.
+fn session_clear(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    cx.editor.clear_session()?;
+    cx.editor.set_status("session cleared");
     Ok(())
 }
 
@@ -3582,6 +3605,28 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         aliases: &["char"],
         doc: "Get info about the character under the primary cursor.",
         fun: get_character_info,
+        completer: CommandCompleter::none(),
+        signature: Signature {
+            positionals: (0, Some(0)),
+            ..Signature::DEFAULT
+        },
+    },
+    TypableCommand {
+        name: "session-save",
+        aliases: &[],
+        doc: "Save the current workspace session.",
+        fun: session_save,
+        completer: CommandCompleter::none(),
+        signature: Signature {
+            positionals: (0, Some(0)),
+            ..Signature::DEFAULT
+        },
+    },
+    TypableCommand {
+        name: "session-clear",
+        aliases: &[],
+        doc: "Remove the saved session for the current workspace.",
+        fun: session_clear,
         completer: CommandCompleter::none(),
         signature: Signature {
             positionals: (0, Some(0)),
