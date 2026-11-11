@@ -1,7 +1,9 @@
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use helix_core::RopeSlice;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::sidebar::{SearchInputs, SidebarConfig, SidebarMode};
 
@@ -135,10 +137,96 @@ pub fn decode_point(text: RopeSlice<'_>, point: Point) -> usize {
     start + point.col.min(end - start)
 }
 
+/// Persistent per-workspace session storage.
+#[derive(Clone, Debug)]
+pub struct SessionStore {
+    dir: PathBuf,
+}
+
+impl Default for SessionStore {
+    fn default() -> Self {
+        Self {
+            dir: helix_loader::data_dir().join("sessions"),
+        }
+    }
+}
+
+impl SessionStore {
+    pub fn new(dir: PathBuf) -> Self {
+        Self { dir }
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    pub fn path_for(&self, workspace: &Path) -> PathBuf {
+        let mut hasher = Sha256::new();
+        hasher.update(workspace.as_os_str().to_string_lossy().as_bytes());
+        let digest = hasher.finalize();
+        let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        self.dir.join(format!("{hex}.json"))
+    }
+
+    pub fn save(&self, session: &Session) -> anyhow::Result<()> {
+        std::fs::create_dir_all(&self.dir)?;
+        let path = self.path_for(&session.workspace);
+        let mut tmp = tempfile::NamedTempFile::new_in(&self.dir)?;
+        serde_json::to_writer_pretty(&mut tmp, session)?;
+        tmp.flush()?;
+        tmp.as_file().sync_all()?;
+
+        #[cfg(windows)]
+        if path.exists() {
+            // Windows cannot atomically replace an existing file with rename.
+            std::fs::remove_file(&path)?;
+        }
+        tmp.persist(&path).map_err(|err| err.error)?;
+        Ok(())
+    }
+
+    pub fn load(&self, workspace: &Path) -> Option<Session> {
+        let path = self.path_for(workspace);
+        let contents = match std::fs::read_to_string(&path) {
+            Ok(contents) => contents,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(err) => {
+                log::warn!("failed to read session {:?}: {err}", path);
+                return None;
+            }
+        };
+
+        let parsed = serde_json::from_str::<Session>(&contents)
+            .ok()
+            .filter(|session| session.version == SESSION_VERSION);
+        if parsed.is_some() {
+            return parsed;
+        }
+
+        let backup = path.with_extension("json.bak");
+        if let Err(err) = std::fs::rename(&path, &backup) {
+            log::warn!("failed to back up corrupt session {:?}: {err}", path);
+        } else {
+            log::warn!("ignored corrupt session {:?} (backed up to {:?})", path, backup);
+        }
+        None
+    }
+
+    pub fn clear(&self, workspace: &Path) -> anyhow::Result<()> {
+        let path = self.path_for(workspace);
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use helix_core::Rope;
+    use std::path::Path;
 
     #[test]
     fn point_round_trip_handles_unicode_and_clamping() {
@@ -180,5 +268,42 @@ mod tests {
         };
         let json = serde_json::to_string(&session).unwrap();
         assert_eq!(serde_json::from_str::<Session>(&json).unwrap(), session);
+    }
+
+    #[test]
+    fn store_round_trips_and_backs_up_corrupt_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = SessionStore::new(tmp.path().to_path_buf());
+        let workspace = tmp.path().join("ws");
+        let session = Session {
+            workspace: workspace.clone(),
+            ..Session::default()
+        };
+
+        store.save(&session).unwrap();
+        assert_eq!(store.load(&workspace), Some(session));
+
+        std::fs::write(store.path_for(&workspace), b"{not json").unwrap();
+        assert_eq!(store.load(&workspace), None);
+        assert!(store.path_for(&workspace).with_extension("json.bak").exists());
+
+        store
+            .save(&Session {
+                workspace: workspace.clone(),
+                ..Session::default()
+            })
+            .unwrap();
+        store.clear(&workspace).unwrap();
+        assert!(!store.path_for(&workspace).exists());
+    }
+
+    #[test]
+    fn session_filename_is_stable_for_the_same_workspace() {
+        let store = SessionStore::new("/tmp/sessions".into());
+        let a = store.path_for(Path::new("/tmp/project"));
+        let b = store.path_for(Path::new("/tmp/project"));
+        let c = store.path_for(Path::new("/tmp/other"));
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 }

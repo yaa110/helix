@@ -10,6 +10,7 @@ use crate::{
     info::Info,
     input::KeyEvent,
     register::Registers,
+    session::SessionStore,
     sidebar::{SidebarConfig, SidebarState},
     theme::{self, Theme},
     tree::{self, Tree},
@@ -1336,6 +1337,8 @@ pub struct Editor {
     pub session_dirty: bool,
     /// Whether session restore/save is active for this launch.
     pub session_active: bool,
+    /// Per-workspace session storage.
+    pub session_store: SessionStore,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1465,6 +1468,7 @@ impl Editor {
             sidebar: SidebarState::default(),
             session_dirty: false,
             session_active: false,
+            session_store: SessionStore::default(),
         }
     }
 
