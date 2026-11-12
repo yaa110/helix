@@ -18,6 +18,7 @@ use file_tree::FileTree;
 pub struct Sidebar {
     pending_space: bool,
     tree: FileTree,
+    last_refresh_epoch: u64,
 }
 
 impl Sidebar {
@@ -25,6 +26,7 @@ impl Sidebar {
         Self {
             pending_space: false,
             tree: FileTree::new(PathBuf::new()),
+            last_refresh_epoch: 0,
         }
     }
 
@@ -32,6 +34,11 @@ impl Sidebar {
         if self.tree.root != editor.workspace_root {
             self.tree = FileTree::new(editor.workspace_root.clone());
             self.tree.rebuild(editor, &editor.sidebar);
+            self.last_refresh_epoch = editor.sidebar.refresh_epoch;
+        } else if self.last_refresh_epoch != editor.sidebar.refresh_epoch {
+            let state = editor.sidebar.clone();
+            self.tree.refresh(editor, &state);
+            self.last_refresh_epoch = editor.sidebar.refresh_epoch;
         }
     }
 

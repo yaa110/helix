@@ -11,7 +11,7 @@ use helix_view::Editor;
 use tui::buffer::Buffer as Surface;
 
 use crate::commands;
-use crate::ui;
+use crate::ui::{self, menu::Item, Select};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -175,6 +175,187 @@ impl FileTree {
         self.rows.get(self.cursor)
     }
 
+    fn target_parent(&self) -> PathBuf {
+        match self.selected_row() {
+            Some(row) if row.kind == EntryKind::Dir => row.path.clone(),
+            Some(row) => row
+                .path
+                .parent()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| self.root.clone()),
+            None => self.root.clone(),
+        }
+    }
+
+    fn mark_changed(editor: &mut Editor, path: &Path) {
+        if let Some(parent) = path.parent() {
+            editor.sidebar.refresh_dirs.insert(parent.to_path_buf());
+        }
+        editor.sidebar.refresh_epoch = editor.sidebar.refresh_epoch.wrapping_add(1);
+        editor.sidebar.selected = Some(path.to_path_buf());
+        editor.session_dirty = true;
+        editor.needs_redraw = true;
+    }
+
+    fn create(&mut self, cx: &mut commands::Context, directory: bool) {
+        let parent = self.target_parent();
+        let label = if directory {
+            "New directory:"
+        } else {
+            "New file:"
+        };
+        ui::prompt(
+            cx,
+            label.into(),
+            None,
+            |_editor, _input| Vec::new(),
+            move |cx, input, event| {
+                if event != crate::ui::PromptEvent::Validate {
+                    return;
+                }
+                let name = input.trim();
+                if name.is_empty()
+                    || name == "."
+                    || name == ".."
+                    || name.contains('/')
+                    || name.contains('\\')
+                {
+                    cx.editor.set_error("invalid name");
+                    return;
+                }
+                let path = parent.join(name);
+                let result = if directory {
+                    std::fs::create_dir(&path)
+                } else {
+                    std::fs::File::create(&path).map(|_| ())
+                };
+                match result {
+                    Ok(()) => {
+                        Self::mark_changed(cx.editor, &path);
+                        cx.editor.set_status(format!(
+                            "created {}",
+                            path.file_name().unwrap_or_default().to_string_lossy()
+                        ));
+                        if !directory {
+                            if let Err(err) = cx.editor.open(&path, Action::Replace) {
+                                cx.editor.set_error(err.to_string());
+                            }
+                        }
+                    }
+                    Err(err) => cx.editor.set_error(format!("failed to create: {err}")),
+                }
+            },
+        );
+    }
+
+    fn rename(&mut self, cx: &mut commands::Context) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        let old = row.path;
+        let name = old
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let parent = old
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| self.root.clone());
+        ui::prompt_with_input(
+            cx,
+            "Rename:".into(),
+            name,
+            None,
+            |_editor, _input| Vec::new(),
+            move |cx, input, event| {
+                if event != crate::ui::PromptEvent::Validate {
+                    return;
+                }
+                let name = input.trim();
+                if name.is_empty()
+                    || name == "."
+                    || name == ".."
+                    || name.contains('/')
+                    || name.contains('\\')
+                {
+                    cx.editor.set_error("invalid name");
+                    return;
+                }
+                let new_path = parent.join(name);
+                if new_path.exists() {
+                    cx.editor.set_error(format!("{} already exists", new_path.display()));
+                    return;
+                }
+                match std::fs::rename(&old, &new_path) {
+                    Ok(()) => {
+                        if let Some(doc_id) = cx.editor.document_id_by_path(&old) {
+                            cx.editor.set_doc_path(doc_id, &new_path);
+                        }
+                        Self::mark_changed(cx.editor, &new_path);
+                        cx.editor.set_status(format!("renamed to {}", name));
+                    }
+                    Err(err) => cx.editor.set_error(format!("failed to rename: {err}")),
+                }
+            },
+        );
+    }
+
+    fn delete(&mut self, cx: &mut commands::Context) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        let path = row.path;
+        let modified_open = cx.editor.documents().any(|doc| {
+            doc.path()
+                .is_some_and(|doc_path| doc_path.starts_with(&path) && doc.is_modified())
+        });
+        if modified_open {
+            cx.editor.set_error("refusing to delete a file with unsaved changes");
+            return;
+        }
+        let target = path.clone();
+        let select = Select::new(
+            format!("Delete {}?", path.display()),
+            [DeleteChoice::No, DeleteChoice::Yes],
+            (),
+            move |editor, choice, event| {
+                if event != crate::ui::PromptEvent::Validate || *choice != DeleteChoice::Yes {
+                    return;
+                }
+                let result = if target.is_dir() {
+                    std::fs::remove_dir_all(&target)
+                } else {
+                    std::fs::remove_file(&target)
+                };
+                match result {
+                    Ok(()) => {
+                        Self::mark_changed(editor, &target);
+                        editor.set_status("deleted");
+                    }
+                    Err(err) => editor.set_error(format!("failed to delete: {err}")),
+                }
+            },
+        );
+        cx.push_layer(Box::new(select));
+    }
+
+    fn copy_path(&mut self, cx: &mut commands::Context, relative: bool) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        let text = if relative {
+            helix_stdx::path::get_relative_path(row.path)
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            row.path.to_string_lossy().into_owned()
+        };
+        match cx.editor.registers.write('+', vec![text.clone()]) {
+            Ok(()) => cx.editor.set_status(format!("copied {text}")),
+            Err(err) => cx.editor.set_error(format!("failed to copy path: {err}")),
+        }
+    }
+
     fn select_path(&mut self, path: &Path) {
         if let Some(index) = self.rows.iter().position(|row| row.path == path) {
             self.cursor = index;
@@ -262,6 +443,12 @@ impl FileTree {
             KeyCode::Enter | KeyCode::Char('o') => self.open_selected(cx, Action::Replace),
             KeyCode::Char('s') => self.open_selected(cx, Action::HorizontalSplit),
             KeyCode::Char('v') => self.open_selected(cx, Action::VerticalSplit),
+            KeyCode::Char('a') => self.create(cx, false),
+            KeyCode::Char('A') => self.create(cx, true),
+            KeyCode::Char('r') => self.rename(cx),
+            KeyCode::Char('d') => self.delete(cx),
+            KeyCode::Char('y') => self.copy_path(cx, false),
+            KeyCode::Char('Y') => self.copy_path(cx, true),
             KeyCode::Char('g') => {
                 self.cursor = 0;
             }
@@ -333,6 +520,24 @@ impl FileTree {
             self.cursor = self.cursor.min(self.rows.len() - 1);
             self.scroll = self.scroll.min(self.cursor);
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeleteChoice {
+    No,
+    Yes,
+}
+
+impl Item for DeleteChoice {
+    type Data = ();
+
+    fn format(&self, _data: &Self::Data) -> tui::widgets::Row<'_> {
+        match self {
+            DeleteChoice::No => "No",
+            DeleteChoice::Yes => "Yes",
+        }
+        .into()
     }
 }
 

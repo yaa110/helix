@@ -80,3 +80,44 @@ async fn tree_navigation_opens_files_and_moves_focus() -> anyhow::Result<()> {
     .await?;
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn create_rename_and_delete_from_tree() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    let created = dir.path().join("new");
+    let renamed = dir.path().join("renamed");
+    let check_created = {
+        let created = created.clone();
+        move |_app: &Application| assert!(created.is_file())
+    };
+    let check_renamed = {
+        let created = created.clone();
+        let renamed = renamed.clone();
+        move |_app: &Application| {
+            assert!(renamed.is_file());
+            assert!(!created.exists());
+        }
+    };
+    let check_deleted = {
+        let renamed = renamed.clone();
+        move |_app: &Application| assert!(!renamed.exists())
+    };
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (Some("<space>ba"), None),
+            (Some("new<ret>"), Some(&check_created)),
+            (Some("r<C-u>renamed<ret>"), Some(&check_renamed)),
+            // The delete confirmation defaults to No; Tab selects Yes.
+            (Some("d<tab><ret>"), Some(&check_deleted)),
+            (Some("<esc>:q!<ret>"), None),
+        ],
+        true,
+    )
+    .await?;
+    Ok(())
+}

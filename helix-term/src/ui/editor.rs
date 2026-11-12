@@ -1510,7 +1510,23 @@ impl Component for EditorView {
                     && cx.editor.sidebar.mode != helix_view::sidebar::SidebarMode::Hidden
                 {
                     cx.editor.reset_idle_timer();
-                    return self.sidebar.handle_event(event, &mut cx);
+                    let result = self.sidebar.handle_event(event, &mut cx);
+                    let callbacks = take(&mut cx.callback);
+                    if callbacks.is_empty() {
+                        return result;
+                    }
+                    let sidebar_callback = match result {
+                        EventResult::Consumed(callback) => callback,
+                        EventResult::Ignored(callback) => callback,
+                    };
+                    return EventResult::Consumed(Some(Box::new(move |compositor, cx| {
+                        for callback in callbacks {
+                            callback(compositor, cx);
+                        }
+                        if let Some(callback) = sidebar_callback {
+                            callback(compositor, cx);
+                        }
+                    })));
                 }
 
                 let mode = cx.editor.mode();
