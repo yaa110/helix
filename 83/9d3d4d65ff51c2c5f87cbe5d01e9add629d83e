@@ -1,0 +1,38 @@
+README.md
+  h_a09932ba751076 109,122-123,129-130,154,194,228-229
+book/src/editor.md
+  h_a09932ba751076 39
+book/src/keymap.md
+  h_a09932ba751076 373,396-399
+helix-term/src/ui/document.rs
+  h_a09932ba751076 266
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 29,673,677-680,692-721,724,729,744,1753-1754,1787-1798
+helix-term/src/ui/prompt.rs
+  h_a09932ba751076 795
+helix-term/src/ui/sidebar.rs
+  h_a09932ba751076 114-117,138
+helix-term/src/ui/sidebar/file_tree.rs
+  h_a09932ba751076 137-144,146-154,156-157,280,300,305-306,308-309,311-319,334-337,340-351,367-369,375,379,393-394,403-440,1038,1117-1122,1355
+helix-term/src/ui/sidebar/search.rs
+  h_a09932ba751076 282,590,630-635
+helix-tui/src/backend/crossterm.rs
+  h_a09932ba751076 168-172,230-231
+helix-tui/src/backend/termina.rs
+  h_a09932ba751076 416
+helix-view/src/editor.rs
+  h_a09932ba751076 1217
+runtime/themes/monokai_pro_filter_spectrum.toml
+  h_a09932ba751076 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "839d3d4d65ff51c2c5f87cbe5d01e9add629d83e",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
