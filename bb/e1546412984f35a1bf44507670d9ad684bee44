@@ -1,0 +1,36 @@
+helix-term/src/commands/typed.rs
+  h_a09932ba751076 389,1690-1694,1704-1708
+helix-term/src/file_watcher.rs
+  h_a09932ba751076 7
+helix-term/src/search.rs
+  h_a09932ba751076 277
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 1684
+helix-term/src/ui/reload_conflict.rs
+  h_a09932ba751076 32,34-36,105
+helix-term/src/ui/sidebar.rs
+  h_a09932ba751076 103,136
+helix-term/src/ui/sidebar/file_tree.rs
+  h_a09932ba751076 286-287,314-315,451,497-502,506,514
+helix-term/src/ui/sidebar/search.rs
+  h_a09932ba751076 114-117,153-172,179-184,356-361,419-420,439-445,474,515-531,533-534,536,539-552,555-556,566-567
+helix-term/tests/test/reload.rs
+  h_a09932ba751076 9-10,32-33,60-61
+helix-term/tests/test/session.rs
+  h_a09932ba751076 40,48,127
+helix-view/src/editor.rs
+  h_a09932ba751076 1561-1565,1634
+helix-view/src/session.rs
+  h_a09932ba751076 213-217,381,517-520
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bbe1546412984f35a1bf44507670d9ad684bee44",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
