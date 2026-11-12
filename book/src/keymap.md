@@ -297,7 +297,8 @@ This layer is a kludge of mappings, mostly pickers.
 | `F`     | Open file picker at current working directory                           | `file_picker_in_current_directory`         |
 | `e`     | Open file explorer at workspace root                                     | `file_explorer`                            |
 | `.`     | Open file explorer at current buffer's directory                        | `file_explorer_in_current_buffer_directory`|
-| `b`     | Open buffer picker                                                      | `buffer_picker`                            |
+| `b`     | Toggle/focus the file tree sidebar                                      | `toggle_file_tree`                         |
+| `B`     | Open buffer picker                                                      | `buffer_picker`                            |
 | `j`     | Open jumplist picker                                                    | `jumplist_picker`                          |
 | `g`     | Open changed file picker                                                | `changed_file_picker`                      |
 | `G`     | Debug (experimental)                                                    | N/A                                        |
@@ -319,10 +320,33 @@ This layer is a kludge of mappings, mostly pickers.
 | `y`     | Yank selections to clipboard                                            | `yank_to_clipboard`                        |
 | `Y`     | Yank main selection to clipboard                                        | `yank_main_selection_to_clipboard`         |
 | `R`     | Replace selections by clipboard contents                                | `replace_selections_with_clipboard`        |
-| `/`     | Global search in workspace folder                                       | `global_search`                            |
+| `/`     | Open/focus the search sidebar                                           | `focus_search`                             |
 | `?`     | Open command palette                                                    | `command_palette`                          |
 
-> 💡 Global search displays results in a fuzzy picker, use `Space + '` to bring it back up after opening a file.
+##### Sidebar (file tree)
+
+`Space + b` shows the file tree and focuses it; pressing it again while the
+tree is focused hides the sidebar. `Esc`/`q` returns focus to the editor while
+keeping the sidebar visible. The old global-search picker remains available as
+`:global-search`.
+
+| Key             | Description                                      |
+| -----           | -----------                                      |
+| `j`, `k`, `Down`, `Up` | Move the selection                        |
+| `h`, `Left`     | Collapse the directory, or move to its parent    |
+| `l`, `Right`    | Expand the directory, or open the file           |
+| `Enter`, `o`    | Open the file                                    |
+| `s`, `v`        | Open in a horizontal / vertical split            |
+| `a`, `A`        | Create a file / directory                        |
+| `r`             | Rename                                           |
+| `d`             | Delete (confirmation defaults to No)             |
+| `y`, `Y`        | Copy the absolute / relative path                |
+| `g`, `G`        | First / last row                                 |
+| `Ctrl-d`, `Ctrl-u` | Move half a page                              |
+| `H`             | Collapse all                                     |
+| `R`             | Refresh the tree                                 |
+| `.`             | Reveal the current buffer                        |
+| `[`, `]`        | Shrink / grow the sidebar                        |
 
 ##### Popup
 

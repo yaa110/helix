@@ -30,6 +30,18 @@ buffers, selections, and scroll positions on startup (and automatic session
 saves on exit). The session is stored under Helix's data directory, keyed by
 the workspace path. `:session-save` and `:session-clear` control it manually.
 
+The sidebar width is configured with:
+
+```toml
+[editor.sidebar]
+width = 30
+min-width = 20
+max-width = 50
+```
+
+The sidebar is auto-hidden when the terminal cannot leave at least 40 columns
+for the editor. File-tree ignore rules reuse `[editor.file-explorer]`.
+
 You can use a custom configuration file by specifying it with the `-c` or
 `--config` command line argument, for example `hx -c path/to/custom-config.toml`.
 You can reload the config file by issuing the `:config-reload` command. Alternatively, on Unix operating systems, you can reload it by sending the USR1

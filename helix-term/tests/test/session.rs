@@ -1,6 +1,7 @@
 use helix_term::application::Application;
 use helix_view::editor::Action;
 use helix_view::session::{self, SessionStore};
+use helix_view::sidebar::SidebarMode;
 use helix_view::view::ViewPosition;
 
 use super::*;
@@ -113,5 +114,28 @@ async fn session_commands_save_and_clear() -> anyhow::Result<()> {
         true,
     )
     .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sidebar_state_round_trips() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a\n")?;
+    let mut app = helpers::AppBuilder::new()
+        .with_workspace_dir(dir.path())
+        .with_config(session_config())
+        .build()?;
+    app.editor.sidebar.mode = SidebarMode::Files;
+    app.editor.sidebar.width = 34;
+    app.editor
+        .sidebar
+        .expanded
+        .insert(dir.path().to_path_buf());
+    app.editor.sidebar.selected = Some(dir.path().join("a.txt"));
+
+    let saved = helix_view::session::collect(&app.editor);
+    assert_eq!(saved.sidebar.width, 34);
+    assert_eq!(saved.sidebar.mode, SidebarMode::Files);
+    assert!(saved.sidebar.selected.is_some());
     Ok(())
 }
