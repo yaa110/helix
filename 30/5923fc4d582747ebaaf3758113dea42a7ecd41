@@ -1,0 +1,38 @@
+.github/workflows/release.yml
+  h_a09932ba751076 2-5,9,12,14-16,19-20,23-24,26-28,30,32,37-39,42,45-52,54,56-58,60,65,67-68,70-72,77,80-88,90,93,95-102,105,107-108,110-111,113,115-117
+Cargo.lock
+  h_a09932ba751076 81-86,1687,1703,1808-1813
+Formula/helix.rb
+  h_a09932ba751076 1-28
+README.md
+  h_a09932ba751076 51-52,56-110,113-114,348-364
+book/src/keymap.md
+  h_a09932ba751076 292-293,314
+helix-term/Cargo.toml
+  h_a09932ba751076 77-78
+helix-term/src/commands.rs
+  h_a09932ba751076 413,3317-3592,3619
+helix-term/src/keymap/default.rs
+  h_a09932ba751076 65,240
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 1522
+helix-term/src/ui/sidebar.rs
+  h_a09932ba751076 89-94,145-154
+helix-term/tests/test/search.rs
+  h_a09932ba751076 99-116
+helix-view/src/sidebar.rs
+  h_a09932ba751076 74-75,90
+install.sh
+  h_a09932ba751076 1-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "305923fc4d582747ebaaf3758113dea42a7ecd41",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}

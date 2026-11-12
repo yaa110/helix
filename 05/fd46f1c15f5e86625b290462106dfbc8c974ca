@@ -1,0 +1,24 @@
+helix-term/src/application.rs
+  h_a09932ba751076 15,94-103,110-125,132-136,168-191,208-209,211-214,283,286,288
+helix-term/tests/integration.rs
+  h_a09932ba751076 22
+helix-term/tests/test/helpers.rs
+  h_a09932ba751076 16,326-327,360,370,406-417,428-442
+helix-term/tests/test/session.rs
+  h_a09932ba751076 1-59
+helix-view/src/editor.rs
+  h_a09932ba751076 13,1521-1542
+helix-view/src/session.rs
+  h_a09932ba751076 4,8,10-11,228-430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "05fd46f1c15f5e86625b290462106dfbc8c974ca",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}

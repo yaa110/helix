@@ -1,0 +1,20 @@
+Cargo.lock
+  h_a09932ba751076 1707
+helix-term/Cargo.toml
+  h_a09932ba751076 76
+helix-term/src/lib.rs
+  h_a09932ba751076 15
+helix-term/src/search.rs
+  h_a09932ba751076 1-315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "79c3215ab6504881958a2d774071507ada7d8491",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
