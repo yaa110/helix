@@ -442,6 +442,10 @@ pub struct Config {
     pub restore_session: bool,
     /// Left sidebar layout configuration.
     pub sidebar: SidebarConfig,
+    /// Reload open documents when they change on disk. Defaults to `true`.
+    pub auto_reload: bool,
+    /// Debounce window in milliseconds for filesystem events. Defaults to 300.
+    pub auto_reload_debounce: u64,
 }
 
 /// User-facing configuration for `[editor.workspace-trust]`.
@@ -1225,6 +1229,8 @@ impl Default for Config {
             workspace_trust: WorkspaceTrustConfig::default(),
             restore_session: true,
             sidebar: SidebarConfig::default(),
+            auto_reload: true,
+            auto_reload_debounce: 300,
         }
     }
 }

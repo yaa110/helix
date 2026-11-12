@@ -323,8 +323,10 @@ pub fn test_editor_config() -> helix_view::editor::Config {
             level: helix_loader::workspace_trust::ImplicitTrustLevel::Insecure,
             ..Default::default()
         },
-        // Tests must not read or write the developer's real session store.
+        // Tests must not read or write the developer's real session store,
+        // and should not start OS file watchers.
         restore_session: false,
+        auto_reload: false,
         ..Default::default()
     }
 }

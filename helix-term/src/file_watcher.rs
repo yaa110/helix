@@ -1,0 +1,150 @@
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::time::Duration;
+
+use helix_view::sidebar::SidebarMode;
+use helix_view::Editor;
+use notify::{RecursiveMode, RecommendedWatcher};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+/// A single debounced OS watcher shared by auto-reload and tree refresh.
+pub struct FileWatcher {
+    debouncer: Debouncer<RecommendedWatcher>,
+    tx: UnboundedSender<Vec<PathBuf>>,
+    doc_dirs: HashSet<PathBuf>,
+    sidebar_dirs: HashSet<PathBuf>,
+    refcounts: HashMap<PathBuf, usize>,
+}
+
+impl FileWatcher {
+    pub fn new(debounce: Duration) -> anyhow::Result<(Self, UnboundedReceiver<Vec<PathBuf>>)> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let events_tx = tx.clone();
+        let debouncer = new_debouncer(debounce, move |result: DebounceEventResult| match result {
+            Ok(events) => {
+                let paths: Vec<PathBuf> = events.into_iter().map(|event| event.path).collect();
+                if !paths.is_empty() {
+                    let _ = events_tx.send(paths);
+                }
+            }
+            Err(err) => log::warn!("file watcher error: {err}"),
+        })?;
+
+        Ok((
+            Self {
+                debouncer,
+                tx,
+                doc_dirs: HashSet::new(),
+                sidebar_dirs: HashSet::new(),
+                refcounts: HashMap::new(),
+            },
+            rx,
+        ))
+    }
+
+    /// Replace the complete watch set. Directories needed by both documents and
+    /// the sidebar are watched once (tracked by the refcount map).
+    pub fn set_watch_set(&mut self, doc_dirs: HashSet<PathBuf>, sidebar_dirs: HashSet<PathBuf>) {
+        let mut desired: HashMap<PathBuf, usize> = HashMap::new();
+        for dir in &doc_dirs {
+            *desired.entry(dir.clone()).or_default() += 1;
+        }
+        for dir in &sidebar_dirs {
+            *desired.entry(dir.clone()).or_default() += 1;
+        }
+
+        for dir in desired.keys() {
+            if !self.refcounts.contains_key(dir) {
+                if let Err(err) = self
+                    .debouncer
+                    .watcher()
+                    .watch(dir, RecursiveMode::NonRecursive)
+                {
+                    log::warn!("failed to watch {dir:?}: {err}");
+                }
+            }
+        }
+
+        let stale: Vec<PathBuf> = self
+            .refcounts
+            .keys()
+            .filter(|dir| !desired.contains_key(*dir))
+            .cloned()
+            .collect();
+        for dir in stale {
+            if let Err(err) = self.debouncer.watcher().unwatch(&dir) {
+                log::warn!("failed to unwatch {dir:?}: {err}");
+            }
+        }
+
+        self.refcounts = desired;
+        self.doc_dirs = doc_dirs;
+        self.sidebar_dirs = sidebar_dirs;
+    }
+
+    /// Watch the parent directories of all open documents.
+    pub fn sync_documents(&mut self, editor: &Editor) {
+        let dirs = editor
+            .documents()
+            .filter_map(|doc| doc.path())
+            .filter_map(|path| path.parent().map(PathBuf::from))
+            .collect();
+        let sidebar = self.sidebar_dirs.clone();
+        self.set_watch_set(dirs, sidebar);
+    }
+
+    /// Watch the directories needed to keep the visible tree fresh.
+    pub fn sync_sidebar(&mut self, editor: &Editor) {
+        let dirs = if editor.sidebar.mode == SidebarMode::Files {
+            let mut dirs = HashSet::new();
+            if !editor.workspace_root.as_os_str().is_empty() {
+                dirs.insert(editor.workspace_root.clone());
+            }
+            for dir in &editor.sidebar.expanded {
+                dirs.insert(dir.clone());
+            }
+            dirs
+        } else {
+            HashSet::new()
+        };
+        let docs = self.doc_dirs.clone();
+        self.set_watch_set(docs, dirs);
+    }
+
+    /// The sending half of the debounced event channel. Kept so the channel
+    /// stays open for the lifetime of the watcher.
+    pub fn sender(&self) -> UnboundedSender<Vec<PathBuf>> {
+        self.tx.clone()
+    }
+
+    pub fn doc_dirs(&self) -> &HashSet<PathBuf> {
+        &self.doc_dirs
+    }
+
+    pub fn sidebar_dirs(&self) -> &HashSet<PathBuf> {
+        &self.sidebar_dirs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn reports_writes_in_a_watched_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut watcher, mut rx) = FileWatcher::new(Duration::from_millis(50)).unwrap();
+        watcher.set_watch_set(HashSet::from([dir.path().to_path_buf()]), HashSet::new());
+
+        let file = dir.path().join("a.txt");
+        let tmp = dir.path().join("a.txt.tmp");
+        std::fs::write(&tmp, "hello").unwrap();
+        std::fs::rename(&tmp, &file).unwrap();
+        let paths = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .expect("watcher timed out")
+            .expect("watcher channel closed");
+        assert!(paths.iter().any(|p| p.ends_with("a.txt")));
+    }
+}
