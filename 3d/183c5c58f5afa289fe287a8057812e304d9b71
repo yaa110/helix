@@ -1,0 +1,18 @@
+book/src/configuration.md
+  h_a09932ba751076 33-44
+book/src/keymap.md
+  h_a09932ba751076 300-301,323,326-349
+helix-term/tests/test/session.rs
+  h_a09932ba751076 4,119-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d183c5c58f5afa289fe287a8057812e304d9b71",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
