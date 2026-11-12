@@ -679,6 +679,7 @@ impl Default for StatusLineConfig {
             left: vec![
                 E::Mode,
                 E::Spinner,
+                E::CodeLens,
                 E::FileName,
                 E::ReadOnlyIndicator,
                 E::FileModificationIndicator,
@@ -725,6 +726,9 @@ pub enum StatusLineElement {
 
     /// The LSP activity spinner
     Spinner,
+
+    /// The first code lens available on the cursor line.
+    CodeLens,
 
     /// The file basename (the leaf of the open file's path)
     FileBaseName,

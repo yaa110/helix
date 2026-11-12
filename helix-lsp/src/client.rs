@@ -392,6 +392,7 @@ impl Client {
                 capabilities.inlay_hint_provider,
                 Some(OneOf::Left(true) | OneOf::Right(InlayHintServerCapabilities::Options(_)))
             ),
+            LanguageServerFeature::CodeLens => capabilities.code_lens_provider.is_some(),
             LanguageServerFeature::DocumentColors => matches!(
                 capabilities.color_provider,
                 Some(
@@ -708,6 +709,9 @@ impl Client {
                             properties: vec!["edit".to_owned(), "command".to_owned()],
                         }),
                         ..Default::default()
+                    }),
+                    code_lens: Some(lsp::CodeLensClientCapabilities {
+                        dynamic_registration: Some(false),
                     }),
                     diagnostic: Some(lsp::DiagnosticClientCapabilities {
                         dynamic_registration: Some(false),
@@ -1786,6 +1790,34 @@ impl Client {
         };
 
         Some(self.call::<lsp::request::Rename>(params))
+    }
+
+    pub fn code_lens(
+        &self,
+        text_document: lsp::TextDocumentIdentifier,
+    ) -> Option<impl Future<Output = Result<Option<Vec<lsp::CodeLens>>>>> {
+        let capabilities = self.capabilities.get().unwrap();
+        capabilities.code_lens_provider.as_ref()?;
+
+        let params = lsp::CodeLensParams {
+            text_document,
+            work_done_progress_params: lsp::WorkDoneProgressParams::default(),
+            partial_result_params: lsp::PartialResultParams::default(),
+        };
+        Some(self.call::<lsp::request::CodeLensRequest>(params))
+    }
+
+    pub fn resolve_code_lens(
+        &self,
+        lens: lsp::CodeLens,
+    ) -> Option<impl Future<Output = Result<lsp::CodeLens>>> {
+        let capabilities = self.capabilities.get().unwrap();
+        capabilities
+            .code_lens_provider
+            .as_ref()?
+            .resolve_provider
+            .filter(|resolve| *resolve)?;
+        Some(self.call::<lsp::request::CodeLensResolve>(lens))
     }
 
     pub fn command(

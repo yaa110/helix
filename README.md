@@ -45,12 +45,13 @@ Everything is implemented natively in Rust. There is no plugin layer.
 - **Workspace search and replace** in the sidebar, with case/word/regex/
   preserve-case toggles, grouped streaming results, open-at-match,
   select-all, replace-one, and replace-all.
-- **Monokai Pro (Filter Spectrum)** as the default theme.
+- **LSP code lenses**: `<space>l` shows actions for the current line (for
+  example gopls `run test`), `<space>L` shows all lenses in the file, and the
+  first available lens title appears in the statusline.
+- **Monokai Community (Filter Spectrum)** as the default theme.
 - **Native implementation** in `helix-view` and `helix-term`; no plugin system.
 
 ## Build and run
-
-The toolchain is pinned in `rust-toolchain.toml` (Rust 1.90.0).
 
 ```sh
 # Run once from the repository root. HELIX_RUNTIME makes Helix use this fork's
@@ -84,7 +85,7 @@ binary elsewhere, either set `HELIX_RUNTIME` or symlink `runtime/` into
 
 ## Default theme
 
-The default theme is **Monokai Pro (Filter Spectrum)**, matching the VSCode
+The default theme is **Monokai Community (Filter Spectrum)**, matching the VSCode
 theme of the same name (`monokai_pro_filter_spectrum.toml`). It is used
 unconditionally when `theme` is not set in `config.toml`. This fork targets
 modern true-color terminals (Ghostty, kitty, WezTerm, iTerm2); the fallback is
@@ -284,6 +285,29 @@ Replace semantics:
   permissions and CRLF line endings. Binary/non-UTF-8 files are skipped.
 - `:search-replace-all` and `:search-replace-current` expose the same
   operations from command mode.
+
+## LSP code lenses (run tests, runnable actions)
+
+Code lenses are the LSP mechanism VSCode uses for gopls’s `run test` /
+`run benchmark` above Go functions and rust-analyzer’s `▶ Run` lens. This fork
+adds generic code-lens support — no Go-specific or debug-adapter code.
+
+- `<space>l` — open a menu of code lenses on the cursor line
+- `<space>L` — open a menu of all code lenses in the current file
+- The first lens on the cursor line is shown in the statusline (`CodeLens`
+  statusline element, enabled by default)
+- Selecting a menu item executes the LSP command via
+  `workspace/executeCommand`; server-initiated `workspace/applyEdit` is handled
+  by the existing LSP integration
+
+The menu is keyboard only: `j`/`k` or arrows to move, `Enter` to execute, `Esc`
+to cancel. Lenses are refreshed on idle after edits. Code actions remain on
+`<space>a`; they are a different protocol.
+
+MVP limitation: lenses whose command is only supplied through
+`codeLens/resolve` are not shown yet, and no inline virtual-text button is
+rendered. This is deliberate: the menu + statusline is less intrusive for a
+modal editor.
 
 ## Configuration
 

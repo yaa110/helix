@@ -595,6 +595,163 @@ impl ui::menu::Item for CodeActionItem {
     }
 }
 
+#[derive(Debug)]
+struct CodeLensItem {
+    title: String,
+    line: usize,
+    ls_id: LanguageServerId,
+    command: lsp::Command,
+}
+
+impl ui::menu::Item for CodeLensItem {
+    type Data = ();
+
+    fn format(&self, _data: &Self::Data) -> Row<'_> {
+        format!("{}: {}", self.line + 1, self.title).into()
+    }
+}
+
+pub fn code_lens(cx: &mut Context) {
+    request_code_lenses(cx, true, true);
+}
+
+pub fn code_lens_file(cx: &mut Context) {
+    request_code_lenses(cx, false, true);
+}
+
+/// Refresh the cached code lenses without opening a menu. Called on idle.
+pub(crate) fn update_code_lenses(cx: &mut Context) {
+    let dirty = {
+        let (_view, doc) = current_ref!(cx.editor);
+        doc.code_lenses_dirty
+    };
+    if dirty {
+        request_code_lenses(cx, false, false);
+    }
+}
+
+fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: bool) {
+    let (doc_id, identifier, cursor_line) = {
+        let (view, doc) = current_ref!(cx.editor);
+        if doc.path().is_none() {
+            return;
+        }
+        let text = doc.text().slice(..);
+        let cursor = doc.selection(view.id).primary().cursor(text);
+        (doc.id(), doc.identifier(), text.char_to_line(cursor))
+    };
+
+    let requests: Vec<_> = {
+        let doc = doc_mut!(cx.editor, &doc_id);
+        doc.language_servers_with_feature(LanguageServerFeature::CodeLens)
+            .filter_map(|client| {
+                let id = client.id();
+                client
+                    .code_lens(identifier.clone())
+                    .map(|request| (id, request))
+            })
+            .collect()
+    };
+    if requests.is_empty() {
+        if show_menu {
+            cx.editor
+                .set_error("No language server provides code lenses for this document");
+        }
+        return;
+    }
+    if let Some(doc) = cx.editor.document_mut(doc_id) {
+        doc.code_lenses_dirty = false;
+    }
+
+    cx.jobs.callback(async move {
+        let mut lenses = Vec::new();
+        for (ls_id, request) in requests {
+            match request.await {
+                Ok(Some(items)) => {
+                    for lens in items {
+                        if let Some(command) = lens.command.clone() {
+                            lenses.push(CodeLensItem {
+                                title: command.title.clone(),
+                                line: lens.range.start.line as usize,
+                                ls_id,
+                                command,
+                            });
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(err) => log::warn!("code lens request failed: {err}"),
+            }
+        }
+
+        let call = move |editor: &mut Editor, compositor: &mut Compositor| {
+            if let Some(doc) = editor.document_mut(doc_id) {
+                doc.code_lenses = lenses
+                    .iter()
+                    .map(|item| lsp::CodeLens {
+                        range: lsp::Range {
+                            start: lsp::Position {
+                                line: item.line as u32,
+                                character: 0,
+                            },
+                            end: lsp::Position {
+                                line: item.line as u32,
+                                character: 0,
+                            },
+                        },
+                        command: Some(item.command.clone()),
+                        data: None,
+                    })
+                    .collect();
+            }
+
+            if !show_menu {
+                editor.needs_redraw = true;
+                return;
+            }
+
+            let items: Vec<_> = lenses
+                .into_iter()
+                .filter(|item| !current_line_only || item.line == cursor_line)
+                .collect();
+            if items.is_empty() {
+                editor.set_status(if current_line_only {
+                    "No code lens on this line"
+                } else {
+                    "No code lenses in this file"
+                });
+                return;
+            }
+
+            let picker = ui::Menu::new(items, (), |editor, item, event| {
+                if event != PromptEvent::Validate {
+                    return;
+                }
+                let Some(item) = item else {
+                    return;
+                };
+                let Some(client) = editor.language_servers.get_by_id(item.ls_id) else {
+                    editor.set_error("language server is no longer available");
+                    return;
+                };
+                if let Some(request) = client.command(item.command.clone()) {
+                    tokio::spawn(async move {
+                        if let Err(err) = request.await {
+                            log::warn!("code lens command failed: {err}");
+                        }
+                    });
+                }
+            });
+            let popup = Popup::new("code-lens", picker)
+                .with_scrollbar(false)
+                .auto_close(true);
+            compositor.replace_or_push("code-lens", popup);
+        };
+
+        Ok(Callback::EditorCompositor(Box::new(call)))
+    });
+}
+
 pub fn code_action(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
 

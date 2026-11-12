@@ -204,6 +204,10 @@ pub struct Document {
     pub(crate) modified_since_accessed: bool,
 
     pub(crate) diagnostics: Vec<Diagnostic>,
+    /// Latest code lenses from all language servers for this document.
+    pub code_lenses: Vec<lsp::CodeLens>,
+    /// Set when the text changes so code lenses are re-requested on idle.
+    pub code_lenses_dirty: bool,
     pub(crate) language_servers: HashMap<LanguageServerName, Arc<Client>>,
 
     diff_handle: Option<DiffHandle>,
@@ -752,6 +756,8 @@ impl Document {
             changes,
             old_state,
             diagnostics: Vec::new(),
+            code_lenses: Vec::new(),
+            code_lenses_dirty: true,
             version: 0,
             history: Cell::new(History::default()),
             savepoints: Vec::new(),
@@ -1694,6 +1700,7 @@ impl Document {
         let success = self.apply_impl(transaction, view_id, emit_lsp_notification);
 
         if !transaction.changes().is_empty() {
+            self.code_lenses_dirty = true;
             // Compose this transaction with the previous one
             take_with(&mut self.changes, |changes| {
                 changes.compose(transaction.changes().clone())

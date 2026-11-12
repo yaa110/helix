@@ -132,6 +132,7 @@ where
     match element_id {
         helix_view::editor::StatusLineElement::Mode => render_mode,
         helix_view::editor::StatusLineElement::Spinner => render_lsp_spinner,
+        helix_view::editor::StatusLineElement::CodeLens => render_code_lens,
         helix_view::editor::StatusLineElement::FileBaseName => render_file_base_name,
         helix_view::editor::StatusLineElement::FileName => render_file_name,
         helix_view::editor::StatusLineElement::FileAbsolutePath => render_file_absolute_path,
@@ -210,6 +211,29 @@ where
             .unwrap_or(" ")
             .into(),
     );
+}
+
+fn render_code_lens<'a, F>(context: &mut RenderContext<'a>, write: F)
+where
+    F: Fn(&mut RenderContext<'a>, Span<'a>) + Copy,
+{
+    let text = context.doc.text().slice(..);
+    let cursor = context
+        .doc
+        .selection(context.view.id)
+        .primary()
+        .cursor(text);
+    let line = text.char_to_line(cursor);
+    let title = context
+        .doc
+        .code_lenses
+        .iter()
+        .find(|lens| lens.range.start.line as usize == line)
+        .and_then(|lens| lens.command.as_ref())
+        .map(|command| command.title.clone());
+    if let Some(title) = title {
+        write(context, Span::raw(format!(" {title} ")));
+    }
 }
 
 fn render_diagnostics<'a, F>(context: &mut RenderContext<'a>, write: F)

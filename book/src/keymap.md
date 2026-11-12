@@ -309,6 +309,8 @@ This layer is a kludge of mappings, mostly pickers.
 | `D`     | Open workspace diagnostics picker (**LSP**)                             | `workspace_diagnostics_picker`             |
 | `r`     | Rename symbol (**LSP**)                                                 | `rename_symbol`                            |
 | `a`     | Apply code action (**LSP**)                                             | `code_action`                              |
+| `l`     | Show code lenses for the current line (**LSP**)                         | `code_lens`                                |
+| `L`     | Show all code lenses in the file (**LSP**)                              | `code_lens_file`                           |
 | `h`     | Select symbol references (**LSP**)                                      | `select_references_to_symbol_under_cursor` |
 | `'`     | Open last fuzzy picker                                                  | `last_picker`                              |
 | `w`     | Enter [window mode](#window-mode)                                       | N/A                                        |

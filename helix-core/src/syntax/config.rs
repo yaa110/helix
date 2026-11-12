@@ -322,6 +322,7 @@ pub enum LanguageServerFeature {
     PullDiagnostics,
     RenameSymbol,
     InlayHints,
+    CodeLens,
     DocumentColors,
     CallHierarchy,
 }
@@ -349,6 +350,7 @@ impl Display for LanguageServerFeature {
             PullDiagnostics => "pull-diagnostics",
             RenameSymbol => "rename-symbol",
             InlayHints => "inlay-hints",
+            CodeLens => "code-lens",
             DocumentColors => "document-colors",
             CallHierarchy => "call-hierarchy",
         };

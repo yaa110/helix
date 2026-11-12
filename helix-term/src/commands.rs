@@ -408,6 +408,8 @@ impl MappableCommand {
         file_explorer_in_current_buffer_directory, "Open file explorer at current buffer's directory",
         file_explorer_in_current_directory, "Open file explorer at current working directory",
         code_action, "Perform code action",
+        code_lens, "Show LSP code lenses for the current line",
+        code_lens_file, "Show all LSP code lenses in the current file",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
         focus_search, "Open/focus the search sidebar",
         buffer_picker, "Open buffer picker",
