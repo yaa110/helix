@@ -1,0 +1,14 @@
+runtime/themes/monokai_pro_filter_spectrum.toml
+  h_a09932ba751076 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "868a6be24edc8ad2ee3548c09f577edbbb319170",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
