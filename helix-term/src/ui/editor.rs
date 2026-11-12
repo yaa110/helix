@@ -1158,6 +1158,22 @@ impl EditorView {
     }
 
     pub fn handle_idle_timeout(&mut self, cx: &mut commands::Context) -> EventResult {
+        let doc_id = {
+            let (view, _doc) = helix_view::current_ref!(cx.editor);
+            view.doc
+        };
+        let needs_prompt = cx
+            .editor
+            .reload_conflict(doc_id)
+            .is_some_and(|conflict| !conflict.notified);
+        if needs_prompt {
+            cx.editor.mark_reload_conflict_notified(doc_id);
+            let prompt = crate::ui::ReloadConflictPrompt::new(doc_id);
+            return EventResult::Consumed(Some(Box::new(move |compositor, _| {
+                compositor.push(Box::new(prompt));
+            })));
+        }
+
         commands::compute_inlay_hints_for_all_views(cx.editor, cx.jobs);
 
         EventResult::Ignored(None)

@@ -1355,6 +1355,7 @@ pub type Motion = Box<dyn Fn(&mut Editor)>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReloadConflict {
     pub disk_modified: std::time::SystemTime,
+    pub notified: bool,
 }
 
 #[derive(Debug)]
@@ -1538,8 +1539,15 @@ impl Editor {
             doc_id,
             ReloadConflict {
                 disk_modified,
+                notified: false,
             },
         );
+    }
+
+    pub fn mark_reload_conflict_notified(&mut self, doc_id: DocumentId) {
+        if let Some(conflict) = self.reload_conflicts.get_mut(&doc_id) {
+            conflict.notified = true;
+        }
     }
 
     pub fn clear_reload_conflict(&mut self, doc_id: DocumentId) {

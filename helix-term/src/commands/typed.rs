@@ -379,14 +379,38 @@ fn buffer_previous(
     Ok(())
 }
 
+pub(crate) fn write_document(
+    cx: &mut compositor::Context,
+    doc_id: DocumentId,
+    force: bool,
+) -> anyhow::Result<()> {
+    let current = view!(cx.editor).doc;
+    if current != doc_id {
+        cx.editor
+            .switch(doc_id, helix_view::editor::Action::Load);
+    }
+    write_impl(
+        cx,
+        None,
+        WriteOptions {
+            force,
+            auto_format: false,
+            code_actions: false,
+        },
+    )
+}
+
 fn write_impl(
     cx: &mut compositor::Context,
     path: Option<&str>,
     options: WriteOptions,
 ) -> anyhow::Result<()> {
     let config = cx.editor.config();
+    let doc_id = doc!(cx.editor).id();
+    if !options.force && cx.editor.reload_conflict(doc_id).is_some() {
+        bail!("file changed on disk; resolve the reload conflict first");
+    }
     let (view, doc) = current!(cx.editor);
-    let doc_id = doc.id();
     let view_id = view.id;
 
     if doc.trim_trailing_whitespace() {
