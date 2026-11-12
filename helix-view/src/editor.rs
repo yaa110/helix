@@ -1601,7 +1601,6 @@ impl Editor {
             let view_id = view_ids[0];
             let doc = doc_mut!(self, &doc_id);
             let view = view_mut!(self, view_id);
-            view.sync_changes(doc);
             doc.reload(view, &self.diff_providers, trust_full)?;
             view.ensure_cursor_in_view(doc, scrolloff);
         }
@@ -1617,7 +1616,6 @@ impl Editor {
         for view_id in view_ids.into_iter().skip(1) {
             let doc = doc_mut!(self, &doc_id);
             let view = view_mut!(self, view_id);
-            view.sync_changes(doc);
             if view.doc == doc_id {
                 view.ensure_cursor_in_view(doc, scrolloff);
             }
