@@ -368,6 +368,19 @@ pub fn file_explorer(root: PathBuf, editor: &Editor) -> Result<FileExplorer, std
 }
 
 fn directory_content(root: &Path, editor: &Editor) -> Result<Vec<(PathBuf, bool)>, std::io::Error> {
+    let mut content = directory_entries(root, editor)?;
+
+    if root.parent().is_some() {
+        content.insert(0, (root.join(".."), true));
+    }
+
+    Ok(content)
+}
+
+pub(crate) fn directory_entries(
+    root: &Path,
+    editor: &Editor,
+) -> Result<Vec<(PathBuf, bool)>, std::io::Error> {
     use ignore::WalkBuilder;
 
     let config = editor.config();
@@ -405,11 +418,10 @@ fn directory_content(root: &Path, editor: &Editor) -> Result<Vec<(PathBuf, bool)
         })
         .collect();
 
-    content.sort_by(|(path1, is_dir1), (path2, is_dir2)| (!is_dir1, path1).cmp(&(!is_dir2, path2)));
-
-    if root.parent().is_some() {
-        content.insert(0, (root.join(".."), true));
-    }
+    content.sort_by(|(path1, is_dir1), (path2, is_dir2)| {
+        (!is_dir1, path1.to_string_lossy().to_lowercase())
+            .cmp(&(!is_dir2, path2.to_string_lossy().to_lowercase()))
+    });
 
     Ok(content)
 }

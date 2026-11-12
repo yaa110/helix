@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use helix_view::graphics::Rect;
 use helix_view::input::KeyCode;
 use helix_view::sidebar::{SidebarFocus, SidebarMode};
@@ -7,20 +9,31 @@ use tui::buffer::Buffer as Surface;
 use crate::commands;
 use crate::compositor::{Context, Event, EventResult};
 
+pub mod file_tree;
+
+use file_tree::FileTree;
+
 /// The persistent left pane. Tasks 12 and 19 add the file tree and search
 /// panes; this component owns the shared layout, header, and key routing.
 pub struct Sidebar {
     pending_space: bool,
+    tree: FileTree,
 }
 
 impl Sidebar {
     pub fn new() -> Self {
         Self {
             pending_space: false,
+            tree: FileTree::new(PathBuf::new()),
         }
     }
 
-    pub fn ensure_init(&mut self, _editor: &mut Editor) {}
+    pub fn ensure_init(&mut self, editor: &mut Editor) {
+        if self.tree.root != editor.workspace_root {
+            self.tree = FileTree::new(editor.workspace_root.clone());
+            self.tree.rebuild(editor, &editor.sidebar);
+        }
+    }
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
         let theme = &cx.editor.theme;
@@ -38,12 +51,16 @@ impl Sidebar {
             .unwrap_or_default();
 
         surface.clear_with(area, background);
-        let title_text = match cx.editor.sidebar.mode {
-            SidebarMode::Files => "FILES",
-            SidebarMode::Search => "SEARCH",
+        let focused = cx.editor.sidebar.focus == SidebarFocus::Sidebar;
+        match cx.editor.sidebar.mode {
+            SidebarMode::Files => {
+                self.tree.render(area, surface, cx.editor, focused);
+            }
+            SidebarMode::Search => {
+                surface.set_string(area.x + 1, area.y, "SEARCH", title);
+            }
             SidebarMode::Hidden => return,
-        };
-        surface.set_string(area.x + 1, area.y, title_text, title);
+        }
 
         if area.width > 0 {
             for y in area.y..area.y.saturating_add(area.height) {
