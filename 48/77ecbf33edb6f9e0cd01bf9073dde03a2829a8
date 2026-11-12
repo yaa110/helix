@@ -1,0 +1,14 @@
+.github/workflows/release.yml
+  h_a09932ba751076 49-51,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4877ecbf33edb6f9e0cd01bf9073dde03a2829a8",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
