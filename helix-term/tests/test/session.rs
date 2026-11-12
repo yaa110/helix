@@ -137,5 +137,13 @@ async fn sidebar_state_round_trips() -> anyhow::Result<()> {
     assert_eq!(saved.sidebar.width, 34);
     assert_eq!(saved.sidebar.mode, SidebarMode::Files);
     assert!(saved.sidebar.selected.is_some());
+
+    app.editor.sidebar.search.query = "foo".into();
+    app.editor.sidebar.search.replacement = "bar".into();
+    app.editor.sidebar.search.regex = true;
+    let saved = helix_view::session::collect(&app.editor);
+    assert_eq!(saved.search.query, "foo");
+    assert_eq!(saved.search.replacement, "bar");
+    assert!(saved.search.regex);
     Ok(())
 }

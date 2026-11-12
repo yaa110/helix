@@ -69,6 +69,8 @@ pub struct SidebarState {
     pub refresh_dirs: HashSet<PathBuf>,
     /// Incremented on every filesystem event so the UI can coalesce refreshes.
     pub refresh_epoch: u64,
+    /// Files in the current search result set (runtime only, not persisted).
+    pub search_files: Vec<PathBuf>,
 }
 
 impl Default for SidebarState {
@@ -82,6 +84,7 @@ impl Default for SidebarState {
             search: SearchInputs::default(),
             refresh_dirs: HashSet::new(),
             refresh_epoch: 0,
+            search_files: Vec::new(),
         }
     }
 }

@@ -124,9 +124,14 @@ impl SearchPane {
         });
     }
 
-    pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor) {
+    pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &mut Editor) {
         self.drain();
         self.rebuild_rows();
+        if self.results.is_empty() {
+            editor.sidebar.search_files.clear();
+        } else {
+            editor.sidebar.search_files = self.results.keys().cloned().collect();
+        }
 
         let theme = &editor.theme;
         let text = theme.get("ui.text");
@@ -356,6 +361,81 @@ impl SearchPane {
         }
     }
 
+    fn replace_options(editor: &Editor) -> SearchOptions {
+        let inputs = &editor.sidebar.search;
+        SearchOptions {
+            match_case: inputs.match_case,
+            whole_word: inputs.whole_word,
+            regex: inputs.regex,
+            preserve_case: inputs.preserve_case,
+        }
+    }
+
+    fn replace_current_match(&mut self, cx: &mut commands::Context) -> anyhow::Result<usize> {
+        let Some(matched) = self.selected_match() else {
+            return Ok(0);
+        };
+        let options = Self::replace_options(cx.editor);
+        let inputs = cx.editor.sidebar.search.clone();
+        let regex = search::build_regex(&inputs.query, options)?;
+        cx.editor
+            .open(&matched.path, helix_view::editor::Action::Replace)?;
+        let view_id = helix_view::view!(cx.editor).id;
+        let doc_id = helix_view::current_ref!(cx.editor).1.id();
+        let doc = helix_view::doc_mut!(cx.editor, &doc_id);
+        let text = doc.text().to_string();
+        let Some(slice) = text.get(matched.start..matched.end) else {
+            return Ok(0);
+        };
+        let caps = regex.captures(slice);
+        let replacement = search::replacement_for(caps.as_ref(), slice, &inputs.replacement, options);
+        let from = doc.text().byte_to_char(matched.start);
+        let to = doc.text().byte_to_char(matched.end);
+        let transaction = helix_core::Transaction::change(
+            doc.text(),
+            std::iter::once((from, to, Some(replacement.into()))),
+        );
+        doc.apply(&transaction, view_id);
+        let view = helix_view::view_mut!(cx.editor, view_id);
+        doc.append_changes_to_history(view);
+        cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+        Ok(1)
+    }
+
+    fn replace_file(&mut self, cx: &mut commands::Context, path: &Path) -> anyhow::Result<usize> {
+        let options = Self::replace_options(cx.editor);
+        let inputs = cx.editor.sidebar.search.clone();
+        let regex = search::build_regex(&inputs.query, options)?;
+        if let Some(doc_id) = cx.editor.document_id_by_path(path) {
+            search::replace_in_open_document(cx.editor, doc_id, &regex, &inputs.replacement, options)
+        } else {
+            search::replace_in_file(path, &regex, &inputs.replacement, options)
+        }
+    }
+
+    fn replace_all(&mut self, cx: &mut commands::Context) -> anyhow::Result<()> {
+        let paths: Vec<PathBuf> = self.results.keys().cloned().collect();
+        let mut replaced = 0;
+        let mut files = 0;
+        let mut skipped = 0;
+        for path in paths {
+            match self.replace_file(cx, &path) {
+                Ok(0) => skipped += 1,
+                Ok(count) => {
+                    replaced += count;
+                    files += 1;
+                }
+                Err(_) => skipped += 1,
+            }
+        }
+        self.pending = true;
+        cx.editor.set_status(format!(
+            "Replaced {replaced} occurrences in {files} files ({skipped} skipped)"
+        ));
+        cx.editor.needs_redraw = true;
+        Ok(())
+    }
+
     pub fn handle_event(
         &mut self,
         event: &Event,
@@ -366,7 +446,12 @@ impl SearchPane {
         };
         if key.modifiers.contains(KeyModifiers::ALT) {
             if key.code == KeyCode::Enter {
-                if let Err(err) = self.select_all_in_file(cx.editor) {
+                let result = if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.replace_all(cx)
+                } else {
+                    self.select_all_in_file(cx.editor)
+                };
+                if let Err(err) = result {
                     cx.editor.set_error(err.to_string());
                 }
                 cx.editor.needs_redraw = true;
@@ -411,6 +496,15 @@ impl SearchPane {
                     KeyCode::Enter if self.focus == SearchFocus::Query => {
                         self.focus = SearchFocus::Results;
                     }
+                    KeyCode::Enter if self.focus == SearchFocus::Replace => {
+                        match self.replace_current_match(cx) {
+                            Ok(count) => {
+                                self.pending = true;
+                                cx.editor.set_status(format!("replaced {count} occurrence(s)"));
+                            }
+                            Err(err) => cx.editor.set_error(err.to_string()),
+                        }
+                    }
                     _ => {
                         let handled = if self.focus == SearchFocus::Query {
                             self.query.handle_key(*key)
@@ -427,6 +521,22 @@ impl SearchPane {
                 }
             }
             SearchFocus::Results => match key.code {
+                KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    let result = if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_))) {
+                        self.selected_file()
+                            .map(|path| self.replace_file(cx, &path))
+                            .unwrap_or(Ok(0))
+                    } else {
+                        self.replace_current_match(cx)
+                    };
+                    match result {
+                        Ok(count) => {
+                            self.pending = true;
+                            cx.editor.set_status(format!("replaced {count} occurrence(s)"));
+                        }
+                        Err(err) => cx.editor.set_error(err.to_string()),
+                    }
+                }
                 KeyCode::Char('j') | KeyCode::Down => {
                     if !self.rows.is_empty() {
                         self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
@@ -437,6 +547,9 @@ impl SearchPane {
                 }
                 KeyCode::Char('h') | KeyCode::Left => self.collapse_selected(),
                 KeyCode::Char('l') | KeyCode::Right => self.expand_selected(),
+                KeyCode::Char('R') => {
+                    self.pending = true;
+                }
                 KeyCode::Enter => {
                     if let Some(matched) = self.selected_match() {
                         if let Err(err) = open_match_with_action(

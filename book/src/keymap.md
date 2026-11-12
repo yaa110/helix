@@ -412,6 +412,33 @@ These mappings are in the style of [vim-unimpaired](https://github.com/tpope/vim
 | `]Space` | Add newline below                            | `add_newline_below`     |
 | `[Space` | Add newline above                            | `add_newline_above`     |
 
+#### Search sidebar
+
+`Space + /` opens the search pane. Type the query; the search starts after the
+idle timeout. `Tab` moves between the query, replace, and result fields.
+`Esc` moves from the query to the results, and from the results back to the
+editor.
+
+| Key | Description |
+| --- | --- |
+| `Tab` | Query → Replace → Results |
+| `Alt-c` | Toggle match case |
+| `Alt-w` | Toggle whole word |
+| `Alt-r` | Toggle regex |
+| `Alt-p` | Toggle preserve case |
+| `j` / `k` | Move through results |
+| `h` / `l` | Collapse / expand a file group |
+| `Enter` | Open the selected match |
+| `s` / `v` | Open the selected match in a split |
+| `n` / `N`, `F4` / `Shift-F4` | Next / previous match |
+| `Alt-Enter` | Select all matches in the current file |
+| `Ctrl-r` | Replace the selected match (or all matches in the selected file) |
+| `Ctrl-Alt-Enter` | Replace all matches in the result set |
+| `R` | Re-run the query |
+
+`:search-replace-all` and `:search-replace-current` expose the same operations
+without the search pane.
+
 ## Insert mode
 
 Accessed by typing `i` in [normal mode](#normal-mode).

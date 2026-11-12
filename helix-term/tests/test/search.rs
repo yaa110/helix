@@ -95,3 +95,26 @@ async fn replace_all_updates_open_buffer_in_memory_and_disk_files() -> anyhow::R
     assert_eq!(std::fs::read_to_string(&closed)?, "bar\n");
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replace_all_from_search_pane_updates_disk_and_reports() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    std::fs::write(&a, "foo\n")?;
+    std::fs::write(&b, "foo\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>/foo").await?;
+    wait_for_search_results(&mut app, 2).await;
+    helpers::send_keys(&mut app, "<ret>").await?;
+    // Put the replace text into the pane, then replace across the result set.
+    app.editor.sidebar.search.replacement = "bar".into();
+    helpers::send_keys(&mut app, "<C-A-ret>").await?;
+
+    assert_eq!(std::fs::read_to_string(&a)?, "bar\n");
+    assert_eq!(std::fs::read_to_string(&b)?, "bar\n");
+    assert!(app.editor.get_status().is_some());
+    Ok(())
+}

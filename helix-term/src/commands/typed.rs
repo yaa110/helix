@@ -1603,6 +1603,82 @@ fn get_character_info(
     Ok(())
 }
 
+fn search_options(editor: &helix_view::Editor) -> crate::search::SearchOptions {
+    let inputs = &editor.sidebar.search;
+    crate::search::SearchOptions {
+        match_case: inputs.match_case,
+        whole_word: inputs.whole_word,
+        regex: inputs.regex,
+        preserve_case: inputs.preserve_case,
+    }
+}
+
+fn search_replace_current(
+    cx: &mut compositor::Context,
+    _args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    let options = search_options(cx.editor);
+    let inputs = cx.editor.sidebar.search.clone();
+    let regex = crate::search::build_regex(&inputs.query, options)?;
+    let doc_id = doc!(cx.editor).id();
+    let count = crate::search::replace_in_open_document(
+        cx.editor,
+        doc_id,
+        &regex,
+        &inputs.replacement,
+        options,
+    )?;
+    cx.editor
+        .set_status(format!("replaced {count} occurrence(s)"));
+    Ok(())
+}
+
+fn search_replace_all(
+    cx: &mut compositor::Context,
+    _args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    let options = search_options(cx.editor);
+    let inputs = cx.editor.sidebar.search.clone();
+    let regex = crate::search::build_regex(&inputs.query, options)?;
+    let paths = cx.editor.sidebar.search_files.clone();
+    let mut replaced = 0usize;
+    let mut files = 0usize;
+    let mut skipped = 0usize;
+    for path in paths {
+        let result = if let Some(doc_id) = cx.editor.document_id_by_path(&path) {
+            crate::search::replace_in_open_document(
+                cx.editor,
+                doc_id,
+                &regex,
+                &inputs.replacement,
+                options,
+            )
+        } else {
+            crate::search::replace_in_file(&path, &regex, &inputs.replacement, options)
+        };
+        match result {
+            Ok(0) => skipped += 1,
+            Ok(count) => {
+                replaced += count;
+                files += 1;
+            }
+            Err(_) => skipped += 1,
+        }
+    }
+    cx.editor.set_status(format!(
+        "Replaced {replaced} occurrences in {files} files ({skipped} skipped)"
+    ));
+    Ok(())
+}
+
 /// Persist the current workspace session.
 fn session_save(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
@@ -3567,6 +3643,28 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         aliases: &["char"],
         doc: "Get info about the character under the primary cursor.",
         fun: get_character_info,
+        completer: CommandCompleter::none(),
+        signature: Signature {
+            positionals: (0, Some(0)),
+            ..Signature::DEFAULT
+        },
+    },
+    TypableCommand {
+        name: "search-replace-current",
+        aliases: &[],
+        doc: "Replace matches in the focused document using the search pane inputs.",
+        fun: search_replace_current,
+        completer: CommandCompleter::none(),
+        signature: Signature {
+            positionals: (0, Some(0)),
+            ..Signature::DEFAULT
+        },
+    },
+    TypableCommand {
+        name: "search-replace-all",
+        aliases: &[],
+        doc: "Replace matches in the current search result set.",
+        fun: search_replace_all,
         completer: CommandCompleter::none(),
         signature: Signature {
             positionals: (0, Some(0)),
