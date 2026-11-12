@@ -856,9 +856,9 @@ impl Default for CursorShapeConfig {
 #[serde(rename_all = "kebab-case")]
 pub enum BufferLine {
     /// Don't render bufferline
-    #[default]
     Never,
     /// Always render
+    #[default]
     Always,
     /// Only if multiple buffers are open
     Multiple,

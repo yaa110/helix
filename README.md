@@ -50,6 +50,7 @@ Everything is implemented natively in Rust. There is no plugin layer.
   first available lens title appears in the statusline.
 - **Searchable text transforms** (`F1` or `<space>t`): base64/hex encode and
   decode, case conversions, and line sorting on selections or the whole buffer.
+- **Always-visible buffer tabs** (`bufferline = "always"`).
 - **Monokai Community (Filter Spectrum)** as the default theme.
 - **Native implementation** in `helix-view` and `helix-term`; no plugin system.
 
@@ -176,6 +177,9 @@ auto-reload = true
 
 # Filesystem debounce in milliseconds. Default: 300
 auto-reload-debounce = 300
+
+# Always show the buffer tabs/bufferline. Default: "always"
+bufferline = "always"
 
 # Ghostty and other modern terminals support this automatically; set it only
 # if Helix does not detect it.
@@ -398,6 +402,9 @@ restore-session = true
 # Reload clean buffers when files change on disk.
 auto-reload = true
 auto-reload-debounce = 300 # milliseconds
+
+# Always show the buffer tabs/bufferline. Default: "always"
+bufferline = "always"
 
 [editor.sidebar]
 width = 30
