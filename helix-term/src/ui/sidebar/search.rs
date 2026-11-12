@@ -111,7 +111,10 @@ impl SearchPane {
 
         let open_docs: Vec<(PathBuf, String)> = editor
             .documents()
-            .filter_map(|doc| doc.path().map(|path| (path.to_path_buf(), doc.text().to_string())))
+            .filter_map(|doc| {
+                doc.path()
+                    .map(|path| (path.to_path_buf(), doc.text().to_string()))
+            })
             .collect();
         let (tx, rx) = std::sync::mpsc::channel();
         self.receiver = Some(rx);
@@ -147,18 +150,38 @@ impl SearchPane {
 
         if y < area.y + area.height {
             let mut toggles = String::new();
-            toggles.push_str(if editor.sidebar.search.match_case { "[Aa] " } else { " Aa  " });
-            toggles.push_str(if editor.sidebar.search.whole_word { "[ab] " } else { " ab  " });
-            toggles.push_str(if editor.sidebar.search.regex { "[.*]" } else { " .* " });
-            toggles.push_str(if editor.sidebar.search.preserve_case { " [AB]" } else { "  AB " });
+            toggles.push_str(if editor.sidebar.search.match_case {
+                "[Aa] "
+            } else {
+                " Aa  "
+            });
+            toggles.push_str(if editor.sidebar.search.whole_word {
+                "[ab] "
+            } else {
+                " ab  "
+            });
+            toggles.push_str(if editor.sidebar.search.regex {
+                "[.*]"
+            } else {
+                " .* "
+            });
+            toggles.push_str(if editor.sidebar.search.preserve_case {
+                " [AB]"
+            } else {
+                "  AB "
+            });
             surface.set_string(area.x + 1, y, &toggles, dim);
             y += 1;
         }
 
         if y < area.y + area.height {
             let replace_area = Rect::new(area.x + 1, y, width, 1);
-            self.replacement
-                .render(replace_area, surface, theme, self.focus == SearchFocus::Replace);
+            self.replacement.render(
+                replace_area,
+                surface,
+                theme,
+                self.focus == SearchFocus::Replace,
+            );
             y += 1;
         }
 
@@ -330,7 +353,12 @@ impl SearchPane {
         Ok(())
     }
 
-    fn move_result(&mut self, forward: bool, action: helix_view::editor::Action, cx: &mut commands::Context) {
+    fn move_result(
+        &mut self,
+        forward: bool,
+        action: helix_view::editor::Action,
+        cx: &mut commands::Context,
+    ) {
         if self.rows.is_empty() {
             return;
         }
@@ -388,7 +416,8 @@ impl SearchPane {
             return Ok(0);
         };
         let caps = regex.captures(slice);
-        let replacement = search::replacement_for(caps.as_ref(), slice, &inputs.replacement, options);
+        let replacement =
+            search::replacement_for(caps.as_ref(), slice, &inputs.replacement, options);
         let from = doc.text().byte_to_char(matched.start);
         let to = doc.text().byte_to_char(matched.end);
         let transaction = helix_core::Transaction::change(
@@ -407,7 +436,13 @@ impl SearchPane {
         let inputs = cx.editor.sidebar.search.clone();
         let regex = search::build_regex(&inputs.query, options)?;
         if let Some(doc_id) = cx.editor.document_id_by_path(path) {
-            search::replace_in_open_document(cx.editor, doc_id, &regex, &inputs.replacement, options)
+            search::replace_in_open_document(
+                cx.editor,
+                doc_id,
+                &regex,
+                &inputs.replacement,
+                options,
+            )
         } else {
             search::replace_in_file(path, &regex, &inputs.replacement, options)
         }
@@ -436,11 +471,7 @@ impl SearchPane {
         Ok(())
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: &Event,
-        cx: &mut commands::Context,
-    ) -> EventResult {
+    pub fn handle_event(&mut self, event: &Event, cx: &mut commands::Context) -> EventResult {
         let Event::Key(key) = event else {
             return EventResult::Consumed(None);
         };
@@ -481,48 +512,48 @@ impl SearchPane {
         }
 
         match self.focus {
-            SearchFocus::Query | SearchFocus::Replace => {
-                match key.code {
-                    KeyCode::Tab => {
-                        self.focus = if self.focus == SearchFocus::Query {
-                            SearchFocus::Replace
-                        } else {
-                            SearchFocus::Results
-                        };
-                    }
-                    KeyCode::Esc => {
-                        self.focus = SearchFocus::Results;
-                    }
-                    KeyCode::Enter if self.focus == SearchFocus::Query => {
-                        self.focus = SearchFocus::Results;
-                    }
-                    KeyCode::Enter if self.focus == SearchFocus::Replace => {
-                        match self.replace_current_match(cx) {
-                            Ok(count) => {
-                                self.pending = true;
-                                cx.editor.set_status(format!("replaced {count} occurrence(s)"));
-                            }
-                            Err(err) => cx.editor.set_error(err.to_string()),
-                        }
-                    }
-                    _ => {
-                        let handled = if self.focus == SearchFocus::Query {
-                            self.query.handle_key(*key)
-                        } else {
-                            self.replacement.handle_key(*key)
-                        };
-                        if handled {
-                            let inputs = &mut cx.editor.sidebar.search;
-                            inputs.query = self.query.value().to_string();
-                            inputs.replacement = self.replacement.value().to_string();
+            SearchFocus::Query | SearchFocus::Replace => match key.code {
+                KeyCode::Tab => {
+                    self.focus = if self.focus == SearchFocus::Query {
+                        SearchFocus::Replace
+                    } else {
+                        SearchFocus::Results
+                    };
+                }
+                KeyCode::Esc => {
+                    self.focus = SearchFocus::Results;
+                }
+                KeyCode::Enter if self.focus == SearchFocus::Query => {
+                    self.focus = SearchFocus::Results;
+                }
+                KeyCode::Enter if self.focus == SearchFocus::Replace => {
+                    match self.replace_current_match(cx) {
+                        Ok(count) => {
                             self.pending = true;
+                            cx.editor
+                                .set_status(format!("replaced {count} occurrence(s)"));
                         }
+                        Err(err) => cx.editor.set_error(err.to_string()),
                     }
                 }
-            }
+                _ => {
+                    let handled = if self.focus == SearchFocus::Query {
+                        self.query.handle_key(*key)
+                    } else {
+                        self.replacement.handle_key(*key)
+                    };
+                    if handled {
+                        let inputs = &mut cx.editor.sidebar.search;
+                        inputs.query = self.query.value().to_string();
+                        inputs.replacement = self.replacement.value().to_string();
+                        self.pending = true;
+                    }
+                }
+            },
             SearchFocus::Results => match key.code {
                 KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    let result = if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_))) {
+                    let result = if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_)))
+                    {
                         self.selected_file()
                             .map(|path| self.replace_file(cx, &path))
                             .unwrap_or(Ok(0))
@@ -532,7 +563,8 @@ impl SearchPane {
                     match result {
                         Ok(count) => {
                             self.pending = true;
-                            cx.editor.set_status(format!("replaced {count} occurrence(s)"));
+                            cx.editor
+                                .set_status(format!("replaced {count} occurrence(s)"));
                         }
                         Err(err) => cx.editor.set_error(err.to_string()),
                     }

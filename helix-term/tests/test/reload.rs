@@ -6,7 +6,8 @@ use super::*;
 
 fn make_dirty(app: &mut Application, text: &str) {
     let (view, doc) = helix_view::current!(app.editor);
-    let transaction = helix_core::Transaction::insert(doc.text(), doc.selection(view.id), text.into());
+    let transaction =
+        helix_core::Transaction::insert(doc.text(), doc.selection(view.id), text.into());
     doc.apply(&transaction, view.id);
     doc.append_changes_to_history(view);
 }
@@ -28,11 +29,8 @@ async fn reload_document_refreshes_text_and_clears_modified() -> anyhow::Result<
     let doc_id = doc!(app.editor).id();
     {
         let (view, doc) = helix_view::current!(app.editor);
-        let transaction = helix_core::Transaction::insert(
-            doc.text(),
-            doc.selection(view.id),
-            "new".into(),
-        );
+        let transaction =
+            helix_core::Transaction::insert(doc.text(), doc.selection(view.id), "new".into());
         doc.apply(&transaction, view.id);
         doc.append_changes_to_history(view);
     }
@@ -59,11 +57,8 @@ async fn clean_buffer_reloads_and_dirty_buffer_conflicts() -> anyhow::Result<()>
     let doc_id = doc!(app.editor).id();
     {
         let (view, doc) = helix_view::current!(app.editor);
-        let transaction = helix_core::Transaction::insert(
-            doc.text(),
-            doc.selection(view.id),
-            "local".into(),
-        );
+        let transaction =
+            helix_core::Transaction::insert(doc.text(), doc.selection(view.id), "local".into());
         doc.apply(&transaction, view.id);
         doc.append_changes_to_history(view);
     }

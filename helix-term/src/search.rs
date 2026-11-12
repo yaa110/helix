@@ -274,8 +274,7 @@ pub fn replace_in_open_document(
             .captures_iter(&text)
             .filter_map(|caps| {
                 let matched = caps.get(0)?;
-                let replacement =
-                    replacement_for(Some(&caps), matched.as_str(), template, options);
+                let replacement = replacement_for(Some(&caps), matched.as_str(), template, options);
                 Some((
                     doc.text().byte_to_char(matched.start()),
                     doc.text().byte_to_char(matched.end()),

@@ -283,7 +283,8 @@ impl FileTree {
                 }
                 let new_path = parent.join(name);
                 if new_path.exists() {
-                    cx.editor.set_error(format!("{} already exists", new_path.display()));
+                    cx.editor
+                        .set_error(format!("{} already exists", new_path.display()));
                     return;
                 }
                 match std::fs::rename(&old, &new_path) {
@@ -310,7 +311,8 @@ impl FileTree {
                 .is_some_and(|doc_path| doc_path.starts_with(&path) && doc.is_modified())
         });
         if modified_open {
-            cx.editor.set_error("refusing to delete a file with unsaved changes");
+            cx.editor
+                .set_error("refusing to delete a file with unsaved changes");
             return;
         }
         let target = path.clone();
@@ -446,9 +448,7 @@ impl FileTree {
             KeyCode::Char('a') => self.create(cx, false),
             KeyCode::Char('A') => self.create(cx, true),
             KeyCode::Char('r') => self.rename(cx),
-            KeyCode::Char('d') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.delete(cx)
-            }
+            KeyCode::Char('d') if !key.modifiers.contains(KeyModifiers::CONTROL) => self.delete(cx),
             KeyCode::Char('y') => self.copy_path(cx, false),
             KeyCode::Char('Y') => self.copy_path(cx, true),
             KeyCode::Char('g') => {
@@ -494,13 +494,16 @@ impl FileTree {
             }
             KeyCode::Char('[') => {
                 let config = cx.editor.config().sidebar;
-                cx.editor.sidebar.width =
-                    cx.editor.sidebar.width.saturating_sub(2).max(config.min_width);
+                cx.editor.sidebar.width = cx
+                    .editor
+                    .sidebar
+                    .width
+                    .saturating_sub(2)
+                    .max(config.min_width);
             }
             KeyCode::Char(']') => {
                 let config = cx.editor.config().sidebar;
-                cx.editor.sidebar.width =
-                    (cx.editor.sidebar.width + 2).min(config.max_width);
+                cx.editor.sidebar.width = (cx.editor.sidebar.width + 2).min(config.max_width);
             }
             KeyCode::Char('q') | KeyCode::Esc => {
                 cx.editor.sidebar.focus = SidebarFocus::Editor;
@@ -508,8 +511,7 @@ impl FileTree {
             _ => return false,
         }
 
-        cx.editor.sidebar.selected =
-            self.selected_row().map(|row| row.path.clone());
+        cx.editor.sidebar.selected = self.selected_row().map(|row| row.path.clone());
         cx.editor.needs_redraw = true;
         true
     }

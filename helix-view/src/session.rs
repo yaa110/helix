@@ -210,7 +210,11 @@ impl SessionStore {
         if let Err(err) = std::fs::rename(&path, &backup) {
             log::warn!("failed to back up corrupt session {:?}: {err}", path);
         } else {
-            log::warn!("ignored corrupt session {:?} (backed up to {:?})", path, backup);
+            log::warn!(
+                "ignored corrupt session {:?} (backed up to {:?})",
+                path,
+                backup
+            );
         }
         None
     }
@@ -374,9 +378,7 @@ pub fn restore(editor: &mut Editor, session: &Session) -> RestoreOutcome {
                     )
                 })
                 .collect();
-            let primary = buffer
-                .primary
-                .min(ranges.len().saturating_sub(1));
+            let primary = buffer.primary.min(ranges.len().saturating_sub(1));
             let anchor = text.line_to_char(
                 buffer
                     .scroll
@@ -512,7 +514,10 @@ mod tests {
 
         std::fs::write(store.path_for(&workspace), b"{not json").unwrap();
         assert_eq!(store.load(&workspace), None);
-        assert!(store.path_for(&workspace).with_extension("json.bak").exists());
+        assert!(store
+            .path_for(&workspace)
+            .with_extension("json.bak")
+            .exists());
 
         store
             .save(&Session {

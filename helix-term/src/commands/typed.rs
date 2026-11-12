@@ -386,8 +386,7 @@ pub(crate) fn write_document(
 ) -> anyhow::Result<()> {
     let current = view!(cx.editor).doc;
     if current != doc_id {
-        cx.editor
-            .switch(doc_id, helix_view::editor::Action::Load);
+        cx.editor.switch(doc_id, helix_view::editor::Action::Load);
     }
     write_impl(
         cx,
@@ -1680,7 +1679,11 @@ fn search_replace_all(
 }
 
 /// Persist the current workspace session.
-fn session_save(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
+fn session_save(
+    cx: &mut compositor::Context,
+    _args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
         return Ok(());
     }
@@ -1690,7 +1693,11 @@ fn session_save(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -
 }
 
 /// Remove the saved session for the current workspace.
-fn session_clear(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow::Result<()> {
+fn session_clear(
+    cx: &mut compositor::Context,
+    _args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
         return Ok(());
     }

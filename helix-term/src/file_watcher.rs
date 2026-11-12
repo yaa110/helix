@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use helix_view::sidebar::SidebarMode;
 use helix_view::Editor;
-use notify::{RecursiveMode, RecommendedWatcher};
+use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 

@@ -100,11 +100,7 @@ impl Sidebar {
         }
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: &Event,
-        cx: &mut commands::Context,
-    ) -> EventResult {
+    pub fn handle_event(&mut self, event: &Event, cx: &mut commands::Context) -> EventResult {
         self.ensure_init(cx.editor);
         let Event::Key(key) = event else {
             return EventResult::Consumed(None);
@@ -137,9 +133,7 @@ impl Sidebar {
             return self.search.handle_event(event, cx);
         }
 
-        if cx.editor.sidebar.mode == SidebarMode::Files
-            && self.tree.handle_key(*key, cx)
-        {
+        if cx.editor.sidebar.mode == SidebarMode::Files && self.tree.handle_key(*key, cx) {
             return EventResult::Consumed(None);
         }
 

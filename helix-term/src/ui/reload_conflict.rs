@@ -29,10 +29,11 @@ impl ReloadConflictPrompt {
                 }
             }
             _ => {
-                if let Err(err) =
-                    crate::commands::typed::write_document(context, self.doc_id, true)
+                if let Err(err) = crate::commands::typed::write_document(context, self.doc_id, true)
                 {
-                    context.editor.set_error(format!("failed to overwrite: {err}"));
+                    context
+                        .editor
+                        .set_error(format!("failed to overwrite: {err}"));
                 } else {
                     context.editor.clear_reload_conflict(self.doc_id);
                 }
@@ -101,11 +102,7 @@ impl Component for ReloadConflictPrompt {
         let selected = context.editor.theme.get("ui.menu.selected");
         for (index, option) in OPTIONS.iter().enumerate() {
             let y = inner.y + 3 + index as u16;
-            let style = if index == self.choice {
-                selected
-            } else {
-                text
-            };
+            let style = if index == self.choice { selected } else { text };
             surface.set_string(inner.x, y, &format!(" {option} "), style);
         }
     }

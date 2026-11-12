@@ -1676,10 +1676,7 @@ impl Component for EditorView {
 
         // -1 for commandline
         let full_editor_area = area.clip_bottom(1);
-        let sidebar_width = cx
-            .editor
-            .sidebar
-            .visible_width(area.width, &config.sidebar);
+        let sidebar_width = cx.editor.sidebar.visible_width(area.width, &config.sidebar);
         let editor_full = if sidebar_width > 0 {
             let sidebar_area = full_editor_area.with_width(sidebar_width);
             self.sidebar.ensure_init(cx.editor);

@@ -37,7 +37,7 @@ async fn restore_round_trip_preserves_buffers_and_positions() -> anyhow::Result<
     let saved = session::collect(&app.editor);
     store.save(&saved)?;
 
-    let mut restored = helpers::AppBuilder::new()
+    let restored = helpers::AppBuilder::new()
         .with_session_store(store)
         .with_workspace_dir(dir.path())
         .with_config(session_config())
@@ -45,10 +45,7 @@ async fn restore_round_trip_preserves_buffers_and_positions() -> anyhow::Result<
     assert_eq!(restored.editor.documents().count(), 1);
     let (view, doc) = helix_view::current_ref!(restored.editor);
     assert_eq!(doc.text().to_string(), "alpha\nbeta\ngamma\n");
-    assert_eq!(
-        doc.selection(view.id),
-        &helix_core::Selection::single(2, 8)
-    );
+    assert_eq!(doc.selection(view.id), &helix_core::Selection::single(2, 8));
     assert_eq!(
         doc.view_offset(view.id),
         ViewPosition {
@@ -127,10 +124,7 @@ async fn sidebar_state_round_trips() -> anyhow::Result<()> {
         .build()?;
     app.editor.sidebar.mode = SidebarMode::Files;
     app.editor.sidebar.width = 34;
-    app.editor
-        .sidebar
-        .expanded
-        .insert(dir.path().to_path_buf());
+    app.editor.sidebar.expanded.insert(dir.path().to_path_buf());
     app.editor.sidebar.selected = Some(dir.path().join("a.txt"));
 
     let saved = helix_view::session::collect(&app.editor);

@@ -1534,7 +1534,11 @@ impl Editor {
         })
     }
 
-    pub fn mark_reload_conflict(&mut self, doc_id: DocumentId, disk_modified: std::time::SystemTime) {
+    pub fn mark_reload_conflict(
+        &mut self,
+        doc_id: DocumentId,
+        disk_modified: std::time::SystemTime,
+    ) {
         self.reload_conflicts.insert(
             doc_id,
             ReloadConflict {
@@ -1603,9 +1607,7 @@ impl Editor {
             .get(&doc_id)
             .and_then(|doc| doc.path().map(ToOwned::to_owned))
         {
-            self.language_servers
-                .file_event_handler
-                .file_changed(path);
+            self.language_servers.file_event_handler.file_changed(path);
         }
 
         for view_id in view_ids.into_iter().skip(1) {
