@@ -51,11 +51,11 @@ binary elsewhere, either set `HELIX_RUNTIME` or symlink `runtime/` into
 
 ## Default theme
 
-The default true-color theme is **Monokai Pro (Filter Spectrum)**, matching
-the VSCode theme of the same name
-(`monokai_pro_filter_spectrum.toml`). It is used when `theme` is not set in
-`config.toml`; terminals without true-color support fall back to Helix's
-16-color theme.
+The default theme is **Monokai Pro (Filter Spectrum)**, matching the VSCode
+theme of the same name (`monokai_pro_filter_spectrum.toml`). It is used
+unconditionally when `theme` is not set in `config.toml`. This fork targets
+modern true-color terminals (Ghostty, kitty, WezTerm, iTerm2); the fallback is
+only used if the theme file itself cannot be loaded.
 
 ```toml
 # Optional: pin it explicitly, or choose another theme.
