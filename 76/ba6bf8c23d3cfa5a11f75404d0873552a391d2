@@ -1,0 +1,16 @@
+helix-term/src/ui/mod.rs
+  h_a09932ba751076 19
+helix-term/src/ui/text_input.rs
+  h_a09932ba751076 1-192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76ba6bf8c23d3cfa5a11f75404d0873552a391d2",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
