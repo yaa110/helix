@@ -127,6 +127,60 @@ impl FileWatcher {
     }
 }
 
+fn disk_content_matches(doc: &helix_view::Document) -> bool {
+    let Some(path) = doc.path() else {
+        return false;
+    };
+    match std::fs::read_to_string(path) {
+        Ok(contents) => contents == doc.text().to_string(),
+        Err(_) => false,
+    }
+}
+
+/// Apply debounced filesystem paths to the editor: reload clean buffers,
+/// queue conflicts for dirty ones, and mark tree directories for refresh.
+pub fn apply_events(editor: &mut Editor, paths: &[PathBuf]) {
+    for raw_path in paths {
+        let path = helix_stdx::path::canonicalize(raw_path);
+        if let Some(doc_id) = editor.document_id_by_path(&path) {
+            if !path.exists() {
+                editor.set_status(format!(
+                    "'{}' deleted on disk",
+                    path.file_name()
+                        .map(|name| name.to_string_lossy())
+                        .unwrap_or_default()
+                ));
+            } else {
+                let disk_modified = std::fs::metadata(&path)
+                    .and_then(|metadata| metadata.modified())
+                    .unwrap_or_else(|_| std::time::SystemTime::now());
+                let (modified, matches) = match editor.documents.get(&doc_id) {
+                    Some(doc) => (doc.is_modified(), disk_content_matches(doc)),
+                    None => continue,
+                };
+                if modified {
+                    editor.mark_reload_conflict(doc_id, disk_modified);
+                    editor.set_status("file changed on disk; resolve the reload conflict");
+                } else if matches {
+                    if let Some(doc) = editor.documents.get_mut(&doc_id) {
+                        doc.pickup_last_saved_time();
+                    }
+                } else if let Err(err) = editor.reload_document(doc_id) {
+                    editor.set_error(format!("failed to reload: {err}"));
+                } else {
+                    editor.set_status("reloaded from disk");
+                }
+            }
+        }
+
+        if let Some(parent) = path.parent().map(PathBuf::from) {
+            editor.sidebar.refresh_dirs.insert(parent);
+            editor.sidebar.refresh_epoch = editor.sidebar.refresh_epoch.wrapping_add(1);
+            editor.needs_redraw = true;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

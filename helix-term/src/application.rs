@@ -33,9 +33,11 @@ use crate::{
 use log::{debug, error, info, warn};
 use std::{
     io::{stdin, IsTerminal},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[cfg_attr(windows, allow(unused_imports))]
 use anyhow::{Context, Error};
@@ -81,6 +83,10 @@ pub struct Application {
 
     theme_mode: Option<theme::Mode>,
     last_session_save: std::time::Instant,
+    file_watcher: Option<crate::file_watcher::FileWatcher>,
+    fs_events: UnboundedReceiver<Vec<PathBuf>>,
+    /// Kept alive when the watcher is disabled so the select branch stays inert.
+    _fs_tx: Option<UnboundedSender<Vec<PathBuf>>>,
 }
 
 #[cfg(feature = "integration")]
@@ -198,6 +204,25 @@ impl Application {
 
         let jobs = Jobs::new();
 
+        let (file_watcher, fs_events, fs_tx) = {
+            let editor_config = config.load();
+            if editor_config.editor.auto_reload {
+                match crate::file_watcher::FileWatcher::new(Duration::from_millis(
+                    editor_config.editor.auto_reload_debounce,
+                )) {
+                    Ok((watcher, events)) => (Some(watcher), events, None),
+                    Err(err) => {
+                        warn!("failed to start file watcher: {err}");
+                        let (tx, rx) = unbounded_channel();
+                        (None, rx, Some(tx))
+                    }
+                }
+            } else {
+                let (tx, rx) = unbounded_channel();
+                (None, rx, Some(tx))
+            }
+        };
+
         if args.load_tutor {
             let path = helix_loader::runtime_file(Path::new("tutor"));
             editor.open(&path, Action::VerticalSplit)?;
@@ -314,6 +339,9 @@ impl Application {
             lsp_progress: LspProgressMap::new(),
             theme_mode,
             last_session_save: std::time::Instant::now(),
+            file_watcher,
+            fs_events,
+            _fs_tx: fs_tx,
         };
 
         Ok(app)
@@ -323,6 +351,11 @@ impl Application {
         if self.compositor.full_redraw {
             self.terminal.clear().expect("Cannot clear the terminal");
             self.compositor.full_redraw = false;
+        }
+
+        if let Some(watcher) = &mut self.file_watcher {
+            watcher.sync_documents(&self.editor);
+            watcher.sync_sidebar(&self.editor);
         }
 
         let mut cx = crate::compositor::Context {
@@ -408,6 +441,14 @@ impl Application {
                     if let Some(job) = self.jobs.handle_callback(&mut self.editor, &mut self.compositor, callback) {
                         self.jobs.add(job);
                     }
+                    self.render().await;
+                }
+                Some(paths) = self.fs_events.recv() => {
+                    if let Some(watcher) = &mut self.file_watcher {
+                        watcher.sync_documents(&self.editor);
+                        watcher.sync_sidebar(&self.editor);
+                    }
+                    crate::file_watcher::apply_events(&mut self.editor, &paths);
                     self.render().await;
                 }
                 event = self.editor.wait_event() => {
