@@ -1,0 +1,19 @@
+helix-term/src/keymap.rs
+  s_8c6ba2b89003ca::t_06eabe2f591034 291-295,623-637
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b278aff7b03dfabd8d3b76ce135d17e70a02810a",
+  "prompts": {},
+  "sessions": {
+    "s_8c6ba2b89003ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "733f3983-2da4-40ee-95ca-883aafcd7c2c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
