@@ -1,0 +1,36 @@
+README.md
+  h_a09932ba751076 112,137-139,145-148,164-165,177,239-240
+book/src/generated/static-cmd.md
+  h_a09932ba751076 6-9,12-15,112
+book/src/keymap.md
+  h_a09932ba751076 374
+helix-term/src/commands.rs
+  h_a09932ba751076 3660-3666
+helix-term/src/keymap/default.rs
+  h_a09932ba751076 10-11,361-362,414-415
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 1302-1318,1595-1604,1867-1871,1933-1936
+helix-term/src/ui/sidebar.rs
+  h_a09932ba751076 46,52-63
+helix-term/src/ui/sidebar/file_tree.rs
+  h_a09932ba751076 140-143,151,155,157,159-164,288-291,316-330,332,334,336-343,408-412,684-687,692,838-859,875-883,1138,1218-1223,1477
+helix-term/src/ui/sidebar/search.rs
+  h_a09932ba751076 11,313-436,717,760,762-768,1004
+helix-term/src/ui/statusline.rs
+  h_a09932ba751076 174-188,192,200-207
+helix-view/src/sidebar.rs
+  h_a09932ba751076 77-78,99
+runtime/themes/monokai_pro_filter_spectrum.toml
+  h_a09932ba751076 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dac03a3fd5f2085f139c5c847cc9a42f77421465",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
