@@ -1,0 +1,14 @@
+helix-view/src/session.rs
+  h_a09932ba751076 408-416
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "31cf46871438ed916ee24026ff3d25bc08df8778",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
