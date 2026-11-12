@@ -1450,6 +1450,14 @@ impl Application {
         Ok(self.editor.exit_code)
     }
 
+    #[cfg(feature = "integration")]
+    pub fn sidebar_row_paths(&mut self) -> Vec<PathBuf> {
+        self.compositor
+            .find::<ui::EditorView>()
+            .map(|view| view.sidebar_row_paths())
+            .unwrap_or_default()
+    }
+
     pub async fn close(&mut self) -> Vec<anyhow::Error> {
         // [NOTE] we intentionally do not return early for errors because we
         //        want to try to run as much cleanup as we can, regardless of

@@ -30,6 +30,10 @@ impl Sidebar {
         }
     }
 
+    pub fn row_paths(&self) -> Vec<PathBuf> {
+        self.tree.rows.iter().map(|row| row.path.clone()).collect()
+    }
+
     pub fn ensure_init(&mut self, editor: &mut Editor) {
         if self.tree.root != editor.workspace_root {
             self.tree = FileTree::new(editor.workspace_root.clone());

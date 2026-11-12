@@ -1,4 +1,5 @@
 use helix_term::application::Application;
+use helix_term::file_watcher;
 use helix_view::doc;
 use helix_view::sidebar::{SidebarFocus, SidebarMode};
 
@@ -78,6 +79,28 @@ async fn tree_navigation_opens_files_and_moves_focus() -> anyhow::Result<()> {
         true,
     )
     .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tree_refreshes_after_external_create() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+    app.editor.sidebar.mode = SidebarMode::Files;
+    app.editor.sidebar.focus = SidebarFocus::Sidebar;
+
+    let before = app.editor.sidebar.refresh_epoch;
+    let file = dir.path().join("appeared.txt");
+    std::fs::write(&file, "x")?;
+    file_watcher::apply_events(&mut app.editor, &[file]);
+    assert!(app.editor.sidebar.refresh_epoch > before);
+
+    app.handle_idle_timeout().await;
+    assert!(app
+        .sidebar_row_paths()
+        .iter()
+        .any(|path| path.ends_with("appeared.txt")));
     Ok(())
 }
 

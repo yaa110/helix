@@ -76,6 +76,10 @@ impl EditorView {
         &mut self.spinners
     }
 
+    pub fn sidebar_row_paths(&self) -> Vec<PathBuf> {
+        self.sidebar.row_paths()
+    }
+
     pub fn render_view(
         &self,
         editor: &Editor,

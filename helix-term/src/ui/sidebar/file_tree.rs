@@ -446,7 +446,9 @@ impl FileTree {
             KeyCode::Char('a') => self.create(cx, false),
             KeyCode::Char('A') => self.create(cx, true),
             KeyCode::Char('r') => self.rename(cx),
-            KeyCode::Char('d') => self.delete(cx),
+            KeyCode::Char('d') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete(cx)
+            }
             KeyCode::Char('y') => self.copy_path(cx, false),
             KeyCode::Char('Y') => self.copy_path(cx, true),
             KeyCode::Char('g') => {
