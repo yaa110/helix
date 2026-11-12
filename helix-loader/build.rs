@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::process::Command;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const MAJOR: &str = env!("CARGO_PKG_VERSION_MAJOR");
 const MINOR: &str = env!("CARGO_PKG_VERSION_MINOR");
 const PATCH: &str = env!("CARGO_PKG_VERSION_PATCH");
@@ -21,7 +22,11 @@ fn main() {
     } else {
         MINOR.to_string()
     };
-    let calver = if PATCH == "0" {
+    let calver = if MAJOR.len() < 2 {
+        // The fork uses a plain semantic version (for example 1.0.5)
+        // instead of upstream's calendar versioning (25.07.1).
+        VERSION.to_string()
+    } else if PATCH == "0" {
         format!("{MAJOR}.{minor}")
     } else {
         format!("{MAJOR}.{minor}.{PATCH}")
