@@ -20,6 +20,7 @@ mod test {
     mod commands;
     mod movement;
     mod reload;
+    mod search;
     mod session;
     mod sidebar;
     mod splits;

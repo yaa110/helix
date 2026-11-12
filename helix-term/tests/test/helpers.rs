@@ -108,6 +108,18 @@ where
 }
 
 #[inline]
+/// Send a key sequence and drive the event loop until idle, without the
+/// automatic cleanup/quit that `test_key_sequence` performs.
+pub async fn send_keys(app: &mut Application, in_keys: &str) -> anyhow::Result<()> {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut rx_stream = UnboundedReceiverStream::new(rx);
+    for key_event in parse_macro(in_keys)?.into_iter() {
+        tx.send(Ok(Event::Key(KeyEvent::from(key_event))))?;
+    }
+    app.event_loop_until_idle(&mut rx_stream).await;
+    Ok(())
+}
+
 pub async fn test_key_sequence(
     app: &mut Application,
     in_keys: Option<&str>,

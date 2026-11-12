@@ -74,6 +74,7 @@ grep-matcher = "0.1"
 notify = "8"
 notify-debouncer-mini = "0.6"
 regex = "1"
+tempfile.workspace = true
 # markdown doc rendering
 pulldown-cmark = { version = "0.13", default-features = false }
 thiserror.workspace = true

@@ -1458,6 +1458,14 @@ impl Application {
             .unwrap_or_default()
     }
 
+    #[cfg(feature = "integration")]
+    pub fn search_result_count(&mut self) -> usize {
+        self.compositor
+            .find::<ui::EditorView>()
+            .map(|view| view.search_result_count())
+            .unwrap_or_default()
+    }
+
     pub async fn close(&mut self) -> Vec<anyhow::Error> {
         // [NOTE] we intentionally do not return early for errors because we
         //        want to try to run as much cleanup as we can, regardless of

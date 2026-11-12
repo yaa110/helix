@@ -80,6 +80,10 @@ impl EditorView {
         self.sidebar.row_paths()
     }
 
+    pub fn search_result_count(&self) -> usize {
+        self.sidebar.search_result_count()
+    }
+
     pub fn render_view(
         &self,
         editor: &Editor,
@@ -1164,6 +1168,8 @@ impl EditorView {
     }
 
     pub fn handle_idle_timeout(&mut self, cx: &mut commands::Context) -> EventResult {
+        self.sidebar.handle_idle_timeout(cx);
+
         let doc_id = {
             let (view, _doc) = helix_view::current_ref!(cx.editor);
             view.doc
