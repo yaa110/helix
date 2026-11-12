@@ -386,9 +386,10 @@ pub(crate) fn write_document(
 ) -> anyhow::Result<()> {
     let current = view!(cx.editor).doc;
     if current != doc_id {
-        cx.editor.switch(doc_id, helix_view::editor::Action::Load);
+        cx.editor
+            .switch(doc_id, helix_view::editor::Action::Replace);
     }
-    write_impl(
+    let result = write_impl(
         cx,
         None,
         WriteOptions {
@@ -396,7 +397,11 @@ pub(crate) fn write_document(
             auto_format: false,
             code_actions: false,
         },
-    )
+    );
+    if result.is_ok() {
+        cx.editor.clear_reload_conflict(doc_id);
+    }
+    result
 }
 
 fn write_impl(
@@ -1702,6 +1707,9 @@ fn session_clear(
         return Ok(());
     }
     cx.editor.clear_session()?;
+    // Do not recreate the session on the way out; the user asked for it gone.
+    cx.editor.session_active = false;
+    cx.editor.session_dirty = false;
     cx.editor.set_status("session cleared");
     Ok(())
 }

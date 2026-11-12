@@ -62,6 +62,10 @@ impl Sidebar {
             self.last_refresh_epoch = editor.sidebar.refresh_epoch;
         }
 
+        if let Some(selected) = editor.sidebar.selected.clone() {
+            self.tree.select_path(&selected);
+        }
+
         if self.last_mode != editor.sidebar.mode {
             if editor.sidebar.mode == SidebarMode::Search {
                 self.search.sync_from_inputs(&editor.sidebar.search);

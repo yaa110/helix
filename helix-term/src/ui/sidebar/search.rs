@@ -90,6 +90,8 @@ impl SearchPane {
             self.results.clear();
             self.rows.clear();
             self.receiver = None;
+            self.error = None;
+            self.capped = false;
             return;
         }
         let options = SearchOptions {
@@ -237,8 +239,13 @@ impl SearchPane {
             surface.set_string(area.x, y + offset as u16, &line, style);
         }
 
-        if self.capped && y + height as u16 > y {
-            surface.set_string(area.x, y, "showing first 10000 matches", dim);
+        if self.capped && area.height > 0 {
+            surface.set_string(
+                area.x,
+                area.y + area.height - 1,
+                "showing first 10000 matches",
+                dim,
+            );
         }
     }
 
@@ -246,9 +253,11 @@ impl SearchPane {
         let Some(receiver) = &self.receiver else {
             return;
         };
+        let mut drained = 0usize;
         for _ in 0..500 {
             match receiver.try_recv() {
                 Ok(SearchEvent::Match(matched)) => {
+                    drained += 1;
                     self.results
                         .entry(matched.path.clone())
                         .or_default()
@@ -261,7 +270,11 @@ impl SearchPane {
                     break;
                 }
                 Ok(SearchEvent::Error(err)) => {
+                    drained += 1;
                     self.error = Some(err);
+                }
+                Ok(SearchEvent::Progress) => {
+                    drained += 1;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -269,6 +282,9 @@ impl SearchPane {
                     break;
                 }
             }
+        }
+        if drained == 500 && self.receiver.is_some() {
+            helix_event::request_redraw();
         }
     }
 
@@ -335,8 +351,10 @@ impl SearchPane {
         editor.open(&path, helix_view::editor::Action::Replace)?;
         let scrolloff = editor.config().scrolloff;
         let (view, doc) = helix_view::current!(editor);
+        let len = doc.text().len_bytes();
         let ranges: helix_core::SmallVec<[helix_core::Range; 1]> = matches
             .iter()
+            .filter(|matched| matched.start <= matched.end && matched.end <= len)
             .map(|matched| {
                 helix_core::Range::new(
                     doc.text().byte_to_char(matched.start),
@@ -412,14 +430,37 @@ impl SearchPane {
         let doc_id = helix_view::current_ref!(cx.editor).1.id();
         let doc = helix_view::doc_mut!(cx.editor, &doc_id);
         let text = doc.text().to_string();
-        let Some(slice) = text.get(matched.start..matched.end) else {
+
+        // The result list is a snapshot. Revalidate the exact range and, if it
+        // no longer matches, fall back to the first current match. Never write
+        // a replacement over text that no longer matches the query.
+        let (start, end, caps) = if matched.start <= matched.end
+            && matched.end <= text.len()
+            && regex
+                .find(&text[matched.start..matched.end])
+                .is_some_and(|found| {
+                    found.start() == 0 && found.end() == matched.end - matched.start
+                }) {
+            (
+                matched.start,
+                matched.end,
+                regex.captures(&text[matched.start..matched.end]),
+            )
+        } else if let Some(caps) = regex.captures(&text) {
+            let found = caps.get(0).unwrap();
+            (found.start(), found.end(), Some(caps))
+        } else {
             return Ok(0);
         };
-        let caps = regex.captures(slice);
-        let replacement =
+
+        let slice = &text[start..end];
+        let mut replacement =
             search::replacement_for(caps.as_ref(), slice, &inputs.replacement, options);
-        let from = doc.text().byte_to_char(matched.start);
-        let to = doc.text().byte_to_char(matched.end);
+        if doc.line_ending == helix_core::LineEnding::Crlf {
+            replacement = replacement.replace("\r\n", "\n").replace('\n', "\r\n");
+        }
+        let from = doc.text().byte_to_char(start);
+        let to = doc.text().byte_to_char(end);
         let transaction = helix_core::Transaction::change(
             doc.text(),
             std::iter::once((from, to, Some(replacement.into()))),
@@ -594,10 +635,26 @@ impl SearchPane {
                     }
                 }
                 KeyCode::Char('s') => {
-                    self.move_result(true, helix_view::editor::Action::HorizontalSplit, cx)
+                    if let Some(matched) = self.selected_match() {
+                        if let Err(err) = open_match_with_action(
+                            cx.editor,
+                            &matched,
+                            helix_view::editor::Action::HorizontalSplit,
+                        ) {
+                            cx.editor.set_error(err.to_string());
+                        }
+                    }
                 }
                 KeyCode::Char('v') => {
-                    self.move_result(true, helix_view::editor::Action::VerticalSplit, cx)
+                    if let Some(matched) = self.selected_match() {
+                        if let Err(err) = open_match_with_action(
+                            cx.editor,
+                            &matched,
+                            helix_view::editor::Action::VerticalSplit,
+                        ) {
+                            cx.editor.set_error(err.to_string());
+                        }
+                    }
                 }
                 KeyCode::F(4) if key.modifiers.contains(KeyModifiers::SHIFT) => {
                     self.move_result(false, helix_view::editor::Action::Replace, cx)
@@ -649,6 +706,10 @@ fn open_match_with_action(
     editor.open(&matched.path, action)?;
     let scrolloff = editor.config().scrolloff;
     let (view, doc) = helix_view::current!(editor);
+    let len = doc.text().len_bytes();
+    if matched.start > matched.end || matched.end > len {
+        anyhow::bail!("search result is stale for {}", matched.path.display());
+    }
     let start = doc.text().byte_to_char(matched.start);
     let end = doc.text().byte_to_char(matched.end);
     doc.set_selection(view.id, helix_core::Selection::single(start, end));

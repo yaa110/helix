@@ -28,11 +28,19 @@ pub struct Match {
 #[derive(Clone, Debug)]
 pub enum SearchEvent {
     Match(Match),
-    Done { capped: bool },
+    Done {
+        capped: bool,
+    },
     Error(String),
+    /// Sent per directory entry so a dropped receiver cancels promptly even
+    /// when a file has no matches.
+    Progress,
 }
 
 pub fn build_regex(query: &str, options: SearchOptions) -> Result<Regex, regex::Error> {
+    if query.is_empty() {
+        return Err(regex::Error::Syntax("empty search query".into()));
+    }
     let pattern = if options.regex {
         query.to_string()
     } else {
@@ -198,6 +206,9 @@ pub fn spawn_search(
             if !entry.path().is_file() || open_paths.iter().any(|path| path == entry.path()) {
                 continue;
             }
+            if tx.send(SearchEvent::Progress).is_err() {
+                return;
+            }
             let Ok(text) = std::fs::read_to_string(entry.path()) else {
                 continue;
             };
@@ -274,7 +285,11 @@ pub fn replace_in_open_document(
             .captures_iter(&text)
             .filter_map(|caps| {
                 let matched = caps.get(0)?;
-                let replacement = replacement_for(Some(&caps), matched.as_str(), template, options);
+                let mut replacement =
+                    replacement_for(Some(&caps), matched.as_str(), template, options);
+                if doc.line_ending == helix_core::LineEnding::Crlf {
+                    replacement = replacement.replace("\r\n", "\n").replace('\n', "\r\n");
+                }
                 Some((
                     doc.text().byte_to_char(matched.start()),
                     doc.text().byte_to_char(matched.end()),
@@ -306,6 +321,9 @@ pub fn replace_in_file(
     let Ok(text) = std::fs::read_to_string(path) else {
         return Ok(0);
     };
+    if text.as_bytes().contains(&0) {
+        return Ok(0);
+    }
     let (output, count) = apply_replacements_to_text(&text, regex, template, options);
     if count == 0 {
         return Ok(0);
@@ -377,6 +395,25 @@ mod tests {
         assert_eq!(matches[0].line, 0);
         assert_eq!(matches[1].line, 1);
         assert_eq!(&"αβ\nβ\n"[matches[1].start..matches[1].end], "β");
+    }
+
+    #[test]
+    fn empty_query_is_rejected() {
+        assert!(build_regex("", SearchOptions::default()).is_err());
+    }
+
+    #[test]
+    fn replace_in_file_skips_valid_utf8_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bin");
+        let original = b"\0\0foo\0";
+        std::fs::write(&path, original).unwrap();
+        let re = build_regex("foo", SearchOptions::default()).unwrap();
+        assert_eq!(
+            replace_in_file(&path, &re, "bar", SearchOptions::default()).unwrap(),
+            0
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
     }
 
     #[test]

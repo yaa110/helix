@@ -105,6 +105,20 @@ async fn tree_refreshes_after_external_create() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn creating_an_existing_file_does_not_truncate_it() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("keep.txt");
+    std::fs::write(&file, "keep me\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>ba").await?;
+    helpers::send_keys(&mut app, "keep.txt<ret>").await?;
+    assert_eq!(std::fs::read_to_string(&file)?, "keep me\n");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn create_rename_and_delete_from_tree() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let mut app = helpers::AppBuilder::new().build()?;

@@ -1683,6 +1683,9 @@ impl Component for EditorView {
             self.sidebar.render(sidebar_area, surface, cx);
             full_editor_area.clip_left(sidebar_width)
         } else {
+            if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar {
+                cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+            }
             full_editor_area
         };
 

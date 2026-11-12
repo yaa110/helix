@@ -158,13 +158,13 @@ pub fn apply_events(editor: &mut Editor, paths: &[PathBuf]) {
                     Some(doc) => (doc.is_modified(), disk_content_matches(doc)),
                     None => continue,
                 };
-                if modified {
-                    editor.mark_reload_conflict(doc_id, disk_modified);
-                    editor.set_status("file changed on disk; resolve the reload conflict");
-                } else if matches {
+                if matches {
                     if let Some(doc) = editor.documents.get_mut(&doc_id) {
                         doc.pickup_last_saved_time();
                     }
+                } else if modified {
+                    editor.mark_reload_conflict(doc_id, disk_modified);
+                    editor.set_status("file changed on disk; resolve the reload conflict");
                 } else if let Err(err) = editor.reload_document(doc_id) {
                     editor.set_error(format!("failed to reload: {err}"));
                 } else {

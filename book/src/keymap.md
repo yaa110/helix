@@ -327,8 +327,8 @@ This layer is a kludge of mappings, mostly pickers.
 
 `Space + b` shows the file tree and focuses it; pressing it again while the
 tree is focused hides the sidebar. `Esc`/`q` returns focus to the editor while
-keeping the sidebar visible. The old global-search picker remains available as
-`:global-search`.
+keeping the sidebar visible. The old global-search picker is still available as
+the static `global_search` command if you want to bind it yourself.
 
 | Key             | Description                                      |
 | -----           | -----------                                      |

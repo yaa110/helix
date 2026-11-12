@@ -1619,6 +1619,7 @@ impl Editor {
             }
         }
 
+        self.reload_conflicts.remove(&doc_id);
         Ok(())
     }
 

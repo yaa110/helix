@@ -227,7 +227,11 @@ impl FileTree {
                 let result = if directory {
                     std::fs::create_dir(&path)
                 } else {
-                    std::fs::File::create(&path).map(|_| ())
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&path)
+                        .map(|_| ())
                 };
                 match result {
                     Ok(()) => {
@@ -287,10 +291,28 @@ impl FileTree {
                         .set_error(format!("{} already exists", new_path.display()));
                     return;
                 }
+                let modified_affected = cx.editor.documents().any(|doc| {
+                    doc.path()
+                        .is_some_and(|path| path.starts_with(&old) && doc.is_modified())
+                });
+                if modified_affected {
+                    cx.editor
+                        .set_error("refusing to rename a file with unsaved changes");
+                    return;
+                }
+                let affected: Vec<_> = cx
+                    .editor
+                    .documents()
+                    .filter_map(|doc| {
+                        let path = doc.path()?;
+                        let relative = path.strip_prefix(&old).ok()?;
+                        Some((doc.id(), new_path.join(relative)))
+                    })
+                    .collect();
                 match std::fs::rename(&old, &new_path) {
                     Ok(()) => {
-                        if let Some(doc_id) = cx.editor.document_id_by_path(&old) {
-                            cx.editor.set_doc_path(doc_id, &new_path);
+                        for (doc_id, path) in affected {
+                            cx.editor.set_doc_path(doc_id, &path);
                         }
                         Self::mark_changed(cx.editor, &new_path);
                         cx.editor.set_status(format!("renamed to {}", name));
@@ -358,7 +380,7 @@ impl FileTree {
         }
     }
 
-    fn select_path(&mut self, path: &Path) {
+    pub fn select_path(&mut self, path: &Path) {
         if let Some(index) = self.rows.iter().position(|row| row.path == path) {
             self.cursor = index;
         }
