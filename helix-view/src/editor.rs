@@ -1345,9 +1345,17 @@ pub struct Editor {
     pub session_active: bool,
     /// Per-workspace session storage.
     pub session_store: SessionStore,
+    /// Documents that changed on disk while modified.
+    pub reload_conflicts: BTreeMap<DocumentId, ReloadConflict>,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
+
+/// An external write was detected while the buffer had unsaved changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReloadConflict {
+    pub disk_modified: std::time::SystemTime,
+}
 
 #[derive(Debug)]
 pub enum EditorEvent {
@@ -1475,6 +1483,7 @@ impl Editor {
             session_dirty: false,
             session_active: false,
             session_store: SessionStore::default(),
+            reload_conflicts: BTreeMap::new(),
         }
     }
 
@@ -1522,6 +1531,96 @@ impl Editor {
             old: old_config,
             new: &config,
         })
+    }
+
+    pub fn mark_reload_conflict(&mut self, doc_id: DocumentId, disk_modified: std::time::SystemTime) {
+        self.reload_conflicts.insert(
+            doc_id,
+            ReloadConflict {
+                disk_modified,
+            },
+        );
+    }
+
+    pub fn clear_reload_conflict(&mut self, doc_id: DocumentId) {
+        self.reload_conflicts.remove(&doc_id);
+    }
+
+    pub fn reload_conflict(&self, doc_id: DocumentId) -> Option<&ReloadConflict> {
+        self.reload_conflicts.get(&doc_id)
+    }
+
+    /// Reload one document from disk, keeping every view's history/selection in
+    /// sync. This is the shared implementation behind `:reload`, auto-reload,
+    /// and the conflict prompt.
+    pub fn reload_document(&mut self, doc_id: DocumentId) -> anyhow::Result<()> {
+        let current_view = self.tree.focus;
+        let mut view_ids: Vec<ViewId> = self
+            .documents
+            .get(&doc_id)
+            .map(|doc| doc.selections().keys().copied().collect())
+            .unwrap_or_default();
+        if !view_ids.contains(&current_view) {
+            if let Some(doc) = self.documents.get_mut(&doc_id) {
+                doc.ensure_view_init(current_view);
+            }
+            view_ids.push(current_view);
+        }
+        if view_ids.is_empty() {
+            anyhow::bail!("document {doc_id} has no views");
+        }
+
+        let trust_full = {
+            let doc = self
+                .documents
+                .get(&doc_id)
+                .ok_or_else(|| anyhow!("document {doc_id} does not exist"))?;
+            self.workspace_trust
+                .query(doc.workspace_root(), TrustQuery::Git)
+                .is_trusted()
+        };
+        let scrolloff = self.config().scrolloff;
+
+        {
+            let view_id = view_ids[0];
+            let doc = doc_mut!(self, &doc_id);
+            let view = view_mut!(self, view_id);
+            view.sync_changes(doc);
+            doc.reload(view, &self.diff_providers, trust_full)?;
+            view.ensure_cursor_in_view(doc, scrolloff);
+        }
+
+        if let Some(path) = self
+            .documents
+            .get(&doc_id)
+            .and_then(|doc| doc.path().map(ToOwned::to_owned))
+        {
+            self.language_servers
+                .file_event_handler
+                .file_changed(path);
+        }
+
+        for view_id in view_ids.into_iter().skip(1) {
+            let doc = doc_mut!(self, &doc_id);
+            let view = view_mut!(self, view_id);
+            view.sync_changes(doc);
+            if view.doc == doc_id {
+                view.ensure_cursor_in_view(doc, scrolloff);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn reload_all_documents(&mut self) -> Vec<anyhow::Error> {
+        let ids: Vec<_> = self.documents.keys().copied().collect();
+        let mut errors = Vec::new();
+        for doc_id in ids {
+            if let Err(err) = self.reload_document(doc_id) {
+                errors.push(err);
+            }
+        }
+        errors
     }
 
     /// Persist this workspace's session using the configured store.
