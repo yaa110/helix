@@ -1,0 +1,28 @@
+helix-term/Cargo.toml
+  h_a09932ba751076 77
+helix-term/src/application.rs
+  h_a09932ba751076 1461-1468
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 83-86,1171-1172
+helix-term/src/ui/sidebar.rs
+  h_a09932ba751076 13,16,23,25,33,35,43-53,64-71,91,113-118,136-139
+helix-term/src/ui/sidebar/search.rs
+  h_a09932ba751076 1-397
+helix-term/tests/integration.rs
+  h_a09932ba751076 23
+helix-term/tests/test/helpers.rs
+  h_a09932ba751076 111-122
+helix-term/tests/test/search.rs
+  h_a09932ba751076 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "56f2c986b4de30a0347d5c674f2d1d8fe44fbd26",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
