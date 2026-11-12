@@ -49,6 +49,21 @@ hx .
 binary elsewhere, either set `HELIX_RUNTIME` or symlink `runtime/` into
 `~/.config/helix/runtime`.
 
+## Default theme
+
+The default true-color theme is **Monokai Pro (Filter Spectrum)**, matching
+the VSCode theme of the same name
+(`monokai_pro_filter_spectrum.toml`). It is used when `theme` is not set in
+`config.toml`; terminals without true-color support fall back to Helix's
+16-color theme.
+
+```toml
+# Optional: pin it explicitly, or choose another theme.
+theme = "monokai_pro_filter_spectrum"
+```
+
+`:theme monokai_pro_filter_spectrum` switches to it at runtime.
+
 ## What is new in this fork
 
 ### 1. Persistent file tree sidebar

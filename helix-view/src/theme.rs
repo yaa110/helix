@@ -672,6 +672,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn monokai_filter_spectrum_parses() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("runtime");
+        let loader = Loader::new(&[root]);
+        let theme = loader
+            .load("monokai_pro_filter_spectrum")
+            .expect("default fork theme should parse");
+        assert_eq!(theme.name(), "monokai_pro_filter_spectrum");
+    }
+
+    #[test]
     fn test_parse_style_string() {
         let fg = Value::String("#ffffff".to_string());
 

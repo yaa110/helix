@@ -603,7 +603,25 @@ impl Application {
                         colors_ok
                     })
             })
-            .unwrap_or_else(|| editor.theme_loader.default_theme(true_color));
+            .unwrap_or_else(|| {
+                // This fork's default theme mirrors VSCode's
+                // "Monokai Pro (Filter Spectrum)". Fall back to the upstream
+                // defaults when true color or the theme file is unavailable.
+                if true_color {
+                    editor
+                        .theme_loader
+                        .load("monokai_pro_filter_spectrum")
+                        .map_err(|e| {
+                            log::warn!(
+                                "failed to load default theme `monokai_pro_filter_spectrum` - {e}"
+                            );
+                            e
+                        })
+                        .unwrap_or_else(|_| editor.theme_loader.default_theme(true_color))
+                } else {
+                    editor.theme_loader.default_theme(false)
+                }
+            });
         let _ = editor.set_theme(theme);
     }
 
