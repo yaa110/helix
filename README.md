@@ -1,19 +1,52 @@
 # Helix — personal VSCode-parity fork
 
-This repository is a **local fork of [Helix](https://github.com/helix-editor/helix)**.
-It is not upstream Helix and is not intended to be pushed to the upstream
-project. The goal is to keep Helix's modal editing model while adding the
-workflow pieces a VSCode user misses:
+> ## Unofficial, AI-assisted fork — read this first
+>
+> This repository is a **personal fork of
+> [Helix](https://github.com/helix-editor/helix)**. It is not upstream Helix,
+> it is not affiliated with or endorsed by the Helix maintainers, and it is not
+> an official Helix release.
+>
+> **Substantial parts of the fork-specific code and documentation were written
+> or modified with the help of AI LLM models.** The changes were made to support
+> this fork author's own workflow and have not been reviewed by the upstream
+> Helix maintainers.
+>
+> **Issues cannot be resolved and pull requests are not managed here.** This
+> repository is published for personal use and reference. Do not report problems
+> caused by this fork to the upstream Helix project, and do not expect support,
+> reviews, merges, or timely responses here. Use it at your own risk.
 
-- a persistent, keyboard-driven file tree;
-- session restore for buffers and cursor/scroll positions;
-- VSCode-style workspace search and replace;
-- automatic reload when an open file changes on disk.
+The goal is to keep Helix's modal editing model while adding the workflow
+pieces a VSCode user misses.
 
 Everything is implemented natively in Rust. There is no plugin layer.
 
 > Upstream Helix remains the authority for everything not described here.
 > See the upstream book and `CHANGELOG.md` for the base editor.
+
+## Fork additions at a glance
+
+- **File tree sidebar** on the left, toggled with `<space>b`, with lazy
+  directory loading, create/rename/delete, splits, path copying, and
+  VSCode-like auto-reveal of the current buffer.
+- **Automatic tree tracking**: changing the current buffer expands and selects
+  it in the tree; opening a file through any picker also selects it.
+- **Two-letter tree jumps** with `gw` + label.
+- **Fast focus switching**: `<space>b` from the editor lands on the current
+  buffer; `Enter`/`Tab`/`Esc` returns to the editor.
+- **Global shortcuts from the sidebar**: unhandled `Ctrl`/`Alt` chords pass
+  through, so bindings such as `Ctrl+E` for a picker still work while the tree
+  is focused.
+- **Session restore** of buffers, selections, cursor/scroll, sidebar state,
+  and search inputs per workspace.
+- **Automatic file reload** with silent reload for clean buffers and a safe
+  Keep/Reload/Overwrite prompt for dirty buffers.
+- **Workspace search and replace** in the sidebar, with case/word/regex/
+  preserve-case toggles, grouped streaming results, open-at-match,
+  select-all, replace-one, and replace-all.
+- **Monokai Pro (Filter Spectrum)** as the default theme.
+- **Native implementation** in `helix-view` and `helix-term`; no plugin system.
 
 ## Build and run
 
@@ -63,6 +96,69 @@ theme = "monokai_pro_filter_spectrum"
 ```
 
 `:theme monokai_pro_filter_spectrum` switches to it at runtime.
+
+## Changing the fork defaults
+
+Everything the fork adds is configurable. A complete example that changes every
+fork-specific default:
+
+```toml
+# Top-level. Omit to use Monokai Pro (Filter Spectrum); set another name to
+# replace the default theme.
+theme = "monokai_pro_filter_spectrum"
+
+[editor]
+# Session restore and automatic saving. Default: true
+restore-session = true
+
+# Reload clean buffers when files change on disk. Default: true
+auto-reload = true
+
+# Filesystem debounce in milliseconds. Default: 300
+auto-reload-debounce = 300
+
+# Ghostty and other modern terminals support this automatically; set it only
+# if Helix does not detect it.
+true-color = true
+
+# Alphabet used by tree `gw` jump labels. Default: a-z
+# jump-label-alphabet = "abcdefghijklmnopqrstuvwxyz"
+
+[editor.sidebar]
+# Preferred/limits for the left pane, in columns. Defaults: 30/20/50
+width = 30
+min-width = 20
+max-width = 50
+
+[editor.file-explorer]
+# The tree and search use these ignore rules. Defaults shown.
+hidden = false
+follow-symlinks = false
+parents = false
+ignore = false
+git-ignore = false
+git-global = false
+git-exclude = false
+flatten-dirs = true
+
+[keys.normal]
+# Fork bindings. Defaults:
+b = "toggle_file_tree"
+B = "buffer_picker"
+# C-e = "file_picker"   # example popular VSCode-style binding
+```
+
+Notes:
+
+- `theme` is top-level; all other settings are under `[editor]` or a child
+  table.
+- `:config-reload` applies most changes without restarting.
+- The tree/search ignore behavior comes from `[editor.file-explorer]`; changing
+  those values affects both the tree and the search walker.
+- `C-b = "toggle_file_tree"` is recommended if you want the VSCode muscle
+  memory; `C-b` is otherwise `page_up`.
+- Unhandled `Ctrl`/`Alt` chords pass through from the sidebar, so custom global
+  bindings keep working while the tree or search pane is focused.
 
 ## What is new in this fork
 
