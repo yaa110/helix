@@ -1,0 +1,16 @@
+book/src/configuration.md
+  h_a09932ba751076 37
+helix-view/src/sidebar.rs
+  h_a09932ba751076 28,41,140-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "63d8e7ec85a3ec52fca44eeb2b23e2fee14186e4",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
