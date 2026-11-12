@@ -1,0 +1,22 @@
+README.md
+  h_a09932ba751076 194-199,206-207,210-219,221-223
+book/src/editor.md
+  h_a09932ba751076 32,35,61,65,111-113,118,125,127,132,213,215,322-323,340,372-373,475
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 1728,1731-1733,1747-1748,1750,1795-1801,1804,1824-1825,1838-1839,1851
+helix-term/src/ui/prompt.rs
+  h_a09932ba751076 431,513-516
+helix-view/src/editor.rs
+  h_a09932ba751076 216,218,548,679-686,689,691-693,695,698,703,959-960,1068-1069,1133-1135,1208,1221,1260,1265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45f916241eb904af8004349fa38d38677dda1f52",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
