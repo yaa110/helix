@@ -66,6 +66,26 @@ impl Sidebar {
             self.tree.select_path(&selected);
         }
 
+        // VSCode-like reveal: while the editor owns focus, keep the tree
+        // selection in sync with the current buffer. Do not fight manual
+        // browsing when the tree itself is focused.
+        if editor.sidebar.mode == SidebarMode::Files && editor.sidebar.focus == SidebarFocus::Editor
+        {
+            let current = {
+                let (_view, doc) = helix_view::current_ref!(editor);
+                doc.path().map(ToOwned::to_owned)
+            };
+            if let Some(path) = current {
+                if self.tree.selected_path() != Some(path.as_path()) {
+                    let mut expanded = editor.sidebar.expanded.clone();
+                    if self.tree.reveal(editor, &mut expanded, &path) {
+                        editor.sidebar.expanded = expanded;
+                        editor.sidebar.selected = Some(path);
+                    }
+                }
+            }
+        }
+
         if self.last_mode != editor.sidebar.mode {
             if editor.sidebar.mode == SidebarMode::Search {
                 self.search.sync_from_inputs(&editor.sidebar.search);

@@ -336,17 +336,24 @@ the static `global_search` command if you want to bind it yourself.
 | `h`, `Left`     | Collapse the directory, or move to its parent    |
 | `l`, `Right`    | Expand the directory, or open the file           |
 | `Enter`, `o`    | Open the file                                    |
+| `Tab`           | Open the file and return to the editor           |
 | `s`, `v`        | Open in a horizontal / vertical split            |
+| `gw`            | Show two-letter jump labels, then type a label   |
+| `gg`, `G`       | First / last row                                 |
 | `a`, `A`        | Create a file / directory                        |
 | `r`             | Rename                                           |
 | `d`             | Delete (confirmation defaults to No)             |
 | `y`, `Y`        | Copy the absolute / relative path                |
-| `g`, `G`        | First / last row                                 |
 | `Ctrl-d`, `Ctrl-u` | Move half a page                              |
 | `H`             | Collapse all                                     |
 | `R`             | Refresh the tree                                 |
 | `.`             | Reveal the current buffer                        |
 | `[`, `]`        | Shrink / grow the sidebar                        |
+
+While the editor has focus, the tree follows the current buffer (expanding
+ancestors and selecting the file), so `<space>b` always lands on the buffer you
+were editing. Tree browsing is not interrupted while the tree itself is
+focused.
 
 ##### Popup
 

@@ -105,6 +105,40 @@ async fn tree_refreshes_after_external_create() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn tree_reveals_the_current_buffer() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    std::fs::write(&a, "a\n")?;
+    std::fs::write(&b, "b\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+    app.editor.sidebar.mode = SidebarMode::Files;
+    app.editor.sidebar.focus = SidebarFocus::Editor;
+
+    app.editor.open(&b, helix_view::editor::Action::Replace)?;
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(b.as_path()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gw_jump_labels_select_a_row() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a\n")?;
+    let b = dir.path().join("b.txt");
+    std::fs::write(&b, "b\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    // Open the tree, start jump labels, then pick the second row ("ab").
+    helpers::send_keys(&mut app, "<space>bgwab").await?;
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(b.as_path()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn creating_an_existing_file_does_not_truncate_it() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let file = dir.path().join("keep.txt");

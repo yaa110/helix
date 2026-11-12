@@ -33,6 +33,9 @@ pub struct FileTree {
     pub rows: Vec<Row>,
     pub cursor: usize,
     pub scroll: usize,
+    labels: Option<Vec<(String, usize)>>,
+    label_prefix: Option<char>,
+    pending_g: bool,
 }
 
 impl FileTree {
@@ -42,6 +45,9 @@ impl FileTree {
             rows: Vec::new(),
             cursor: 0,
             scroll: 0,
+            labels: None,
+            label_prefix: None,
+            pending_g: false,
         }
     }
 
@@ -90,6 +96,9 @@ impl FileTree {
         push_dir(&mut rows, root, 0, expanded, &list);
         self.rows = rows;
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
+        self.labels = None;
+        self.label_prefix = None;
+        self.pending_g = false;
         self.clamp_scroll();
     }
 
@@ -159,7 +168,25 @@ impl FileTree {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| row.path.display().to_string());
-            let text = format!("{}{} {}", "  ".repeat(row.depth), marker, name);
+            let label = self.labels.as_ref().and_then(|labels| {
+                labels
+                    .iter()
+                    .find(|(_, label_index)| *label_index == index)
+                    .map(|(label, _)| {
+                        if self
+                            .label_prefix
+                            .is_some_and(|prefix| !label.starts_with(prefix))
+                        {
+                            "  "
+                        } else {
+                            label.as_str()
+                        }
+                    })
+            });
+            let text = match label {
+                Some(label) => format!("{label} {}{} {}", "  ".repeat(row.depth), marker, name),
+                None => format!("{}{} {}", "  ".repeat(row.depth), marker, name),
+            };
             let style = if focused && index == self.cursor {
                 menu
             } else if row.kind == EntryKind::Dir {
@@ -169,6 +196,101 @@ impl FileTree {
             };
             surface.set_string(area.x, area.y + 1 + offset as u16, &text, style);
         }
+    }
+
+    pub fn selected_path(&self) -> Option<&Path> {
+        self.selected_row().map(|row| row.path.as_path())
+    }
+
+    /// Expand all ancestors of `path` below `root`, rebuild, and select it.
+    pub fn reveal(
+        &mut self,
+        editor: &Editor,
+        expanded: &mut HashSet<PathBuf>,
+        path: &Path,
+    ) -> bool {
+        if !path.starts_with(&self.root) {
+            return false;
+        }
+        let mut ancestor = path.parent();
+        while let Some(parent) = ancestor {
+            if parent == self.root || !parent.starts_with(&self.root) {
+                break;
+            }
+            expanded.insert(parent.to_path_buf());
+            ancestor = parent.parent();
+        }
+        let state = SidebarState {
+            expanded: expanded.clone(),
+            ..SidebarState::default()
+        };
+        self.rebuild(editor, &state);
+        self.select_path(path);
+        true
+    }
+
+    fn start_jump_labels(&mut self, cx: &mut commands::Context) {
+        let alphabet = cx.editor.config().jump_label_alphabet.clone();
+        if alphabet.len() < 2 {
+            return;
+        }
+        let limit = alphabet.len() * alphabet.len();
+        let mut labels = Vec::new();
+        for (index, _row) in self.rows.iter().enumerate().take(limit) {
+            let first = alphabet[index / alphabet.len()];
+            let second = alphabet[index % alphabet.len()];
+            labels.push((format!("{first}{second}"), index));
+        }
+        self.labels = Some(labels);
+        self.label_prefix = None;
+    }
+
+    fn handle_label_key(&mut self, key: KeyEvent) -> bool {
+        let some_labels = self
+            .labels
+            .as_ref()
+            .is_some_and(|labels| !labels.is_empty());
+        if !some_labels {
+            self.labels = None;
+            self.label_prefix = None;
+            return true;
+        }
+        match key.code {
+            KeyCode::Esc => {
+                self.labels = None;
+                self.label_prefix = None;
+            }
+            KeyCode::Char(c) => {
+                if let Some(prefix) = self.label_prefix.take() {
+                    let target = self.labels.as_ref().and_then(|labels| {
+                        labels
+                            .iter()
+                            .find(|(label, _)| {
+                                let mut chars = label.chars();
+                                chars.next() == Some(prefix) && chars.next() == Some(c)
+                            })
+                            .map(|(_, index)| *index)
+                    });
+                    if let Some(index) = target {
+                        self.cursor = index;
+                    }
+                    self.labels = None;
+                } else if self
+                    .labels
+                    .as_ref()
+                    .is_some_and(|labels| labels.iter().any(|(label, _)| label.starts_with(c)))
+                {
+                    self.label_prefix = Some(c);
+                } else {
+                    self.labels = None;
+                }
+            }
+            _ => {
+                self.labels = None;
+                self.label_prefix = None;
+            }
+        }
+        true
     }
 
     fn selected_row(&self) -> Option<&Row> {
@@ -445,6 +567,29 @@ impl FileTree {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
+        if self.labels.is_some() {
+            let handled = self.handle_label_key(key);
+            cx.editor.sidebar.selected = self.selected_row().map(|row| row.path.clone());
+            cx.editor.needs_redraw = true;
+            return handled;
+        }
+        if self.pending_g {
+            self.pending_g = false;
+            match key.code {
+                KeyCode::Char('w') => {
+                    self.start_jump_labels(cx);
+                    cx.editor.needs_redraw = true;
+                    return true;
+                }
+                KeyCode::Char('g') => {
+                    self.cursor = 0;
+                    cx.editor.needs_redraw = true;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.rows.is_empty() {
@@ -474,7 +619,7 @@ impl FileTree {
             KeyCode::Char('y') => self.copy_path(cx, false),
             KeyCode::Char('Y') => self.copy_path(cx, true),
             KeyCode::Char('g') => {
-                self.cursor = 0;
+                self.pending_g = true;
             }
             KeyCode::Char('G') => {
                 self.cursor = self.rows.len().saturating_sub(1);
@@ -526,6 +671,16 @@ impl FileTree {
             KeyCode::Char(']') => {
                 let config = cx.editor.config().sidebar;
                 cx.editor.sidebar.width = (cx.editor.sidebar.width + 2).min(config.max_width);
+            }
+            KeyCode::Tab => {
+                if self
+                    .selected_row()
+                    .is_some_and(|row| row.kind == EntryKind::File)
+                {
+                    self.open_selected(cx, Action::Replace);
+                } else {
+                    cx.editor.sidebar.focus = SidebarFocus::Editor;
+                }
             }
             KeyCode::Char('q') | KeyCode::Esc => {
                 cx.editor.sidebar.focus = SidebarFocus::Editor;
