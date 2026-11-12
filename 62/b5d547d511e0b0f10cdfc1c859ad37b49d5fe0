@@ -1,0 +1,16 @@
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 705,709,743,749-764,769,774
+helix-term/src/ui/icons.rs
+  h_a09932ba751076 3-4,6-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "62b5d547d511e0b0f10cdfc1c859ad37b49d5fe0",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
