@@ -1,0 +1,16 @@
+README.md
+  h_a09932ba751076 196-197
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 1725-1730,1734,1737,1742,1745-1746,1751-1752,1755,1763,1773,1796,1799,1819-1820,1823,1833-1836,1847-1848
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "31123e766743e88e242207fbabb6080db0f0a660",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
