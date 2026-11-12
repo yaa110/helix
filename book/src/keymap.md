@@ -228,9 +228,11 @@ Jumps to various locations.
 | `c`   | Go to the middle of the screen                   | `goto_window_center`       |
 | `b`   | Go to the bottom of the screen                   | `goto_window_bottom`       |
 | `d`   | Go to definition (**LSP**)                       | `goto_definition`          |
+| `P`   | Peek definition (**LSP**)                        | `peek_definition`          |
 | `D`   | Go to declaration (**LSP**)                      | `goto_declaration`         |
 | `y`   | Go to type definition (**LSP**)                  | `goto_type_definition`     |
 | `r`   | Go to references (**LSP**)                       | `goto_reference`           |
+| `R`   | Peek references (**LSP**)                        | `peek_reference`           |
 | `i`   | Go to implementation (**LSP**)                   | `goto_implementation`      |
 | `a`   | Go to the last accessed/alternate file           | `goto_last_accessed_file`  |
 | `m`   | Go to the last modified/alternate file           | `goto_last_modified_file`  |

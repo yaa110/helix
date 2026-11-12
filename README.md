@@ -50,6 +50,8 @@ Everything is implemented natively in Rust. There is no plugin layer.
 - **LSP code lenses**: `<space>l` shows actions for the current line (for
   example gopls `run test`), `<space>L` shows all lenses in the file, and the
   first available lens title appears in the statusline.
+- **Peek definition/references**: `gP` / `gR` open a non-destructive preview
+  picker; `Enter` jumps, `Esc` cancels without moving the cursor.
 - **Searchable text transforms** (`F1` or `<space>t`): base64/hex encode and
   decode, case conversions, and line sorting on selections or the whole buffer.
 - **Always-visible buffer tabs** (`bufferline = "always"`).
@@ -367,6 +369,19 @@ Available actions:
 
 Open with `F1` or `<space>t`; type to filter, `j`/`k` or arrows to move,
 `Enter` to apply, `Esc` to cancel.
+
+## Peek definition and references
+
+VSCode-like peek without leaving the buffer:
+
+- `gP` — peek definition of the symbol under the cursor
+- `gR` — peek references
+- The results open in a searchable floating picker with a file preview
+- `Enter` jumps to the selected location; `Esc` closes the peek and leaves the
+  cursor exactly where it was
+- This works for multiple results too (the same picker lists every location)
+
+The normal destructive jumps remain `gd` (definition) and `gr` (references).
 
 ## LSP code lenses (run tests, runnable actions)
 

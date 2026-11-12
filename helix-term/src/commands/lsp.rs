@@ -1039,39 +1039,72 @@ impl Display for ApplyEditErrorKind {
 }
 
 /// Precondition: `locations` should be non-empty.
-fn goto_impl(editor: &mut Editor, compositor: &mut Compositor, locations: Vec<Location>) {
+fn show_location_picker(
+    _editor: &mut Editor,
+    compositor: &mut Compositor,
+    locations: Vec<Location>,
+) {
     let cwdir = helix_stdx::env::current_working_dir();
+    let columns = [ui::PickerColumn::new(
+        "location",
+        |item: &Location, cwdir: &std::path::PathBuf| {
+            let path = if let Some(path) = item.uri.as_path() {
+                path.strip_prefix(cwdir).unwrap_or(path).to_string_lossy()
+            } else {
+                item.uri.to_string().into()
+            };
 
+            format!("{path}:{}", item.range.start.line + 1).into()
+        },
+    )];
+
+    let picker = Picker::new(columns, 0, locations, cwdir, |cx, location, action| {
+        jump_to_location(cx.editor, location, action)
+    })
+    .with_preview(|_editor, location| location_to_file_location(location));
+    compositor.push(Box::new(overlaid(picker)));
+}
+
+fn goto_impl(editor: &mut Editor, compositor: &mut Compositor, locations: Vec<Location>) {
     match locations.as_slice() {
         [location] => {
             jump_to_location(editor, location, Action::Replace);
         }
         [] => unreachable!("`locations` should be non-empty for `goto_impl`"),
-        _locations => {
-            let columns = [ui::PickerColumn::new(
-                "location",
-                |item: &Location, cwdir: &std::path::PathBuf| {
-                    let path = if let Some(path) = item.uri.as_path() {
-                        path.strip_prefix(cwdir).unwrap_or(path).to_string_lossy()
-                    } else {
-                        item.uri.to_string().into()
-                    };
+        _locations => show_location_picker(editor, compositor, locations),
+    }
+}
 
-                    format!("{path}:{}", item.range.start.line + 1).into()
-                },
-            )];
-
-            let picker = Picker::new(columns, 0, locations, cwdir, |cx, location, action| {
-                jump_to_location(cx.editor, location, action)
-            })
-            .with_preview(|_editor, location| location_to_file_location(location));
-            compositor.push(Box::new(overlaid(picker)));
-        }
+fn peek_impl(editor: &mut Editor, compositor: &mut Compositor, locations: Vec<Location>) {
+    if locations.is_empty() {
+        editor.set_status("Nothing to peek");
+    } else {
+        show_location_picker(editor, compositor, locations);
     }
 }
 
 fn goto_single_impl<P, F>(cx: &mut Context, feature: LanguageServerFeature, request_provider: P)
 where
+    P: Fn(&Client, lsp::Position, lsp::TextDocumentIdentifier) -> Option<F>,
+    F: Future<Output = helix_lsp::Result<Option<lsp::GotoDefinitionResponse>>> + 'static + Send,
+{
+    request_single_impl(cx, feature, request_provider, false)
+}
+
+fn peek_single_impl<P, F>(cx: &mut Context, feature: LanguageServerFeature, request_provider: P)
+where
+    P: Fn(&Client, lsp::Position, lsp::TextDocumentIdentifier) -> Option<F>,
+    F: Future<Output = helix_lsp::Result<Option<lsp::GotoDefinitionResponse>>> + 'static + Send,
+{
+    request_single_impl(cx, feature, request_provider, true)
+}
+
+fn request_single_impl<P, F>(
+    cx: &mut Context,
+    feature: LanguageServerFeature,
+    request_provider: P,
+    peek: bool,
+) where
     P: Fn(&Client, lsp::Position, lsp::TextDocumentIdentifier) -> Option<F>,
     F: Future<Output = helix_lsp::Result<Option<lsp::GotoDefinitionResponse>>> + 'static + Send,
 {
@@ -1128,6 +1161,8 @@ where
                     LanguageServerFeature::GotoImplementation => "No implementation found.",
                     _ => "No location found.",
                 });
+            } else if peek {
+                peek_impl(editor, compositor, locations);
             } else {
                 goto_impl(editor, compositor, locations);
             }
@@ -1152,6 +1187,14 @@ pub fn goto_definition(cx: &mut Context) {
     );
 }
 
+pub fn peek_definition(cx: &mut Context) {
+    peek_single_impl(
+        cx,
+        LanguageServerFeature::GotoDefinition,
+        |ls, pos, doc_id| ls.goto_definition(doc_id, pos, None),
+    );
+}
+
 pub fn goto_type_definition(cx: &mut Context) {
     goto_single_impl(
         cx,
@@ -1169,6 +1212,14 @@ pub fn goto_implementation(cx: &mut Context) {
 }
 
 pub fn goto_reference(cx: &mut Context) {
+    request_references(cx, false);
+}
+
+pub fn peek_reference(cx: &mut Context) {
+    request_references(cx, true);
+}
+
+fn request_references(cx: &mut Context, peek: bool) {
     let config = cx.editor.config();
     let (view, doc) = current_ref!(cx.editor);
 
@@ -1205,6 +1256,8 @@ pub fn goto_reference(cx: &mut Context) {
         let call = move |editor: &mut Editor, compositor: &mut Compositor| {
             if locations.is_empty() {
                 editor.set_error("No references found.");
+            } else if peek {
+                peek_impl(editor, compositor, locations);
             } else {
                 goto_impl(editor, compositor, locations);
             }
