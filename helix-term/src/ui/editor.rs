@@ -9,7 +9,7 @@ use crate::{
         document::{render_document, LinePos, TextRenderer},
         statusline,
         text_decorations::{self, Decoration, DecorationManager, InlineDiagnostics},
-        Completion, ProgressSpinners,
+        Completion, ProgressSpinners, Sidebar,
     },
 };
 
@@ -42,6 +42,7 @@ pub struct EditorView {
     pub(crate) last_insert: (commands::MappableCommand, Vec<InsertEvent>),
     pub(crate) completion: Option<Completion>,
     spinners: ProgressSpinners,
+    pub(crate) sidebar: Sidebar,
     /// Tracks if the terminal window is focused by reaction to terminal focus events
     terminal_focused: bool,
 }
@@ -66,6 +67,7 @@ impl EditorView {
             last_insert: (commands::MappableCommand::normal_mode, Vec::new()),
             completion: None,
             spinners: ProgressSpinners::default(),
+            sidebar: Sidebar::new(),
             terminal_focused: true,
         }
     }
@@ -1504,6 +1506,13 @@ impl Component for EditorView {
                 // clear status
                 cx.editor.status_msg = None;
 
+                if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
+                    && cx.editor.sidebar.mode != helix_view::sidebar::SidebarMode::Hidden
+                {
+                    cx.editor.reset_idle_timer();
+                    return self.sidebar.handle_event(event, &mut cx);
+                }
+
                 let mode = cx.editor.mode();
 
                 if !self.on_next_key(OnKeyCallbackKind::PseudoPending, &mut cx, key) {
@@ -1639,8 +1648,23 @@ impl Component for EditorView {
             _ => false,
         };
 
-        // -1 for commandline and -1 for bufferline
-        let mut editor_area = area.clip_bottom(1);
+        // -1 for commandline
+        let full_editor_area = area.clip_bottom(1);
+        let sidebar_width = cx
+            .editor
+            .sidebar
+            .visible_width(area.width, &config.sidebar);
+        let editor_full = if sidebar_width > 0 {
+            let sidebar_area = full_editor_area.with_width(sidebar_width);
+            self.sidebar.ensure_init(cx.editor);
+            self.sidebar.render(sidebar_area, surface, cx);
+            full_editor_area.clip_left(sidebar_width)
+        } else {
+            full_editor_area
+        };
+
+        // -1 for bufferline
+        let mut editor_area = editor_full;
         if use_bufferline {
             editor_area = editor_area.clip_top(1);
         }
@@ -1649,12 +1673,12 @@ impl Component for EditorView {
         cx.editor.resize(editor_area);
 
         if use_bufferline {
-            Self::render_bufferline(cx.editor, area.with_height(1), surface);
+            Self::render_bufferline(cx.editor, editor_full.with_height(1), surface);
         }
 
         for (view, is_focused) in cx.editor.tree.views() {
             let doc = cx.editor.document(view.doc).unwrap();
-            self.render_view(cx.editor, doc, view, area, surface, is_focused);
+            self.render_view(cx.editor, doc, view, editor_area, surface, is_focused);
         }
 
         if config.auto_info {

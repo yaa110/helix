@@ -11,6 +11,7 @@ pub mod popup;
 pub mod prompt;
 mod reload_conflict;
 mod select;
+pub mod sidebar;
 mod spinner;
 mod statusline;
 mod text;
@@ -30,6 +31,7 @@ pub use popup::Popup;
 pub use prompt::{Prompt, PromptEvent};
 pub use reload_conflict::ReloadConflictPrompt;
 pub use select::Select;
+pub use sidebar::Sidebar;
 pub use spinner::{ProgressSpinners, Spinner};
 pub use text::Text;
 

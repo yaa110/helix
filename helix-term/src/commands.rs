@@ -51,6 +51,7 @@ use helix_view::{
     info::Info,
     input::KeyEvent,
     keyboard::KeyCode,
+    sidebar::{SidebarFocus, SidebarMode},
     theme::Style,
     tree,
     view::{Jump, View},
@@ -407,6 +408,8 @@ impl MappableCommand {
         file_explorer_in_current_buffer_directory, "Open file explorer at current buffer's directory",
         file_explorer_in_current_directory, "Open file explorer at current working directory",
         code_action, "Perform code action",
+        toggle_file_tree, "Toggle/focus the file tree sidebar",
+        focus_search, "Open/focus the search sidebar",
         buffer_picker, "Open buffer picker",
         jumplist_picker, "Open jumplist picker",
         symbol_picker, "Open symbol picker",
@@ -3306,6 +3309,35 @@ impl PathStyleConfig {
 
         Cell::from(Spans::from(spans))
     }
+}
+
+fn toggle_file_tree(cx: &mut Context) {
+    let sidebar = &mut cx.editor.sidebar;
+    match (sidebar.mode, sidebar.focus) {
+        (SidebarMode::Hidden, _) => {
+            sidebar.mode = SidebarMode::Files;
+            sidebar.focus = SidebarFocus::Sidebar;
+        }
+        (_, SidebarFocus::Editor) => {
+            sidebar.mode = SidebarMode::Files;
+            sidebar.focus = SidebarFocus::Sidebar;
+        }
+        (SidebarMode::Files, SidebarFocus::Sidebar) => {
+            sidebar.mode = SidebarMode::Hidden;
+            sidebar.focus = SidebarFocus::Editor;
+        }
+        (SidebarMode::Search, SidebarFocus::Sidebar) => {
+            sidebar.mode = SidebarMode::Files;
+            sidebar.focus = SidebarFocus::Sidebar;
+        }
+    }
+    cx.editor.needs_redraw = true;
+}
+
+fn focus_search(cx: &mut Context) {
+    cx.editor.sidebar.mode = SidebarMode::Search;
+    cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+    cx.editor.needs_redraw = true;
 }
 
 fn buffer_picker(cx: &mut Context) {

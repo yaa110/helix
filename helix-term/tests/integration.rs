@@ -21,5 +21,6 @@ mod test {
     mod movement;
     mod reload;
     mod session;
+    mod sidebar;
     mod splits;
 }
