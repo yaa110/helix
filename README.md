@@ -48,10 +48,69 @@ Everything is implemented natively in Rust. There is no plugin layer.
 - **LSP code lenses**: `<space>l` shows actions for the current line (for
   example gopls `run test`), `<space>L` shows all lenses in the file, and the
   first available lens title appears in the statusline.
+- **Searchable text transforms** (`F1` or `<space>t`): base64/hex encode and
+  decode, case conversions, and line sorting on selections or the whole buffer.
 - **Monokai Community (Filter Spectrum)** as the default theme.
 - **Native implementation** in `helix-view` and `helix-term`; no plugin system.
 
+## Install
+
+This fork is published at
+[github.com/yaa110/helix](https://github.com/yaa110/helix).
+
+### Homebrew
+
+```sh
+brew tap yaa110/helix https://github.com/yaa110/helix
+brew install yaa110/helix/helix
+```
+
+The formula builds from the `master` branch and installs `hx` plus this fork's
+runtime (themes, queries, grammars) under Homebrew's prefix.
+
+```sh
+# After new commits on master:
+brew reinstall yaa110/helix/helix
+```
+
+### curl installer
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/yaa110/helix/master/install.sh | sh
+```
+
+This installs to `~/.local` by default:
+
+- `~/.local/bin/hx` — wrapper that sets `HELIX_RUNTIME`
+- `~/.local/libexec/helix/hx` — the actual binary
+- `~/.local/share/helix/runtime` — themes, queries, grammars
+
+Make sure `~/.local/bin` is on your `PATH`:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Override the prefix or version:
+
+```sh
+HELIX_INSTALL_DIR="$HOME/.helix" \
+HELIX_VERSION=v0.1.0 \
+  curl -fsSL https://raw.githubusercontent.com/yaa110/helix/master/install.sh | sh
+```
+
+Prebuilt releases are provided for:
+
+- `x86_64-unknown-linux-gnu`
+- `aarch64-unknown-linux-gnu`
+- `x86_64-apple-darwin`
+- `aarch64-apple-darwin`
+
+The release workflow only runs when a `v*` tag is pushed.
+
 ## Build and run
+
+Local builds use your `rustup` default toolchain. CI builds with Rust 1.90.0.
 
 ```sh
 # Run once from the repository root. HELIX_RUNTIME makes Helix use this fork's
@@ -285,6 +344,23 @@ Replace semantics:
   permissions and CRLF line endings. Binary/non-UTF-8 files are skipped.
 - `:search-replace-all` and `:search-replace-current` expose the same
   operations from command mode.
+
+## Text transforms (`F1` / `<space>t`)
+
+A searchable VSCode-style action modal for selected text. If there is no
+selection, the transform applies to the whole buffer.
+
+Available actions:
+
+- Base64 encode / decode
+- Hex encode / decode
+- `UPPERCASE`, `lowercase`, `Title Case`
+- `kebab-case`, `snake_case`, `camelCase`, `PascalCase`,
+  `SCREAMING_SNAKE_CASE`, `dot.case`
+- Sort lines ascending / descending
+
+Open with `F1` or `<space>t`; type to filter, `j`/`k` or arrows to move,
+`Enter` to apply, `Esc` to cancel.
 
 ## LSP code lenses (run tests, runnable actions)
 

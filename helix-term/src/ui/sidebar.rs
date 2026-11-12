@@ -86,6 +86,12 @@ impl Sidebar {
             }
         }
 
+        if editor.sidebar.search_focus_query {
+            self.search.sync_from_inputs(&editor.sidebar.search);
+            self.search.focus_query();
+            editor.sidebar.search_focus_query = false;
+        }
+
         if self.last_mode != editor.sidebar.mode {
             if editor.sidebar.mode == SidebarMode::Search {
                 self.search.sync_from_inputs(&editor.sidebar.search);
@@ -134,6 +140,16 @@ impl Sidebar {
             && self.search.focus != SearchFocus::Results
         {
             return self.search.handle_event(event, cx);
+        }
+
+        // In the results list, let the normal `Space` menu (and other global
+        // shortcuts) run. `EditorView` will keep routing the sequence to the
+        // keymap while it has pending keys.
+        if cx.editor.sidebar.mode == SidebarMode::Search
+            && self.search.focus == SearchFocus::Results
+            && key.code == KeyCode::Char(' ')
+        {
+            return EventResult::Ignored(None);
         }
 
         if self.pending_space {

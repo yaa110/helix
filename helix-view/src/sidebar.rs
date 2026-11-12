@@ -71,6 +71,8 @@ pub struct SidebarState {
     pub refresh_epoch: u64,
     /// Files in the current search result set (runtime only, not persisted).
     pub search_files: Vec<PathBuf>,
+    /// Request the search pane to focus its query input on the next frame.
+    pub search_focus_query: bool,
 }
 
 impl Default for SidebarState {
@@ -85,6 +87,7 @@ impl Default for SidebarState {
             refresh_dirs: HashSet::new(),
             refresh_epoch: 0,
             search_files: Vec::new(),
+            search_focus_query: false,
         }
     }
 }

@@ -1519,6 +1519,7 @@ impl Component for EditorView {
 
                 if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
                     && cx.editor.sidebar.mode != helix_view::sidebar::SidebarMode::Hidden
+                    && self.keymaps.pending().is_empty()
                 {
                     cx.editor.reset_idle_timer();
                     let result = self.sidebar.handle_event(event, &mut cx);

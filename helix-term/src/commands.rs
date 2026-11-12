@@ -410,6 +410,7 @@ impl MappableCommand {
         code_action, "Perform code action",
         code_lens, "Show LSP code lenses for the current line",
         code_lens_file, "Show all LSP code lenses in the current file",
+        transform_picker, "Open the searchable text-transform picker",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
         focus_search, "Open/focus the search sidebar",
         buffer_picker, "Open buffer picker",
@@ -3313,6 +3314,282 @@ impl PathStyleConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransformAction {
+    Base64Encode,
+    Base64Decode,
+    HexEncode,
+    HexDecode,
+    Upper,
+    Lower,
+    Title,
+    Kebab,
+    Snake,
+    Camel,
+    Pascal,
+    ScreamingSnake,
+    Dot,
+    SortAsc,
+    SortDesc,
+}
+
+impl TransformAction {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Base64Encode => "Base64 encode",
+            Self::Base64Decode => "Base64 decode",
+            Self::HexEncode => "Hex encode",
+            Self::HexDecode => "Hex decode",
+            Self::Upper => "UPPERCASE",
+            Self::Lower => "lowercase",
+            Self::Title => "Title Case",
+            Self::Kebab => "kebab-case",
+            Self::Snake => "snake_case",
+            Self::Camel => "camelCase",
+            Self::Pascal => "PascalCase",
+            Self::ScreamingSnake => "SCREAMING_SNAKE_CASE",
+            Self::Dot => "dot.case",
+            Self::SortAsc => "Sort lines ascending",
+            Self::SortDesc => "Sort lines descending",
+        }
+    }
+}
+
+fn transform_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut prev_lower = false;
+    for ch in text.chars() {
+        if ch.is_alphanumeric() {
+            if ch.is_uppercase() && prev_lower && !current.is_empty() {
+                words.push(std::mem::take(&mut current));
+            }
+            current.push(ch);
+            prev_lower = ch.is_lowercase() || ch.is_numeric();
+        } else {
+            if !current.is_empty() {
+                words.push(std::mem::take(&mut current));
+            }
+            prev_lower = false;
+        }
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
+}
+
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    match chars.next() {
+        Some(first) => {
+            let mut out = first.to_uppercase().collect::<String>();
+            out.push_str(&chars.as_str().to_lowercase());
+            out
+        }
+        None => String::new(),
+    }
+}
+
+fn join_words(text: &str, separator: &str, capitalize_each: bool) -> String {
+    let words = transform_words(text);
+    words
+        .iter()
+        .map(|word| {
+            if capitalize_each {
+                capitalize(word)
+            } else {
+                word.to_lowercase()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(separator)
+}
+
+fn join_words_lower(text: &str, separator: &str) -> String {
+    transform_words(text)
+        .iter()
+        .map(|word| word.to_lowercase())
+        .collect::<Vec<_>>()
+        .join(separator)
+}
+
+fn sort_lines(text: &str, ascending: bool) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let trailing = text.ends_with('\n');
+    let body = if trailing {
+        &text[..text.len() - eol.len()]
+    } else {
+        text
+    };
+    let mut lines: Vec<&str> = body.split(eol).collect();
+    lines.sort();
+    if !ascending {
+        lines.reverse();
+    }
+    let mut output = lines.join(eol);
+    if trailing {
+        output.push_str(eol);
+    }
+    output
+}
+
+fn transform_text(text: &str, action: TransformAction) -> anyhow::Result<String> {
+    use base64::Engine as _;
+    Ok(match action {
+        TransformAction::Base64Encode => {
+            base64::engine::general_purpose::STANDARD.encode(text.as_bytes())
+        }
+        TransformAction::Base64Decode => {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(text.trim())
+                .map_err(|err| anyhow!("invalid base64: {err}"))?;
+            String::from_utf8(bytes).map_err(|err| anyhow!("decoded base64 is not UTF-8: {err}"))?
+        }
+        TransformAction::HexEncode => hex::encode(text.as_bytes()),
+        TransformAction::HexDecode => {
+            let bytes = hex::decode(text.trim()).map_err(|err| anyhow!("invalid hex: {err}"))?;
+            String::from_utf8(bytes).map_err(|err| anyhow!("decoded hex is not UTF-8: {err}"))?
+        }
+        TransformAction::Upper => text.to_uppercase(),
+        TransformAction::Lower => text.to_lowercase(),
+        TransformAction::Title => join_words(text, " ", true),
+        TransformAction::Kebab => join_words_lower(text, "-"),
+        TransformAction::Snake => join_words_lower(text, "_"),
+        TransformAction::Camel => {
+            let words = transform_words(text);
+            words
+                .iter()
+                .enumerate()
+                .map(|(index, word)| {
+                    if index == 0 {
+                        word.to_lowercase()
+                    } else {
+                        capitalize(word)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        }
+        TransformAction::Pascal => join_words(text, "", true),
+        TransformAction::ScreamingSnake => join_words(text, "_", true).to_uppercase(),
+        TransformAction::Dot => join_words_lower(text, "."),
+        TransformAction::SortAsc => sort_lines(text, true),
+        TransformAction::SortDesc => sort_lines(text, false),
+    })
+}
+
+fn apply_transform(editor: &mut Editor, action: TransformAction) -> anyhow::Result<()> {
+    let (view, doc) = current!(editor);
+    let text = doc.text().clone();
+    let selection = doc.selection(view.id).clone();
+    let ranges: Vec<Range> = selection
+        .ranges()
+        .iter()
+        .filter(|range| !range.is_empty())
+        .copied()
+        .collect();
+    let targets = if ranges.is_empty() {
+        vec![Range::new(0, text.len_chars())]
+    } else {
+        ranges
+    };
+
+    let mut changes = Vec::with_capacity(targets.len());
+    for range in targets {
+        let slice = range.slice(text.slice(..));
+        let replacement = transform_text(&slice.to_string(), action)?;
+        changes.push((range.from(), range.to(), Some(replacement.into())));
+    }
+
+    let transaction = Transaction::change(&text, changes.into_iter());
+    doc.apply(&transaction, view.id);
+    doc.append_changes_to_history(view);
+    if editor.mode == Mode::Select {
+        editor.mode = Mode::Normal;
+    }
+    Ok(())
+}
+
+fn transform_picker(cx: &mut Context) {
+    use TransformAction::*;
+    let actions = [
+        Base64Encode,
+        Base64Decode,
+        HexEncode,
+        HexDecode,
+        Upper,
+        Lower,
+        Title,
+        Kebab,
+        Snake,
+        Camel,
+        Pascal,
+        ScreamingSnake,
+        Dot,
+        SortAsc,
+        SortDesc,
+    ];
+    let columns = [PickerColumn::new(
+        "transform",
+        |action: &TransformAction, _: &()| action.label().into(),
+    )];
+    let picker = Picker::new(columns, 0, actions, (), |cx, action, _| {
+        if let Err(err) = apply_transform(cx.editor, *action) {
+            cx.editor.set_error(err.to_string());
+        }
+    });
+    cx.push_layer(Box::new(overlaid(picker)));
+}
+
+#[cfg(test)]
+mod transform_tests {
+    use super::*;
+
+    #[test]
+    fn transforms_case_and_lines() {
+        assert_eq!(
+            transform_text("helloWorld", TransformAction::Snake).unwrap(),
+            "hello_world"
+        );
+        assert_eq!(
+            transform_text("hello world", TransformAction::Pascal).unwrap(),
+            "HelloWorld"
+        );
+        assert_eq!(
+            transform_text("hello world", TransformAction::Kebab).unwrap(),
+            "hello-world"
+        );
+        assert_eq!(
+            transform_text("b\na\n", TransformAction::SortAsc).unwrap(),
+            "a\nb\n"
+        );
+        assert_eq!(
+            transform_text("b\r\na\r\n", TransformAction::SortDesc).unwrap(),
+            "b\r\na\r\n"
+        );
+    }
+
+    #[test]
+    fn transforms_base64_and_hex() {
+        let encoded = transform_text("hello", TransformAction::Base64Encode).unwrap();
+        assert_eq!(encoded, "aGVsbG8=");
+        assert_eq!(
+            transform_text(&encoded, TransformAction::Base64Decode).unwrap(),
+            "hello"
+        );
+        let encoded = transform_text("hello", TransformAction::HexEncode).unwrap();
+        assert_eq!(encoded, "68656c6c6f");
+        assert_eq!(
+            transform_text(&encoded, TransformAction::HexDecode).unwrap(),
+            "hello"
+        );
+    }
+}
+
 fn toggle_file_tree(cx: &mut Context) {
     let sidebar = &mut cx.editor.sidebar;
     match (sidebar.mode, sidebar.focus) {
@@ -3339,6 +3616,7 @@ fn toggle_file_tree(cx: &mut Context) {
 fn focus_search(cx: &mut Context) {
     cx.editor.sidebar.mode = SidebarMode::Search;
     cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+    cx.editor.sidebar.search_focus_query = true;
     cx.editor.needs_redraw = true;
 }
 

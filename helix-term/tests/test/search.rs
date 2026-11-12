@@ -97,6 +97,24 @@ async fn replace_all_updates_open_buffer_in_memory_and_disk_files() -> anyhow::R
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn global_space_shortcuts_work_from_search_results() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "foo\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>/foo").await?;
+    wait_for_search_results(&mut app, 1).await;
+    helpers::send_keys(&mut app, "<ret>").await?;
+    helpers::send_keys(&mut app, "<space>b").await?;
+    assert_eq!(
+        app.editor.sidebar.mode,
+        helix_view::sidebar::SidebarMode::Files
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn replace_all_from_search_pane_updates_disk_and_reports() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let a = dir.path().join("a.txt");

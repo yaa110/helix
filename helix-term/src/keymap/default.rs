@@ -62,6 +62,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "w" => goto_word,
         },
         ":" => command_mode,
+        "F1" => transform_picker,
 
         "i" => insert_mode,
         "I" => insert_at_line_start,
@@ -236,6 +237,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "D" => workspace_diagnostics_picker,
             "g" => changed_file_picker,
             "a" => code_action,
+            "t" => transform_picker,
             "l" => code_lens,
             "L" => code_lens_file,
             "'" => last_picker,
