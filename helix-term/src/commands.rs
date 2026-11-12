@@ -411,6 +411,7 @@ impl MappableCommand {
         code_lens, "Show LSP code lenses for the current line",
         code_lens_file, "Show all LSP code lenses in the current file",
         transform_picker, "Open the searchable text-transform picker",
+        close_buffer, "Close the current buffer (same as :buffer-close)",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
         focus_search, "Open/focus the search sidebar",
         buffer_picker, "Open buffer picker",
@@ -3589,6 +3590,36 @@ mod transform_tests {
             transform_text(&encoded, TransformAction::HexDecode).unwrap(),
             "hello"
         );
+    }
+}
+
+fn close_buffer(cx: &mut Context) {
+    use helix_view::editor::CloseError;
+
+    if let Err(err) = cx.block_try_flush_writes() {
+        cx.editor
+            .set_error(format!("failed to flush writes: {err}"));
+        return;
+    }
+
+    let doc_id = view!(cx.editor).doc;
+    match cx.editor.close_document(doc_id, false) {
+        Ok(()) => {
+            cx.editor.sidebar.reveal_current = true;
+            cx.editor.needs_redraw = true;
+        }
+        Err(CloseError::BufferModified(name)) => {
+            cx.editor.set_error(format!(
+                "unsaved changes in {name}; use :buffer-close! to force close"
+            ));
+        }
+        Err(CloseError::DoesNotExist) => {
+            cx.editor.set_error("buffer no longer exists");
+        }
+        Err(CloseError::SaveError(err)) => {
+            cx.editor
+                .set_error(format!("failed to save before closing: {err}"));
+        }
     }
 }
 

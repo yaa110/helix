@@ -79,7 +79,7 @@
 | `search_selection` | Use current selection as search pattern | normal: `` <A-*> ``, select: `` <A-*> `` |
 | `search_selection_detect_word_boundaries` | Use current selection as the search pattern, automatically wrapping with `\b` on word boundaries | normal: `` * ``, select: `` * `` |
 | `make_search_word_bounded` | Modify current search to make it word bounded |  |
-| `global_search` | Global search in workspace folder | normal: `` <space>/ ``, select: `` <space>/ `` |
+| `global_search` | Global search in workspace folder |  |
 | `extend_line` | Select current line, if already selected, extend to another line based on the anchor |  |
 | `extend_line_below` | Select current line, if already selected, extend to next line | normal: `` x ``, select: `` x `` |
 | `extend_line_above` | Select current line, if already selected, extend to previous line |  |
@@ -102,9 +102,15 @@
 | `file_picker_in_current_directory` | Open file picker at current working directory | normal: `` <space>F ``, select: `` <space>F `` |
 | `file_explorer` | Open file explorer in workspace root | normal: `` <space>e ``, select: `` <space>e `` |
 | `file_explorer_in_current_buffer_directory` | Open file explorer at current buffer's directory | normal: `` <space>. ``, select: `` <space>. `` |
-| `file_explorer_in_current_directory` | Open file explorer at current working directory |  |
+| `file_explorer_in_current_directory` | Open file explorer at current working directory | normal: `` <space>E ``, select: `` <space>E `` |
 | `code_action` | Perform code action | normal: `` <space>a ``, select: `` <space>a `` |
-| `buffer_picker` | Open buffer picker | normal: `` <space>b ``, select: `` <space>b `` |
+| `code_lens` | Show LSP code lenses for the current line | normal: `` <space>l ``, select: `` <space>l `` |
+| `code_lens_file` | Show all LSP code lenses in the current file | normal: `` <space>L ``, select: `` <space>L `` |
+| `transform_picker` | Open the searchable text-transform picker | normal: `` <F1> ``, `` <space>t ``, select: `` <F1> ``, `` <space>t `` |
+| `close_buffer` | Close the current buffer (same as :buffer-close) | normal: `` <space>x ``, select: `` <space>x `` |
+| `toggle_file_tree` | Toggle/focus the file tree sidebar | normal: `` <space>b ``, select: `` <space>b `` |
+| `focus_search` | Open/focus the search sidebar | normal: `` <space>/ ``, select: `` <space>/ `` |
+| `buffer_picker` | Open buffer picker | normal: `` <space>B ``, select: `` <space>B `` |
 | `jumplist_picker` | Open jumplist picker | normal: `` <space>j ``, select: `` <space>j `` |
 | `symbol_picker` | Open symbol picker |  |
 | `syntax_symbol_picker` | Open symbol picker from syntax information |  |
@@ -125,6 +131,7 @@
 | `select_mode` | Enter selection extend mode | normal: `` v `` |
 | `exit_select_mode` | Exit selection mode | select: `` <esc> `` |
 | `goto_definition` | Goto definition | normal: `` gd ``, select: `` gd `` |
+| `peek_definition` | Peek definition without leaving the current buffer | normal: `` gP ``, select: `` gP `` |
 | `goto_declaration` | Goto declaration | normal: `` gD ``, select: `` gD `` |
 | `add_newline_above` | Add newline above | normal: `` [<space> ``, select: `` [<space> `` |
 | `add_newline_below` | Add newline below | normal: `` ]<space> ``, select: `` ]<space> `` |
@@ -138,6 +145,7 @@
 | `goto_file_hsplit` | Goto files in selections (hsplit) | normal: `` <C-w>f ``, `` <space>wf ``, select: `` <C-w>f ``, `` <space>wf `` |
 | `goto_file_vsplit` | Goto files in selections (vsplit) | normal: `` <C-w>F ``, `` <space>wF ``, select: `` <C-w>F ``, `` <space>wF `` |
 | `goto_reference` | Goto references | normal: `` gr ``, select: `` gr `` |
+| `peek_reference` | Peek references without leaving the current buffer | normal: `` gR ``, select: `` gR `` |
 | `goto_window_top` | Goto window top | normal: `` gt ``, select: `` gt `` |
 | `goto_window_center` | Goto window center | normal: `` gc ``, select: `` gc `` |
 | `goto_window_bottom` | Goto window bottom | normal: `` gb ``, select: `` gb `` |

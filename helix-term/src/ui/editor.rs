@@ -1517,6 +1517,30 @@ impl Component for EditorView {
                 // clear status
                 cx.editor.status_msg = None;
 
+                // Tree-specific Space sequences take precedence over the global
+                // Space menu, but only while the tree actually owns focus.
+                let tree_space_op = cx.editor.sidebar.focus
+                    == helix_view::sidebar::SidebarFocus::Sidebar
+                    && cx.editor.sidebar.mode == helix_view::sidebar::SidebarMode::Files
+                    && self.keymaps.pending() == [key!(' ')]
+                    && matches!(key.code, KeyCode::Char('c' | 'm' | 'p' | 'd'))
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+                if tree_space_op {
+                    self.keymaps.take_pending();
+                    self.sidebar.handle_space_op(key, &mut cx);
+                    let callbacks = take(&mut cx.callback);
+                    if callbacks.is_empty() {
+                        return EventResult::Consumed(None);
+                    }
+                    return EventResult::Consumed(Some(Box::new(move |compositor, cx| {
+                        for callback in callbacks {
+                            callback(compositor, cx);
+                        }
+                    })));
+                }
+
                 if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
                     && cx.editor.sidebar.mode != helix_view::sidebar::SidebarMode::Hidden
                     && self.keymaps.pending().is_empty()

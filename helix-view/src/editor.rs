@@ -644,7 +644,7 @@ impl Default for LspConfig {
             auto_document_highlight: false,
             inlay_hints_length_limit: None,
             snippets: true,
-            goto_reference_include_declaration: true,
+            goto_reference_include_declaration: false,
             display_color_swatches: true,
         }
     }
@@ -2283,6 +2283,10 @@ impl Editor {
         };
 
         self.switch(id, action);
+        // Opening a file (including from a picker, which may use `Action::Load`)
+        // must reveal it in the tree even though `Action::Load` does not switch
+        // the view through `switch`'s normal path.
+        self.sidebar.reveal_current = true;
 
         Ok(id)
     }

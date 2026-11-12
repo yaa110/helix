@@ -18,7 +18,6 @@ use search::{SearchFocus, SearchPane};
 /// The persistent left pane. Tasks 12 and 19 add the file tree and search
 /// panes; this component owns the shared layout, header, and key routing.
 pub struct Sidebar {
-    pending_space: bool,
     tree: FileTree,
     search: SearchPane,
     last_refresh_epoch: u64,
@@ -28,7 +27,6 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new() -> Self {
         Self {
-            pending_space: false,
             tree: FileTree::new(PathBuf::new()),
             search: SearchPane::new(&helix_view::sidebar::SearchInputs::default()),
             last_refresh_epoch: 0,
@@ -51,6 +49,17 @@ impl Sidebar {
         }
     }
 
+    pub fn handle_space_op(
+        &mut self,
+        key: helix_view::input::KeyEvent,
+        cx: &mut commands::Context,
+    ) -> bool {
+        if cx.editor.sidebar.mode != SidebarMode::Files {
+            return false;
+        }
+        self.tree.handle_space_op(key, cx)
+    }
+
     pub fn ensure_init(&mut self, editor: &mut Editor) {
         if self.tree.root != editor.workspace_root {
             self.tree = FileTree::new(editor.workspace_root.clone());
@@ -60,6 +69,11 @@ impl Sidebar {
             let state = editor.sidebar.clone();
             self.tree.refresh(editor, &state);
             self.last_refresh_epoch = editor.sidebar.refresh_epoch;
+        }
+
+        if self.tree.filter != editor.sidebar.tree_filter {
+            self.tree
+                .set_filter(editor.sidebar.tree_filter.clone(), editor);
         }
 
         if let Some(selected) = editor.sidebar.selected.clone() {
@@ -106,15 +120,32 @@ impl Sidebar {
             .try_get_exact("ui.sidebar")
             .or_else(|| theme.try_get_exact("ui.background"))
             .unwrap_or_default();
-        let border = theme
-            .try_get_exact("ui.sidebar.border")
-            .or_else(|| theme.try_get_exact("ui.linenr"))
-            .unwrap_or_default();
         surface.clear_with(area, background);
         let focused = cx.editor.sidebar.focus == SidebarFocus::Sidebar;
+        let border = if focused {
+            theme
+                .try_get_exact("ui.sidebar.border.focused")
+                .or_else(|| theme.try_get_exact("ui.sidebar.border"))
+                .or_else(|| theme.try_get_exact("ui.linenr"))
+                .unwrap_or_default()
+                .add_modifier(helix_view::graphics::Modifier::BOLD)
+        } else {
+            theme
+                .try_get_exact("ui.sidebar.border")
+                .or_else(|| theme.try_get_exact("ui.linenr"))
+                .unwrap_or_default()
+        };
         match cx.editor.sidebar.mode {
             SidebarMode::Files => {
                 self.tree.render(area, surface, cx.editor, focused);
+                if focused && cx.editor.status_msg.is_none() {
+                    if let Some(hint) = self.tree.overflow_hint.clone() {
+                        // A terminal has no native tooltip; the statusline is
+                        // the closest equivalent and remains visible while the
+                        // selected tree row is horizontally clipped.
+                        cx.editor.set_status(hint);
+                    }
+                }
             }
             SidebarMode::Search => {
                 self.search.render(area, surface, cx.editor);
@@ -151,23 +182,6 @@ impl Sidebar {
             return EventResult::Ignored(None);
         }
 
-        if self.pending_space {
-            self.pending_space = false;
-            match key.code {
-                KeyCode::Char('b') => {
-                    cx.editor.sidebar.mode = SidebarMode::Hidden;
-                    cx.editor.sidebar.focus = SidebarFocus::Editor;
-                }
-                KeyCode::Char('/') => {
-                    cx.editor.sidebar.mode = SidebarMode::Search;
-                    cx.editor.sidebar.focus = SidebarFocus::Sidebar;
-                }
-                _ => {}
-            }
-            cx.editor.needs_redraw = true;
-            return EventResult::Consumed(None);
-        }
-
         if cx.editor.sidebar.mode == SidebarMode::Search {
             return self.search.handle_event(event, cx);
         }
@@ -177,10 +191,9 @@ impl Sidebar {
         }
 
         match key.code {
-            KeyCode::Char(' ') => {
-                self.pending_space = true;
-                EventResult::Consumed(None)
-            }
+            // Let the global `<space>` menu run while the tree is focused. The
+            // tree-specific Space sequences are intercepted by EditorView.
+            KeyCode::Char(' ') => EventResult::Ignored(None),
             KeyCode::Esc | KeyCode::Char('q') => {
                 cx.editor.sidebar.focus = SidebarFocus::Editor;
                 cx.editor.needs_redraw = true;

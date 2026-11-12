@@ -75,6 +75,8 @@ pub struct SidebarState {
     pub search_focus_query: bool,
     /// Set when the focused buffer changes; the tree reveals it once.
     pub reveal_current: bool,
+    /// Current file-tree filter text (runtime only).
+    pub tree_filter: String,
 }
 
 impl Default for SidebarState {
@@ -91,6 +93,7 @@ impl Default for SidebarState {
             search_files: Vec::new(),
             search_focus_query: false,
             reveal_current: false,
+            tree_filter: String::new(),
         }
     }
 }

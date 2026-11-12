@@ -268,6 +268,14 @@ impl Application {
                                 nr_of_files -= 1;
                                 continue;
                             }
+                            Err(DocumentOpenError::BinaryFile) => {
+                                nr_of_files -= 1;
+                                editor.set_error(format!(
+                                    "not displaying {} because it is binary",
+                                    file.display()
+                                ));
+                                continue;
+                            }
                             Err(err) => return Err(anyhow::anyhow!(err)),
                             // We can't open more than 1 buffer for 1 file, in this case we already have opened this file previously
                             Ok(doc_id) if old_id == Some(doc_id) => {

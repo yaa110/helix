@@ -300,8 +300,10 @@ This layer is a kludge of mappings, mostly pickers.
 | `f`     | Open file picker at LSP workspace root                                  | `file_picker`                              |
 | `F`     | Open file picker at current working directory                           | `file_picker_in_current_directory`         |
 | `e`     | Open file explorer at workspace root                                     | `file_explorer`                            |
+| `E`     | Open file explorer at current working directory                          | `file_explorer_in_current_directory`       |
 | `.`     | Open file explorer at current buffer's directory                        | `file_explorer_in_current_buffer_directory`|
 | `b`     | Toggle/focus the file tree sidebar                                      | `toggle_file_tree`                         |
+| `x`     | Close the current buffer (same as `:buffer-close`)                      | `close_buffer`                             |
 | `B`     | Open buffer picker                                                      | `buffer_picker`                            |
 | `j`     | Open jumplist picker                                                    | `jumplist_picker`                          |
 | `g`     | Open changed file picker                                                | `changed_file_picker`                      |
@@ -350,6 +352,12 @@ the static `global_search` command if you want to bind it yourself.
 | `a`, `A`        | Create a file / directory                        |
 | `r`             | Rename                                           |
 | `d`             | Delete (confirmation defaults to No)             |
+| `Space` `c`     | Copy the selected file/directory                 |
+| `Space` `m`     | Cut/move the selected file/directory             |
+| `Space` `p`     | Paste into the selected directory                |
+| `Space` `d`     | Delete (confirmation defaults to No)             |
+| `/`             | Filter the tree; `Esc` clears the filter         |
+| `zh`, `zl`      | Scroll long tree rows left / right               |
 | `y`, `Y`        | Copy the absolute / relative path                |
 | `Ctrl-d`, `Ctrl-u` | Move half a page                              |
 | `H`             | Collapse all                                     |
@@ -362,9 +370,20 @@ ancestors and selects that file. Manually selecting a different row is preserved
 when focus returns to the editor; it only snaps back when the focused buffer
 changes.
 
-Unhandled `Ctrl`/`Alt` chords are passed through to the normal keymap while the
-sidebar is focused, so custom global bindings (for example
-`C-e = "file_picker"`) work from the tree. Plain keys are owned by the sidebar.
+Unhandled `Ctrl`/`Alt` chords and the global `Space` menu are passed through to
+the normal keymap while the sidebar is focused, so custom global bindings (for
+example `C-e = "file_picker"`) and `<space>e` work from the tree. Plain keys are
+owned by the sidebar; only the tree-specific `Space` sequences (`c`, `m`, `p`,
+`d`) are intercepted. Tree rows are clipped at the pane edge and the statusline
+shows the full path when the selected row is too long; use `zh`/`zl` to scroll.
+
+The selected row always shows a `▍` accent bar. While the tree is focused the
+sidebar border/header are bold/accented and the row uses the focused selection
+style; when focus returns to the editor the same row remains visible but uses
+the dimmed/unfocused style. Themes can override this with
+`ui.tree.selected.focused`, `ui.tree.selected.unfocused`,
+`ui.tree.selected.indicator`, `ui.tree.selected.indicator.unfocused`,
+`ui.sidebar.border.focused`, and `ui.sidebar.title.focused`.
 
 ##### Popup
 

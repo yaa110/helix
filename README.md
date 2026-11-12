@@ -37,13 +37,15 @@ Everything is implemented natively in Rust. There is no plugin layer.
 - **Two-letter tree jumps** with `gw` + label.
 - **Fast focus switching**: `<space>b` from the editor lands on the current
   buffer; `Enter`/`Tab`/`Esc` returns to the editor.
-- **Global shortcuts from the sidebar**: unhandled `Ctrl`/`Alt` chords pass
-  through, so bindings such as `Ctrl+E` for a picker still work while the tree
-  is focused.
+- **Global shortcuts from the sidebar**: unhandled `Ctrl`/`Alt` chords and the
+  global `<space>` menu pass through, so bindings such as `Ctrl+E` or
+  `<space>e` still work while the tree is focused.
 - **Session restore** of buffers, selections, cursor/scroll, sidebar state,
   and search inputs per workspace.
 - **Automatic file reload** with silent reload for clean buffers and a safe
   Keep/Reload/Overwrite prompt for dirty buffers.
+- **Binary-file guard**: images and other binary files are detected before
+  decoding and reported instead of being rendered as terminal garbage.
 - **Workspace search and replace** in the sidebar, with case/word/regex/
   preserve-case toggles, grouped streaming results, open-at-match,
   select-all, replace-one, and replace-all.
@@ -238,6 +240,9 @@ keyboard driven.
 
 - `<space>b` — show/focus the Files pane, or hide it when Files is already focused.
 - `<space>/` — show/focus the Search pane.
+- `<space>e` / `<space>E` — open the file explorer at the workspace / current
+  working directory.
+- `<space>x` — close the current buffer (`:buffer-close`).
 - `<space>B` — buffer picker (moved from `<space>b`).
 - The sidebar auto-hides when the terminal cannot leave 40 columns for the editor.
 
@@ -261,18 +266,37 @@ filesystem changes.
 | `a` / `A` | Create a file / directory |
 | `r` | Rename |
 | `d` | Delete (confirmation defaults to No) |
+| `<space>c` | Copy the selected file/directory |
+| `<space>m` | Cut/move the selected file/directory |
+| `<space>p` | Paste into the selected directory |
+| `<space>d` | Delete with confirmation |
+| `/` | Filter the tree; `Esc` clears the filter |
+| `zh` / `zl` | Scroll long tree rows left / right |
 | `y` / `Y` | Copy the absolute / relative path |
 | `H` | Collapse all |
 | `R` | Refresh |
 | `.` | Reveal the current buffer in the tree |
 | `[` / `]` | Shrink / grow the sidebar |
+| `<space>x` | Close the current buffer (same as `:buffer-close`) |
 | `q` / `Esc` | Return focus to the editor |
 
+Long names are clipped at the pane boundary instead of spilling into the
+editor. The statusline shows the full path of the selected row whenever it is
+truncated; use `zh`/`zl` to scroll it horizontally.
+
+Focus is indicated the way desktop editors do it: the selected row always has a
+`▍` accent bar, and the sidebar border/header become prominent while the tree
+owns focus; the inactive selection stays visible but dimmed. Themes can override
+this with `ui.tree.selected.focused`, `ui.tree.selected.unfocused`,
+`ui.tree.selected.indicator`, `ui.tree.selected.indicator.unfocused`,
+`ui.sidebar.border.focused`, and `ui.sidebar.title.focused`.
+
 **Global shortcuts still work:** while the tree (or search pane) is focused,
-plain keys belong to the sidebar, but unhandled `Ctrl`/`Alt` chords fall through
-to the normal keymap. So a custom `Ctrl+e = "file_picker"` (or any other global
-binding) works from the tree, and `<space>b` / a configured `Ctrl+b` still
-toggles it.
+plain keys belong to the sidebar, but unhandled `Ctrl`/`Alt` chords and the
+global `<space>` menu fall through to the normal keymap. So a custom
+`Ctrl+e = "file_picker"` (or any other global binding) works from the tree, and
+`<space>b` / a configured `Ctrl+b` still toggles it. Tree-specific Space
+sequences (`c`, `m`, `p`, `d`) are consumed only while the tree has focus.
 
 **VSCode-like reveal:** when a new buffer is opened or the selected buffer
 changes (next/previous buffer, picker, `:open`, etc.), the tree expands and
@@ -401,10 +425,14 @@ The menu is keyboard only: `j`/`k` or arrows to move, `Enter` to execute, `Esc`
 to cancel. Lenses are refreshed on idle after edits. Code actions remain on
 `<space>a`; they are a different protocol.
 
-MVP limitation: lenses whose command is only supplied through
-`codeLens/resolve` are not shown yet, and no inline virtual-text button is
-rendered. This is deliberate: the menu + statusline is less intrusive for a
-modal editor.
+Lenses whose command is supplied lazily through `codeLens/resolve` are resolved
+automatically before the menu is shown. No inline virtual-text button is
+rendered: the menu + statusline is less intrusive for a modal editor.
+
+> **gopls note:** recent gopls versions disable the `test` code-lens source by
+> default (VS Code renders tests through its own UI). This fork's
+> `languages.toml` enables `gopls.config.codelenses.test = true`. If you
+> override the gopls configuration, keep that flag to see `run test` lenses.
 
 ## Configuration
 
@@ -468,6 +496,9 @@ These are deliberately out of scope for the current fork state:
   inputs.
 - BOM/non-UTF-8 file comparison in the watcher is best-effort.
 - No OS trash integration; tree delete is permanent after confirmation.
+- Binary detection is intentionally conservative: files with a UTF BOM or an
+  explicitly configured encoding are opened as text. Binary files opened from
+  the command line produce a status message and an empty scratch buffer.
 - No mouse interaction, git decorations, or LSP rename propagation from tree
   renames.
 - Windows session replacement is not fully atomic.

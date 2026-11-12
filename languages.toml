@@ -224,6 +224,11 @@ await = true
 [language-server.gopls]
 command = "gopls"
 
+[language-server.gopls.config.codelenses]
+# gopls disables test/benchmark lenses by default because VS Code renders
+# them through its own test UI. Helix has no such UI, so opt back in.
+test = true
+
 [language-server.gopls.config.hints]
 assignVariableTypes = true
 compositeLiteralFields = true

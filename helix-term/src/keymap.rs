@@ -288,6 +288,11 @@ impl Keymaps {
         &self.state
     }
 
+    /// Clear pending keys after a sidebar-specific sequence consumes them.
+    pub fn take_pending(&mut self) -> Vec<KeyEvent> {
+        std::mem::take(&mut self.state)
+    }
+
     pub fn sticky(&self) -> Option<&KeyTrieNode> {
         self.sticky.as_ref()
     }
@@ -614,5 +619,20 @@ is_sticky = false
         ));
 
         assert_eq!(toml::from_str(keys), Ok(expectation));
+    }
+
+    #[test]
+    fn fork_space_bindings_are_present() {
+        let keymap = default();
+        let normal = keymap.get(&Mode::Normal).unwrap();
+        let leaf = |keys: &[KeyEvent]| normal.search(keys).cloned().expect("binding should exist");
+        assert_eq!(
+            leaf(&[key!(' '), key!('E')]),
+            KeyTrie::MappableCommand(MappableCommand::file_explorer_in_current_directory)
+        );
+        assert_eq!(
+            leaf(&[key!(' '), key!('x')]),
+            KeyTrie::MappableCommand(MappableCommand::close_buffer)
+        );
     }
 }

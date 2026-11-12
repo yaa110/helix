@@ -2,8 +2,9 @@ use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
 use helix_view::editor::Action;
-use helix_view::graphics::Rect;
+use helix_view::graphics::{Modifier, Rect};
 use helix_view::input::KeyEvent;
 use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::sidebar::{SidebarFocus, SidebarState};
@@ -28,14 +29,24 @@ pub struct Row {
 }
 
 #[derive(Debug, Clone)]
+struct FileClipboard {
+    paths: Vec<PathBuf>,
+    cut: bool,
+}
+
 pub struct FileTree {
     pub root: PathBuf,
     pub rows: Vec<Row>,
     pub cursor: usize,
     pub scroll: usize,
+    pub filter: String,
+    pub overflow_hint: Option<String>,
+    clipboard: Option<FileClipboard>,
     labels: Option<Vec<(String, usize)>>,
     label_prefix: Option<char>,
     pending_g: bool,
+    pending_z: bool,
+    horizontal_scroll: usize,
 }
 
 impl FileTree {
@@ -45,9 +56,14 @@ impl FileTree {
             rows: Vec::new(),
             cursor: 0,
             scroll: 0,
+            filter: String::new(),
+            overflow_hint: None,
+            clipboard: None,
             labels: None,
             label_prefix: None,
             pending_g: false,
+            pending_z: false,
+            horizontal_scroll: 0,
         }
     }
 
@@ -70,12 +86,13 @@ impl FileTree {
             depth: usize,
             expanded: &HashSet<PathBuf>,
             list: &impl Fn(&Path) -> io::Result<Vec<(PathBuf, bool)>>,
+            recurse_all: bool,
         ) {
             let Ok(entries) = list(dir) else {
                 return;
             };
             for (path, is_dir) in entries {
-                let is_expanded = is_dir && expanded.contains(&path);
+                let is_expanded = is_dir && (recurse_all || expanded.contains(&path));
                 rows.push(Row {
                     path: path.clone(),
                     depth,
@@ -87,13 +104,28 @@ impl FileTree {
                     expanded: is_expanded,
                 });
                 if is_expanded {
-                    push_dir(rows, &path, depth + 1, expanded, list);
+                    push_dir(rows, &path, depth + 1, expanded, list, recurse_all);
                 }
             }
         }
 
         let mut rows = Vec::new();
-        push_dir(&mut rows, root, 0, expanded, &list);
+        // While filtering, walk the whole tree so matches inside collapsed
+        // directories are still discoverable.
+        push_dir(&mut rows, root, 0, expanded, &list, !self.filter.is_empty());
+        if !self.filter.is_empty() {
+            let needle = self.filter.to_lowercase();
+            let matches: HashSet<PathBuf> = rows
+                .iter()
+                .filter(|row| row.path.to_string_lossy().to_lowercase().contains(&needle))
+                .map(|row| row.path.clone())
+                .collect();
+            rows.retain(|row| {
+                matches.contains(&row.path)
+                    || (row.kind == EntryKind::Dir
+                        && matches.iter().any(|path| path.starts_with(&row.path)))
+            });
+        }
         self.rows = rows;
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         self.labels = None;
@@ -120,31 +152,60 @@ impl FileTree {
         self.clamp_scroll();
     }
 
-    pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, _focused: bool) {
+    pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
         let theme = &editor.theme;
-        let title = theme
-            .try_get_exact("ui.sidebar.title")
-            .or_else(|| theme.try_get_exact("ui.text"))
-            .unwrap_or_default();
+        let title = if focused {
+            theme
+                .try_get_exact("ui.sidebar.title.focused")
+                .or_else(|| theme.try_get_exact("ui.sidebar.title"))
+                .or_else(|| theme.try_get_exact("ui.text"))
+                .unwrap_or_default()
+                .add_modifier(Modifier::BOLD)
+        } else {
+            theme
+                .try_get_exact("ui.sidebar.title")
+                .or_else(|| theme.try_get_exact("ui.text"))
+                .unwrap_or_default()
+        };
         let directory = theme
             .try_get_exact("ui.tree.directory")
             .or_else(|| theme.try_get_exact("ui.text.directory"))
             .unwrap_or_default();
-        let menu = theme
-            .try_get_exact("ui.tree.selected")
+        let selected = theme
+            .try_get_exact(if focused {
+                "ui.tree.selected.focused"
+            } else {
+                "ui.tree.selected.unfocused"
+            })
+            .or_else(|| theme.try_get_exact("ui.tree.selected"))
             .or_else(|| theme.try_get_exact("ui.selection"))
             .unwrap_or_default();
+        let menu = if focused {
+            selected
+        } else {
+            selected.add_modifier(Modifier::DIM)
+        };
+        let indicator = theme
+            .try_get_exact(if focused {
+                "ui.tree.selected.indicator"
+            } else {
+                "ui.tree.selected.indicator.unfocused"
+            })
+            .unwrap_or(menu);
 
         if area.height == 0 {
             return;
         }
 
-        let header = self
+        let mut header = self
             .root
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| self.root.display().to_string());
-        surface.set_string(area.x, area.y, &header, title);
+        if !self.filter.is_empty() {
+            header.push_str(&format!(" [{}]", self.filter));
+        }
+        surface.set_stringn(area.x, area.y, &header, area.width as usize, title);
 
         let height = area.height.saturating_sub(1) as usize;
         if height == 0 {
@@ -156,6 +217,7 @@ impl FileTree {
             self.scroll = self.cursor + 1 - height;
         }
 
+        self.overflow_hint = None;
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
             let marker = match row.kind {
@@ -196,12 +258,133 @@ impl FileTree {
             } else {
                 title
             };
-            surface.set_string(area.x, area.y + 1 + offset as u16, &text, style);
+
+            let selected_row = index == self.cursor;
+            let indicator_width = u16::from(selected_row);
+            let content_x = area.x + indicator_width;
+            let content_width = (area.width as usize).saturating_sub(indicator_width as usize);
+            let full_width = text.width();
+            if selected_row {
+                let max_scroll = full_width.saturating_sub(content_width);
+                self.horizontal_scroll = self.horizontal_scroll.min(max_scroll);
+                if full_width > content_width {
+                    self.overflow_hint = Some(row.path.display().to_string());
+                }
+                // A focus-independent accent bar keeps the selected row
+                // discoverable; its style is muted while the tree is inactive.
+                surface.set_string(area.x, area.y + 1 + offset as u16, "▍", indicator);
+            }
+            let visible = skip_columns(&text, self.horizontal_scroll);
+            // `set_stringn` is essential here: writing an overlong row with
+            // `set_string` spills the remaining cells into the editor pane.
+            surface.set_stringn(
+                content_x,
+                area.y + 1 + offset as u16,
+                visible,
+                content_width,
+                style,
+            );
         }
     }
 
     pub fn selected_path(&self) -> Option<&Path> {
         self.selected_row().map(|row| row.path.as_path())
+    }
+
+    pub fn set_filter(&mut self, filter: String, editor: &mut Editor) {
+        self.filter = filter.clone();
+        editor.sidebar.tree_filter = filter;
+        self.rebuild_from_editor(editor);
+    }
+
+    fn prompt_filter(&mut self, cx: &mut commands::Context) {
+        let current = self.filter.clone();
+        ui::prompt_with_input(
+            cx,
+            "Filter files:".into(),
+            current,
+            None,
+            |_editor, _input| Vec::new(),
+            move |cx, input, event| {
+                if event == crate::ui::PromptEvent::Validate {
+                    cx.editor.sidebar.tree_filter = input.trim().to_string();
+                    cx.editor.needs_redraw = true;
+                }
+            },
+        );
+    }
+
+    fn remember_for_paste(&mut self, cx: &mut commands::Context, cut: bool) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        self.clipboard = Some(FileClipboard {
+            paths: vec![row.path.clone()],
+            cut,
+        });
+        cx.editor.set_status(format!(
+            "{} {}",
+            if cut { "cut" } else { "copied" },
+            row.path.display()
+        ));
+    }
+
+    fn paste_clipboard(&mut self, cx: &mut commands::Context) {
+        let Some(clipboard) = self.clipboard.clone() else {
+            cx.editor.set_error("file clipboard is empty");
+            return;
+        };
+        let target_dir = self.target_parent();
+        let mut pasted = Vec::new();
+        for source in &clipboard.paths {
+            let Some(name) = source.file_name() else {
+                continue;
+            };
+            let destination = target_dir.join(name);
+            if destination == *source {
+                continue;
+            }
+            if destination.exists() {
+                cx.editor
+                    .set_error(format!("{} already exists", destination.display()));
+                continue;
+            }
+            let result = if clipboard.cut {
+                move_recursively(source, &destination).map(|_| {
+                    move_open_documents(cx.editor, source, &destination);
+                })
+            } else {
+                copy_recursively(source, &destination)
+            };
+            match result {
+                Ok(()) => {
+                    Self::mark_changed(cx.editor, &destination);
+                    pasted.push(destination);
+                }
+                Err(err) => cx
+                    .editor
+                    .set_error(format!("failed to paste {}: {err}", source.display())),
+            }
+        }
+        if clipboard.cut {
+            self.clipboard = None;
+        }
+        if let Some(last) = pasted.last() {
+            cx.editor.sidebar.selected = Some(last.clone());
+        }
+        self.rebuild_from_editor(cx.editor);
+    }
+
+    pub fn handle_space_op(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
+        match key.code {
+            KeyCode::Char('c') => self.remember_for_paste(cx, false),
+            KeyCode::Char('m') => self.remember_for_paste(cx, true),
+            KeyCode::Char('p') => self.paste_clipboard(cx),
+            KeyCode::Char('d') => self.delete(cx),
+            _ => return false,
+        }
+        cx.editor.needs_redraw = true;
+        true
     }
 
     /// Expand all ancestors of `path` below `root`, rebuild, and select it.
@@ -447,7 +630,7 @@ impl FileTree {
         );
     }
 
-    fn delete(&mut self, cx: &mut commands::Context) {
+    pub fn delete(&mut self, cx: &mut commands::Context) {
         let Some(row) = self.selected_row().cloned() else {
             return;
         };
@@ -510,9 +693,9 @@ impl FileTree {
         }
     }
 
-    fn rebuild_from_editor(&mut self, cx: &mut commands::Context) {
-        let state = cx.editor.sidebar.clone();
-        self.rebuild(cx.editor, &state);
+    fn rebuild_from_editor(&mut self, editor: &mut Editor) {
+        let state = editor.sidebar.clone();
+        self.rebuild(editor, &state);
     }
 
     fn open_selected(&mut self, cx: &mut commands::Context, action: Action) {
@@ -547,7 +730,7 @@ impl FileTree {
         } else {
             cx.editor.sidebar.expanded.insert(path.clone());
         }
-        self.rebuild_from_editor(cx);
+        self.rebuild_from_editor(cx.editor);
         self.select_path(&path);
     }
 
@@ -557,7 +740,7 @@ impl FileTree {
         };
         if row.kind == EntryKind::Dir && row.expanded {
             cx.editor.sidebar.expanded.remove(&row.path);
-            self.rebuild_from_editor(cx);
+            self.rebuild_from_editor(cx.editor);
             self.select_path(&row.path);
         } else if row.depth > 0 {
             let target_depth = row.depth - 1;
@@ -592,7 +775,34 @@ impl FileTree {
             }
         }
 
+        if self.pending_z {
+            self.pending_z = false;
+            match key.code {
+                KeyCode::Char('h') | KeyCode::Left => {
+                    self.horizontal_scroll = self.horizontal_scroll.saturating_sub(4);
+                    cx.editor.needs_redraw = true;
+                    return true;
+                }
+                KeyCode::Char('l') | KeyCode::Right => {
+                    self.horizontal_scroll = self.horizontal_scroll.saturating_add(4);
+                    cx.editor.needs_redraw = true;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        if key.code == KeyCode::Esc && !self.filter.is_empty() {
+            self.filter.clear();
+            cx.editor.sidebar.tree_filter.clear();
+            self.rebuild_from_editor(cx.editor);
+            cx.editor.needs_redraw = true;
+            return true;
+        }
+
         match key.code {
+            KeyCode::Char('/') => self.prompt_filter(cx),
+            KeyCode::Char('z') => self.pending_z = true,
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.rows.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
@@ -634,7 +844,7 @@ impl FileTree {
             }
             KeyCode::Char('H') => {
                 cx.editor.sidebar.expanded.clear();
-                self.rebuild_from_editor(cx);
+                self.rebuild_from_editor(cx.editor);
                 self.cursor = 0;
             }
             KeyCode::Char('R') => {
@@ -656,7 +866,7 @@ impl FileTree {
                         cx.editor.sidebar.expanded.insert(parent.to_path_buf());
                         ancestor = parent.parent();
                     }
-                    self.rebuild_from_editor(cx);
+                    self.rebuild_from_editor(cx.editor);
                     self.select_path(&path);
                     cx.editor.sidebar.selected = Some(path);
                 }
@@ -702,6 +912,82 @@ impl FileTree {
         } else {
             self.cursor = self.cursor.min(self.rows.len() - 1);
             self.scroll = self.scroll.min(self.cursor);
+        }
+    }
+}
+
+/// Skip a number of terminal columns from the start of `text`, preserving
+/// UTF-8 boundaries and wide characters.
+fn skip_columns(text: &str, columns: usize) -> &str {
+    let mut skipped = 0;
+    for (index, ch) in text.char_indices() {
+        if skipped >= columns {
+            return &text[index..];
+        }
+        skipped += ch.width().unwrap_or(0);
+    }
+    ""
+}
+
+fn copy_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
+    if source.is_dir() {
+        std::fs::create_dir_all(destination)?;
+        for entry in std::fs::read_dir(source)? {
+            let entry = entry?;
+            copy_recursively(&entry.path(), &destination.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        std::fs::copy(source, destination).map(|_| ())
+    }
+}
+
+/// Move a path, falling back to copy + delete when `rename` crosses a device
+/// or the filesystem does not support it.
+fn move_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
+    match std::fs::rename(source, destination) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            copy_recursively(source, destination)?;
+            if source.is_dir() {
+                std::fs::remove_dir_all(source)
+            } else {
+                std::fs::remove_file(source)
+            }
+        }
+    }
+}
+
+fn move_open_documents(editor: &mut Editor, old: &Path, new: &Path) {
+    let affected: Vec<_> = editor
+        .documents()
+        .filter_map(|doc| {
+            let path = doc.path()?;
+            let relative = path.strip_prefix(old).ok()?;
+            Some((doc.id(), new.join(relative)))
+        })
+        .collect();
+    for (doc_id, path) in affected {
+        editor.set_doc_path(doc_id, &path);
+    }
+
+    let expanded: Vec<_> = editor
+        .sidebar
+        .expanded
+        .iter()
+        .filter_map(|path| {
+            path.strip_prefix(old)
+                .ok()
+                .map(|relative| (path.clone(), new.join(relative)))
+        })
+        .collect();
+    for (old_path, new_path) in expanded {
+        editor.sidebar.expanded.remove(&old_path);
+        editor.sidebar.expanded.insert(new_path);
+    }
+    if let Some(selected) = editor.sidebar.selected.clone() {
+        if let Ok(relative) = selected.strip_prefix(old) {
+            editor.sidebar.selected = Some(new.join(relative));
         }
     }
 }
@@ -761,5 +1047,41 @@ mod tests {
         assert_eq!(tree.rows.len(), 3);
         assert_eq!(tree.rows[1].depth, 1);
         assert_eq!(tree.rows[1].path.file_name().unwrap(), "main.rs");
+    }
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+
+    #[test]
+    fn skip_columns_stays_on_utf8_boundaries() {
+        assert_eq!(skip_columns("abcdef", 0), "abcdef");
+        assert_eq!(skip_columns("abcdef", 4), "ef");
+        assert_eq!(skip_columns("abcdef", 99), "");
+        assert_eq!(skip_columns("a世b", 2), "b");
+    }
+
+    #[test]
+    fn filter_walks_collapsed_directories() {
+        let root = PathBuf::from("/repo");
+        let mut tree = FileTree::new(root.clone());
+        tree.filter = "needle".to_string();
+        tree.rebuild_with(&root, &HashSet::new(), |dir| {
+            Ok(match dir {
+                _ if dir == Path::new("/repo") => vec![
+                    (PathBuf::from("/repo/src"), true),
+                    (PathBuf::from("/repo/README.md"), false),
+                ],
+                _ if dir == Path::new("/repo/src") => {
+                    vec![(PathBuf::from("/repo/src/needle.rs"), false)]
+                }
+                _ => Vec::new(),
+            })
+        });
+        let paths: Vec<_> = tree.rows.iter().map(|row| row.path.as_path()).collect();
+        assert!(paths.contains(&Path::new("/repo/src")));
+        assert!(paths.contains(&Path::new("/repo/src/needle.rs")));
+        assert!(!paths.contains(&Path::new("/repo/README.md")));
     }
 }

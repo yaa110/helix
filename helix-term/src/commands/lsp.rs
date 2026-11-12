@@ -641,17 +641,23 @@ fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: boo
         (doc.id(), doc.identifier(), text.char_to_line(cursor))
     };
 
-    let requests: Vec<_> = {
-        let doc = doc_mut!(cx.editor, &doc_id);
+    let client_ids: Vec<_> = {
+        let Some(doc) = cx.editor.document(doc_id) else {
+            return;
+        };
         doc.language_servers_with_feature(LanguageServerFeature::CodeLens)
-            .filter_map(|client| {
-                let id = client.id();
-                client
-                    .code_lens(identifier.clone())
-                    .map(|request| (id, request))
-            })
+            .map(|client| client.id())
             .collect()
     };
+    let requests: Vec<_> = client_ids
+        .into_iter()
+        .filter_map(|id| {
+            let client = cx.editor.language_servers.get_by_id(id)?.clone();
+            client
+                .code_lens(identifier.clone())
+                .map(|request| (id, request, client))
+        })
+        .collect();
     if requests.is_empty() {
         if show_menu {
             cx.editor
@@ -665,10 +671,25 @@ fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: boo
 
     cx.jobs.callback(async move {
         let mut lenses = Vec::new();
-        for (ls_id, request) in requests {
+        for (ls_id, request, client) in requests {
             match request.await {
                 Ok(Some(items)) => {
-                    for lens in items {
+                    for mut lens in items {
+                        // gopls and several other servers return unresolved
+                        // lenses: the command is only populated after a
+                        // `codeLens/resolve` round-trip.
+                        if lens.command.is_none() {
+                            let Some(resolve) = client.resolve_code_lens(lens.clone()) else {
+                                continue;
+                            };
+                            match resolve.await {
+                                Ok(resolved) => lens = resolved,
+                                Err(err) => {
+                                    log::warn!("code lens resolve failed: {err}");
+                                    continue;
+                                }
+                            }
+                        }
                         if let Some(command) = lens.command.clone() {
                             lenses.push(CodeLensItem {
                                 title: command.title.clone(),

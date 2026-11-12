@@ -53,6 +53,10 @@
 | `:show-directory`, `:pwd` | Show the current working directory. |
 | `:encoding` | Set encoding. Based on `https://encoding.spec.whatwg.org`. |
 | `:character-info`, `:char` | Get info about the character under the primary cursor. |
+| `:search-replace-current` | Replace matches in the focused document using the search pane inputs. |
+| `:search-replace-all` | Replace matches in the current search result set. |
+| `:session-save` | Save the current workspace session. |
+| `:session-clear` | Remove the saved session for the current workspace. |
 | `:reload`, `:rl` | Discard changes and reload from the source file. |
 | `:reload-all`, `:rla` | Discard changes and reload all documents from the source files. |
 | `:update`, `:u` | Write changes only if the file has been modified. |

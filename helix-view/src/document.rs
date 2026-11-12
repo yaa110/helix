@@ -27,7 +27,7 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::future::Future;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Weak};
@@ -134,6 +134,8 @@ pub struct SavePoint {
 pub enum DocumentOpenError {
     #[error("path must be a regular file, symlink, or directory")]
     IrregularFile,
+    #[error("file is binary and cannot be displayed as text")]
+    BinaryFile,
     #[error(transparent)]
     IoError(#[from] io::Error),
 }
@@ -797,6 +799,27 @@ impl Document {
     // TODO: async fn?
     /// Create a new document from `path`. Encoding is auto-detected, but it can be manually
     /// overwritten with the `encoding` parameter.
+    fn looks_binary(sample: &[u8]) -> bool {
+        if sample.is_empty() || encoding::Encoding::for_bom(sample).is_some() {
+            return false;
+        }
+        if sample.contains(&0) {
+            return true;
+        }
+        let controls = sample
+            .iter()
+            .filter(|byte| **byte < 0x09 || (**byte > 0x0d && **byte < 0x20))
+            .count();
+        controls * 10 > sample.len()
+    }
+
+    fn path_is_binary(path: &Path) -> io::Result<bool> {
+        let mut file = std::fs::File::open(path)?;
+        let mut sample = [0u8; 8192];
+        let read = file.read(&mut sample)?;
+        Ok(Self::looks_binary(&sample[..read]))
+    }
+
     pub fn open(
         path: &Path,
         mut encoding: Option<&'static Encoding>,
@@ -815,6 +838,13 @@ impl Document {
             EditorConfig::default()
         };
         encoding = encoding.or(editor_config.encoding);
+
+        // Do not decode arbitrary binary data as text: it corrupts the terminal
+        // and is never editable in a meaningful way. An explicit encoding or a
+        // UTF BOM is treated as text.
+        if path.exists() && encoding.is_none() && Self::path_is_binary(path)? {
+            return Err(DocumentOpenError::BinaryFile);
+        }
 
         // Open the file if it exists, otherwise assume it is a new file (and thus empty).
         let (rope, encoding, has_bom) = if path.exists() {
@@ -2826,4 +2856,38 @@ mod test {
     decode!(jis0212_decode, "jis0212", "EUC-JP");
     decode!(shift_jis_decode, "shift_jis");
     encode!(shift_jis_encode, "shift_jis");
+}
+
+#[cfg(test)]
+mod binary_detection_tests {
+    use super::Document;
+
+    #[test]
+    fn detects_nul_bytes_as_binary() {
+        let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
+        assert!(Document::looks_binary(png));
+    }
+
+    #[test]
+    fn detects_control_byte_ratio_as_binary() {
+        let sample = [0x01u8; 64];
+        assert!(Document::looks_binary(&sample));
+    }
+
+    #[test]
+    fn treats_text_as_text() {
+        assert!(!Document::looks_binary(
+            b"fn main() {\n\tprintln!(\"hi\");\n}\n"
+        ));
+        assert!(!Document::looks_binary(
+            "hello, \u{4e16}\u{754c}\n".as_bytes()
+        ));
+        assert!(!Document::looks_binary(b""));
+    }
+
+    #[test]
+    fn honors_utf_bom() {
+        let utf16le = b"\xff\xfeh\x00e\x00l\x00l\x00o\x00";
+        assert!(!Document::looks_binary(utf16le));
+    }
 }
