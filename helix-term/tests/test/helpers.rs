@@ -439,17 +439,27 @@ impl AppBuilder {
             bail!("Changing the working directory to {path:?} is not yet supported for integration tests");
         }
 
+        // Tests never need the OS watcher, and only tests that explicitly
+        // provide a session store may touch session state. This also protects
+        // tests that build a raw `Config::default()` from reading the
+        // developer's real session file.
+        let mut config = self.config;
+        config.editor.auto_reload = false;
+        if self.session_store.is_none() {
+            config.editor.restore_session = false;
+        }
+
         let mut app = match self.session_store {
             Some(store) => Application::new_with_session_store(
                 self.args,
-                self.config,
+                config,
                 self.syn_loader,
                 WorkspaceTrust::fully_trusted(),
                 store,
             )?,
             None => Application::new(
                 self.args,
-                self.config,
+                config,
                 self.syn_loader,
                 WorkspaceTrust::fully_trusted(),
             )?,

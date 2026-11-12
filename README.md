@@ -89,6 +89,12 @@ filesystem changes.
 | `[` / `]` | Shrink / grow the sidebar |
 | `q` / `Esc` | Return focus to the editor |
 
+**Global shortcuts still work:** while the tree (or search pane) is focused,
+plain keys belong to the sidebar, but unhandled `Ctrl`/`Alt` chords fall through
+to the normal keymap. So a custom `Ctrl+e = "file_picker"` (or any other global
+binding) works from the tree, and `<space>b` / a configured `Ctrl+b` still
+toggles it.
+
 **VSCode-like reveal:** while the editor has focus, the tree automatically
 selects the current buffer, expanding its ancestor directories. This also
 happens when a file is opened through a picker, `:open`, or any other command.

@@ -588,6 +588,10 @@ impl SearchPane {
                         inputs.query = self.query.value().to_string();
                         inputs.replacement = self.replacement.value().to_string();
                         self.pending = true;
+                    } else if key.modifiers.contains(KeyModifiers::CONTROL)
+                        || key.modifiers.contains(KeyModifiers::ALT)
+                    {
+                        return EventResult::Ignored(None);
                     }
                 }
             },
@@ -670,6 +674,11 @@ impl SearchPane {
                 }
                 KeyCode::Tab => {
                     self.focus = SearchFocus::Query;
+                }
+                _ if key.modifiers.contains(KeyModifiers::CONTROL)
+                    || key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    return EventResult::Ignored(None);
                 }
                 _ => return EventResult::Consumed(None),
             },

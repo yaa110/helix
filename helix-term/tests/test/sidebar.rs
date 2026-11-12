@@ -105,6 +105,25 @@ async fn tree_refreshes_after_external_create() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn global_ctrl_bindings_work_while_tree_is_focused() -> anyhow::Result<()> {
+    use helix_core::hashmap;
+    use helix_term::keymap;
+    use helix_view::document::Mode;
+
+    let mut config = helpers::test_config();
+    config
+        .keys
+        .insert(Mode::Normal, keymap!({"Normal" "C-e" => toggle_file_tree,}));
+    let mut app = helpers::AppBuilder::new().with_config(config).build()?;
+
+    helpers::send_keys(&mut app, "<space>b").await?;
+    assert_eq!(app.editor.sidebar.mode, SidebarMode::Files);
+    helpers::send_keys(&mut app, "<C-e>").await?;
+    assert_eq!(app.editor.sidebar.mode, SidebarMode::Hidden);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn tree_reveals_the_current_buffer() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let a = dir.path().join("a.txt");

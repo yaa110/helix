@@ -172,10 +172,21 @@ impl Sidebar {
                 EventResult::Consumed(None)
             }
             _ => {
-                // The sidebar consumes unhandled keys so they never leak into
-                // the editor.
-                cx.editor.needs_redraw = true;
-                EventResult::Consumed(None)
+                // Let global Ctrl/Alt chords (file picker, window commands,
+                // user bindings) reach the normal keymap. Plain keys stay
+                // owned by the sidebar so they cannot edit the buffer.
+                if key
+                    .modifiers
+                    .contains(helix_view::keyboard::KeyModifiers::CONTROL)
+                    || key
+                        .modifiers
+                        .contains(helix_view::keyboard::KeyModifiers::ALT)
+                {
+                    EventResult::Ignored(None)
+                } else {
+                    cx.editor.needs_redraw = true;
+                    EventResult::Consumed(None)
+                }
             }
         }
     }

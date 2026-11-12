@@ -1523,20 +1523,31 @@ impl Component for EditorView {
                     let result = self.sidebar.handle_event(event, &mut cx);
                     let callbacks = take(&mut cx.callback);
                     if callbacks.is_empty() {
-                        return result;
+                        match result {
+                            EventResult::Consumed(callback) => {
+                                return EventResult::Consumed(callback)
+                            }
+                            // Global Ctrl/Alt chords fall through to the normal
+                            // keymap (file picker, user bindings, etc.).
+                            EventResult::Ignored(None) => {}
+                            EventResult::Ignored(callback) => {
+                                return EventResult::Consumed(callback)
+                            }
+                        }
+                    } else {
+                        let sidebar_callback = match result {
+                            EventResult::Consumed(callback) => callback,
+                            EventResult::Ignored(callback) => callback,
+                        };
+                        return EventResult::Consumed(Some(Box::new(move |compositor, cx| {
+                            for callback in callbacks {
+                                callback(compositor, cx);
+                            }
+                            if let Some(callback) = sidebar_callback {
+                                callback(compositor, cx);
+                            }
+                        })));
                     }
-                    let sidebar_callback = match result {
-                        EventResult::Consumed(callback) => callback,
-                        EventResult::Ignored(callback) => callback,
-                    };
-                    return EventResult::Consumed(Some(Box::new(move |compositor, cx| {
-                        for callback in callbacks {
-                            callback(compositor, cx);
-                        }
-                        if let Some(callback) = sidebar_callback {
-                            callback(compositor, cx);
-                        }
-                    })));
                 }
 
                 let mode = cx.editor.mode();

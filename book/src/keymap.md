@@ -355,6 +355,10 @@ ancestors and selecting the file), so `<space>b` always lands on the buffer you
 were editing. Tree browsing is not interrupted while the tree itself is
 focused.
 
+Unhandled `Ctrl`/`Alt` chords are passed through to the normal keymap while the
+sidebar is focused, so custom global bindings (for example
+`C-e = "file_picker"`) work from the tree. Plain keys are owned by the sidebar.
+
 ##### Popup
 
 Displays documentation for item under cursor. Remapping currently not supported.
