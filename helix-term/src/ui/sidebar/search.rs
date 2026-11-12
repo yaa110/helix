@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use helix_view::graphics::Rect;
@@ -269,6 +269,93 @@ impl SearchPane {
         self.selected_match_at(self.cursor).cloned()
     }
 
+    fn selected_file(&self) -> Option<PathBuf> {
+        match self.rows.get(self.cursor)? {
+            ResultRow::File(path) => Some(path.clone()),
+            ResultRow::Match(path, _) => Some(path.clone()),
+        }
+    }
+
+    pub fn open_match(
+        &mut self,
+        editor: &mut Editor,
+        file: &Path,
+        start: usize,
+        end: usize,
+    ) -> anyhow::Result<()> {
+        let matched = Match {
+            path: file.to_path_buf(),
+            line: 0,
+            col: 0,
+            start,
+            end,
+            text: String::new(),
+            preview: String::new(),
+        };
+        open_match_with_action(editor, &matched, helix_view::editor::Action::Replace)
+    }
+
+    pub fn select_all_in_file(&mut self, editor: &mut Editor) -> anyhow::Result<()> {
+        let Some(path) = self.selected_file() else {
+            return Ok(());
+        };
+        let matches = self
+            .results
+            .get(&path)
+            .map(|file| file.matches.clone())
+            .unwrap_or_default();
+        editor.open(&path, helix_view::editor::Action::Replace)?;
+        let scrolloff = editor.config().scrolloff;
+        let (view, doc) = helix_view::current!(editor);
+        let ranges: helix_core::SmallVec<[helix_core::Range; 1]> = matches
+            .iter()
+            .map(|matched| {
+                helix_core::Range::new(
+                    doc.text().byte_to_char(matched.start),
+                    doc.text().byte_to_char(matched.end),
+                )
+            })
+            .collect();
+        if ranges.is_empty() {
+            return Ok(());
+        }
+        doc.set_selection(view.id, helix_core::Selection::new(ranges, 0));
+        view.ensure_cursor_in_view_center(doc, scrolloff);
+        editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+        Ok(())
+    }
+
+    fn move_result(&mut self, forward: bool, action: helix_view::editor::Action, cx: &mut commands::Context) {
+        if self.rows.is_empty() {
+            return;
+        }
+        let mut index = self.cursor;
+        loop {
+            if forward {
+                if index + 1 >= self.rows.len() {
+                    index = 0;
+                    break;
+                }
+                index += 1;
+            } else {
+                if index == 0 {
+                    index = self.rows.len() - 1;
+                    break;
+                }
+                index -= 1;
+            }
+            if matches!(&self.rows[index], ResultRow::Match(_, _)) {
+                break;
+            }
+        }
+        self.cursor = index;
+        if let Some(matched) = self.selected_match() {
+            if let Err(err) = open_match_with_action(cx.editor, &matched, action) {
+                cx.editor.set_error(err.to_string());
+            }
+        }
+    }
+
     pub fn handle_event(
         &mut self,
         event: &Event,
@@ -278,6 +365,13 @@ impl SearchPane {
             return EventResult::Consumed(None);
         };
         if key.modifiers.contains(KeyModifiers::ALT) {
+            if key.code == KeyCode::Enter {
+                if let Err(err) = self.select_all_in_file(cx.editor) {
+                    cx.editor.set_error(err.to_string());
+                }
+                cx.editor.needs_redraw = true;
+                return EventResult::Consumed(None);
+            }
             match key.code {
                 KeyCode::Char('c') => {
                     cx.editor.sidebar.search.match_case = !cx.editor.sidebar.search.match_case;
@@ -345,10 +439,29 @@ impl SearchPane {
                 KeyCode::Char('l') | KeyCode::Right => self.expand_selected(),
                 KeyCode::Enter => {
                     if let Some(matched) = self.selected_match() {
-                        if let Err(err) = open_match(cx, &matched) {
+                        if let Err(err) = open_match_with_action(
+                            cx.editor,
+                            &matched,
+                            helix_view::editor::Action::Replace,
+                        ) {
                             cx.editor.set_error(err.to_string());
                         }
                     }
+                }
+                KeyCode::Char('s') => {
+                    self.move_result(true, helix_view::editor::Action::HorizontalSplit, cx)
+                }
+                KeyCode::Char('v') => {
+                    self.move_result(true, helix_view::editor::Action::VerticalSplit, cx)
+                }
+                KeyCode::F(4) if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                    self.move_result(false, helix_view::editor::Action::Replace, cx)
+                }
+                KeyCode::Char('n') | KeyCode::F(4) => {
+                    self.move_result(true, helix_view::editor::Action::Replace, cx)
+                }
+                KeyCode::Char('N') => {
+                    self.move_result(false, helix_view::editor::Action::Replace, cx)
                 }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
@@ -383,15 +496,18 @@ impl SearchPane {
     }
 }
 
-fn open_match(cx: &mut commands::Context, matched: &Match) -> anyhow::Result<()> {
-    cx.editor
-        .open(&matched.path, helix_view::editor::Action::Replace)?;
-    let scrolloff = cx.editor.config().scrolloff;
-    let (view, doc) = helix_view::current!(cx.editor);
+fn open_match_with_action(
+    editor: &mut Editor,
+    matched: &Match,
+    action: helix_view::editor::Action,
+) -> anyhow::Result<()> {
+    editor.open(&matched.path, action)?;
+    let scrolloff = editor.config().scrolloff;
+    let (view, doc) = helix_view::current!(editor);
     let start = doc.text().byte_to_char(matched.start);
     let end = doc.text().byte_to_char(matched.end);
     doc.set_selection(view.id, helix_core::Selection::single(start, end));
     view.ensure_cursor_in_view_center(doc, scrolloff);
-    cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+    editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
     Ok(())
 }

@@ -33,3 +33,37 @@ async fn search_pane_finds_and_opens_a_match() -> anyhow::Result<()> {
     assert_eq!(doc.selection(view.id).primary().from(), 5); // start of "needle"
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn select_all_matches_in_file_creates_multiple_selections() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "x\nx\nx\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>/x").await?;
+    wait_for_search_results(&mut app, 3).await;
+    helpers::send_keys(&mut app, "<ret>").await?;
+    helpers::send_keys(&mut app, "<A-ret>").await?;
+
+    let (view, doc) = helix_view::current_ref!(app.editor);
+    assert_eq!(doc.selection(view.id).ranges().len(), 3);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unicode_match_opens_at_char_offsets() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("u.txt"), "αβγ\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>/β").await?;
+    wait_for_search_results(&mut app, 1).await;
+    helpers::send_keys(&mut app, "<ret><ret>").await?;
+
+    let (view, doc) = helix_view::current_ref!(app.editor);
+    assert_eq!(doc.selection(view.id).primary().from(), 1);
+    assert_eq!(doc.selection(view.id).primary().to(), 2);
+    Ok(())
+}
