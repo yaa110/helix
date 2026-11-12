@@ -1,0 +1,16 @@
+README.md
+  h_a09932ba751076 422-423,426,430-433,436-437
+helix-term/src/commands/lsp.rs
+  h_a09932ba751076 40,602,627,629,631,634-639,695,746-753,763-765,767
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "56453cf772ca5736031a5b15a5018ed0c3a3889a",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
