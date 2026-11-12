@@ -1,0 +1,20 @@
+README.md
+  h_a09932ba751076 188-190
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 704-705
+helix-term/src/ui/icons.rs
+  h_a09932ba751076 1-53
+helix-term/src/ui/mod.rs
+  h_a09932ba751076 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76f5f3800ff773f2d382c0b144d286faf0d08e6c",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
