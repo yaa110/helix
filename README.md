@@ -17,6 +17,8 @@
 > caused by this fork to the upstream Helix project, and do not expect support,
 > reviews, merges, or timely responses here. Use it at your own risk.
 
+![Helix fork screenshot](assets/helix.png)
+
 The goal is to keep Helix's modal editing model while adding the workflow
 pieces a VSCode user misses.
 

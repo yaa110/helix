@@ -120,7 +120,7 @@ impl FileTree {
         self.clamp_scroll();
     }
 
-    pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
+    pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, _focused: bool) {
         let theme = &editor.theme;
         let title = theme
             .try_get_exact("ui.sidebar.title")
@@ -187,7 +187,9 @@ impl FileTree {
                 Some(label) => format!("{label} {}{} {}", "  ".repeat(row.depth), marker, name),
                 None => format!("{}{} {}", "  ".repeat(row.depth), marker, name),
             };
-            let style = if focused && index == self.cursor {
+            // Keep the selected row visible even when the editor owns focus,
+            // so it is clear which file is currently open.
+            let style = if index == self.cursor {
                 menu
             } else if row.kind == EntryKind::Dir {
                 directory
