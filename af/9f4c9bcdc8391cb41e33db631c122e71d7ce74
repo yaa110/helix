@@ -1,0 +1,19 @@
+helix-term/tests/test/sidebar.rs
+  s_8c6ba2b89003ca::t_91106fbb292e7a 145-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af9f4c9bcdc8391cb41e33db631c122e71d7ce74",
+  "prompts": {},
+  "sessions": {
+    "s_8c6ba2b89003ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "733f3983-2da4-40ee-95ca-883aafcd7c2c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
