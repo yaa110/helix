@@ -1,0 +1,32 @@
+book/src/keymap.md
+  h_a09932ba751076 330-331
+helix-term/src/commands/typed.rs
+  h_a09932ba751076 389-390,392,400-404,1718-1720
+helix-term/src/file_watcher.rs
+  h_a09932ba751076 161,165-167
+helix-term/src/search.rs
+  h_a09932ba751076 31-33,35-37,41-43,209-211,288-292,324-326,400-418
+helix-term/src/ui/editor.rs
+  h_a09932ba751076 1691-1693
+helix-term/src/ui/sidebar.rs
+  h_a09932ba751076 65-68
+helix-term/src/ui/sidebar/file_tree.rs
+  h_a09932ba751076 230-234,294-311,314-315,383
+helix-term/src/ui/sidebar/search.rs
+  h_a09932ba751076 93-94,242-248,256,260,273,276-278,286-288,354,357,433-452,455-457,459-463,638-646,649-657,709-712
+helix-term/tests/test/sidebar.rs
+  h_a09932ba751076 107-120
+helix-view/src/editor.rs
+  h_a09932ba751076 1646
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "270e0197bd8b30da82c9573cac26c8a3f4ec7e53",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
