@@ -2,6 +2,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 
+use helix_core::Transaction;
+use helix_view::{DocumentId, Editor};
 use regex::{Captures, Regex, RegexBuilder};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -248,6 +250,71 @@ fn matches_in_text(path: &Path, text: &str, regex: &Regex) -> Vec<Match> {
     results
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ReplaceOutcome {
+    pub replaced: usize,
+    pub files: usize,
+    pub skipped: Vec<PathBuf>,
+}
+
+/// Apply a replacement to one open document as a single undoable transaction.
+pub fn replace_in_open_document(
+    editor: &mut Editor,
+    doc_id: DocumentId,
+    regex: &Regex,
+    template: &str,
+    options: SearchOptions,
+) -> anyhow::Result<usize> {
+    let view_id = helix_view::view!(editor).id;
+    let changes: Vec<_> = {
+        let doc = editor.documents.get_mut(&doc_id).unwrap();
+        doc.ensure_view_init(view_id);
+        let text = doc.text().to_string();
+        regex
+            .captures_iter(&text)
+            .filter_map(|caps| {
+                let matched = caps.get(0)?;
+                let replacement =
+                    replacement_for(Some(&caps), matched.as_str(), template, options);
+                Some((
+                    doc.text().byte_to_char(matched.start()),
+                    doc.text().byte_to_char(matched.end()),
+                    Some(replacement.into()),
+                ))
+            })
+            .collect()
+    };
+    let count = changes.len();
+    if count == 0 {
+        return Ok(0);
+    }
+    let doc = helix_view::doc_mut!(editor, &doc_id);
+    let view = helix_view::view_mut!(editor, view_id);
+    let transaction = Transaction::change(doc.text(), changes.into_iter());
+    doc.apply(&transaction, view_id);
+    doc.append_changes_to_history(view);
+    Ok(count)
+}
+
+/// Replace in a file that is not necessarily open. The file is re-read and
+/// re-searched immediately before writing so stale offsets cannot clobber it.
+pub fn replace_in_file(
+    path: &Path,
+    regex: &Regex,
+    template: &str,
+    options: SearchOptions,
+) -> anyhow::Result<usize> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Ok(0);
+    };
+    let (output, count) = apply_replacements_to_text(&text, regex, template, options);
+    if count == 0 {
+        return Ok(0);
+    }
+    write_atomic(path, &output)?;
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +378,41 @@ mod tests {
         assert_eq!(matches[0].line, 0);
         assert_eq!(matches[1].line, 1);
         assert_eq!(&"αβ\nβ\n"[matches[1].start..matches[1].end], "β");
+    }
+
+    #[test]
+    fn replace_in_file_rereads_before_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.txt");
+        std::fs::write(&path, "foo\n").unwrap();
+        let re = build_regex(
+            "foo",
+            SearchOptions {
+                match_case: true,
+                ..SearchOptions::default()
+            },
+        )
+        .unwrap();
+
+        std::fs::write(&path, "xfoo\n").unwrap();
+        assert_eq!(
+            replace_in_file(&path, &re, "bar", SearchOptions::default()).unwrap(),
+            1
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "xbar\n");
+    }
+
+    #[test]
+    fn replace_in_file_skips_binary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bin");
+        let original = [0xff_u8, 0xfe, b'f', b'o', b'o'];
+        std::fs::write(&path, original).unwrap();
+        let re = build_regex("foo", SearchOptions::default()).unwrap();
+        assert_eq!(
+            replace_in_file(&path, &re, "bar", SearchOptions::default()).unwrap(),
+            0
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
     }
 }

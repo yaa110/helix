@@ -1,4 +1,6 @@
 use helix_term::application::Application;
+use helix_term::search;
+use helix_view::doc;
 
 use super::*;
 
@@ -65,5 +67,31 @@ async fn unicode_match_opens_at_char_offsets() -> anyhow::Result<()> {
     let (view, doc) = helix_view::current_ref!(app.editor);
     assert_eq!(doc.selection(view.id).primary().from(), 1);
     assert_eq!(doc.selection(view.id).primary().to(), 2);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replace_all_updates_open_buffer_in_memory_and_disk_files() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let open = dir.path().join("open.txt");
+    let closed = dir.path().join("closed.txt");
+    std::fs::write(&open, "foo\n")?;
+    std::fs::write(&closed, "foo\n")?;
+    let mut app = helpers::AppBuilder::new().with_file(&open, None).build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    let re = search::build_regex("foo", search::SearchOptions::default())?;
+    let doc_id = doc!(app.editor).id();
+    let n = search::replace_in_open_document(
+        &mut app.editor,
+        doc_id,
+        &re,
+        "bar",
+        search::SearchOptions::default(),
+    )?;
+    assert_eq!(n, 1);
+    assert!(doc!(app.editor).is_modified());
+    search::replace_in_file(&closed, &re, "bar", search::SearchOptions::default())?;
+    assert_eq!(std::fs::read_to_string(&closed)?, "bar\n");
     Ok(())
 }
