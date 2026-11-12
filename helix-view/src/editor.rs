@@ -2176,6 +2176,7 @@ impl Editor {
         };
 
         self._refresh();
+        self.sidebar.reveal_current = true;
         if let Some(focus_lost) = focust_lost {
             dispatch(DocumentFocusLost {
                 editor: self,

@@ -430,6 +430,7 @@ pub fn restore(editor: &mut Editor, session: &Session) -> RestoreOutcome {
         .as_ref()
         .map(|path| decode_path(&editor.workspace_root, path));
     editor.sidebar.search = session.search.clone();
+    editor.sidebar.reveal_current = true;
 
     // Do not call `ensure_cursor_in_view` here: it would re-scroll to satisfy
     // scrolloff and override the saved viewport. The saved selection and

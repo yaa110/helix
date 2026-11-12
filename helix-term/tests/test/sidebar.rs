@@ -143,6 +143,29 @@ async fn tree_reveals_the_current_buffer() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn manual_tree_selection_survives_escaping_to_editor() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    std::fs::write(&a, "a\n")?;
+    std::fs::write(&b, "b\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+    app.editor.open(&a, helix_view::editor::Action::Replace)?;
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+
+    helpers::send_keys(&mut app, "<space>b").await?;
+    helpers::send_keys(&mut app, "j").await?;
+    helpers::send_keys(&mut app, "<esc>").await?;
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(b.as_path()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn gw_jump_labels_select_a_row() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::write(dir.path().join("a.txt"), "a\n")?;

@@ -272,11 +272,11 @@ to the normal keymap. So a custom `Ctrl+e = "file_picker"` (or any other global
 binding) works from the tree, and `<space>b` / a configured `Ctrl+b` still
 toggles it.
 
-**VSCode-like reveal:** while the editor has focus, the tree automatically
-selects the current buffer, expanding its ancestor directories. This also
-happens when a file is opened through a picker, `:open`, or any other command.
-Manual tree browsing is not interrupted while the tree itself is focused.
-`Tab` or `Enter` jumps back to the editor.
+**VSCode-like reveal:** when a new buffer is opened or the selected buffer
+changes (next/previous buffer, picker, `:open`, etc.), the tree expands and
+selects that file. Manual tree browsing is preserved: selecting another row and
+pressing `Esc` does not snap the tree back until the focused buffer actually
+changes. `Tab` or `Enter` jumps back to the editor.
 
 **Fast jumping:** `<space>b` from the editor lands on the current buffer in
 the tree (because of auto-reveal); `Enter`, `Tab`, or `Esc` goes back to the

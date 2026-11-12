@@ -355,10 +355,10 @@ the static `global_search` command if you want to bind it yourself.
 | `.`             | Reveal the current buffer                        |
 | `[`, `]`        | Shrink / grow the sidebar                        |
 
-While the editor has focus, the tree follows the current buffer (expanding
-ancestors and selecting the file), so `<space>b` always lands on the buffer you
-were editing. Tree browsing is not interrupted while the tree itself is
-focused.
+When a new buffer is opened or the focused buffer changes, the tree expands
+ancestors and selects that file. Manually selecting a different row is preserved
+when focus returns to the editor; it only snaps back when the focused buffer
+changes.
 
 Unhandled `Ctrl`/`Alt` chords are passed through to the normal keymap while the
 sidebar is focused, so custom global bindings (for example

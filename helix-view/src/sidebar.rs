@@ -73,6 +73,8 @@ pub struct SidebarState {
     pub search_files: Vec<PathBuf>,
     /// Request the search pane to focus its query input on the next frame.
     pub search_focus_query: bool,
+    /// Set when the focused buffer changes; the tree reveals it once.
+    pub reveal_current: bool,
 }
 
 impl Default for SidebarState {
@@ -88,6 +90,7 @@ impl Default for SidebarState {
             refresh_epoch: 0,
             search_files: Vec::new(),
             search_focus_query: false,
+            reveal_current: false,
         }
     }
 }
