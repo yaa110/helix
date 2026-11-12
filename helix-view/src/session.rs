@@ -403,7 +403,28 @@ pub fn restore(editor: &mut Editor, session: &Session) -> RestoreOutcome {
         .and_then(|path| editor.document_id_by_path(&path))
         .or_else(|| restored.first().map(|(id, _)| *id));
     if let Some(doc_id) = focused_id {
-        editor.switch(doc_id, Action::Load);
+        editor.switch(doc_id, Action::Replace);
+
+        // `Action::Replace` calls `ensure_cursor_in_view`, which would pull the
+        // viewport toward the cursor. Re-apply the saved viewport afterwards.
+        if let Some((_, buffer)) = restored.iter().find(|(id, _)| *id == doc_id) {
+            let view_id = crate::view!(editor).id;
+            let doc = crate::doc_mut!(editor, &doc_id);
+            let anchor = doc.text().line_to_char(
+                buffer
+                    .scroll
+                    .anchor_line
+                    .min(doc.text().len_lines().saturating_sub(1)),
+            );
+            doc.set_view_offset(
+                view_id,
+                ViewPosition {
+                    anchor,
+                    vertical_offset: buffer.scroll.vertical_offset,
+                    horizontal_offset: buffer.scroll.horizontal_offset,
+                },
+            );
+        }
     }
 
     editor.sidebar.mode = session.sidebar.mode;

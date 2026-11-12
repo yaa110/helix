@@ -74,6 +74,7 @@ impl Sidebar {
         event: &Event,
         cx: &mut commands::Context,
     ) -> EventResult {
+        self.ensure_init(cx.editor);
         let Event::Key(key) = event else {
             return EventResult::Consumed(None);
         };
@@ -95,6 +96,12 @@ impl Sidebar {
             return EventResult::Consumed(None);
         }
 
+        if cx.editor.sidebar.mode == SidebarMode::Files
+            && self.tree.handle_key(*key, cx)
+        {
+            return EventResult::Consumed(None);
+        }
+
         match key.code {
             KeyCode::Char(' ') => {
                 self.pending_space = true;
@@ -106,8 +113,8 @@ impl Sidebar {
                 EventResult::Consumed(None)
             }
             _ => {
-                // The placeholder consumes navigation keys so they never leak
-                // into the editor; Task 12 handles them for real.
+                // The sidebar consumes unhandled keys so they never leak into
+                // the editor.
                 cx.editor.needs_redraw = true;
                 EventResult::Consumed(None)
             }

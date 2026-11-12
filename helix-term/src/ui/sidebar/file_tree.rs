@@ -2,11 +2,15 @@ use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use helix_view::editor::Action;
 use helix_view::graphics::Rect;
-use helix_view::sidebar::SidebarState;
+use helix_view::input::KeyEvent;
+use helix_view::keyboard::{KeyCode, KeyModifiers};
+use helix_view::sidebar::{SidebarFocus, SidebarState};
 use helix_view::Editor;
 use tui::buffer::Buffer as Surface;
 
+use crate::commands;
 use crate::ui;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,6 +169,160 @@ impl FileTree {
             };
             surface.set_string(area.x, area.y + 1 + offset as u16, &text, style);
         }
+    }
+
+    fn selected_row(&self) -> Option<&Row> {
+        self.rows.get(self.cursor)
+    }
+
+    fn select_path(&mut self, path: &Path) {
+        if let Some(index) = self.rows.iter().position(|row| row.path == path) {
+            self.cursor = index;
+        }
+    }
+
+    fn rebuild_from_editor(&mut self, cx: &mut commands::Context) {
+        let state = cx.editor.sidebar.clone();
+        self.rebuild(cx.editor, &state);
+    }
+
+    fn open_selected(&mut self, cx: &mut commands::Context, action: Action) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        match row.kind {
+            EntryKind::Dir => {
+                self.toggle_expand(cx);
+            }
+            EntryKind::File => {
+                if let Err(err) = cx.editor.open(&row.path, action) {
+                    cx.editor.set_error(err.to_string());
+                } else {
+                    cx.editor.sidebar.focus = SidebarFocus::Editor;
+                    cx.editor.sidebar.selected = Some(row.path);
+                }
+            }
+        }
+    }
+
+    fn toggle_expand(&mut self, cx: &mut commands::Context) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        if row.kind != EntryKind::Dir {
+            return;
+        }
+        let path = row.path;
+        if cx.editor.sidebar.expanded.contains(&path) {
+            cx.editor.sidebar.expanded.remove(&path);
+        } else {
+            cx.editor.sidebar.expanded.insert(path.clone());
+        }
+        self.rebuild_from_editor(cx);
+        self.select_path(&path);
+    }
+
+    fn collapse_or_parent(&mut self, cx: &mut commands::Context) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        if row.kind == EntryKind::Dir && row.expanded {
+            cx.editor.sidebar.expanded.remove(&row.path);
+            self.rebuild_from_editor(cx);
+            self.select_path(&row.path);
+        } else if row.depth > 0 {
+            let target_depth = row.depth - 1;
+            self.cursor = self.rows[..self.cursor]
+                .iter()
+                .rposition(|candidate| candidate.depth == target_depth)
+                .unwrap_or(0);
+        }
+    }
+
+    pub fn handle_key(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                if !self.rows.is_empty() {
+                    self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.cursor = self.cursor.saturating_sub(1);
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                if let Some(row) = self.selected_row().cloned() {
+                    if row.kind == EntryKind::Dir && !row.expanded {
+                        self.toggle_expand(cx);
+                    } else {
+                        self.open_selected(cx, Action::Replace);
+                    }
+                }
+            }
+            KeyCode::Char('h') | KeyCode::Left => self.collapse_or_parent(cx),
+            KeyCode::Enter | KeyCode::Char('o') => self.open_selected(cx, Action::Replace),
+            KeyCode::Char('s') => self.open_selected(cx, Action::HorizontalSplit),
+            KeyCode::Char('v') => self.open_selected(cx, Action::VerticalSplit),
+            KeyCode::Char('g') => {
+                self.cursor = 0;
+            }
+            KeyCode::Char('G') => {
+                self.cursor = self.rows.len().saturating_sub(1);
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = (self.cursor + 10).min(self.rows.len().saturating_sub(1));
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = self.cursor.saturating_sub(10);
+            }
+            KeyCode::Char('H') => {
+                cx.editor.sidebar.expanded.clear();
+                self.rebuild_from_editor(cx);
+                self.cursor = 0;
+            }
+            KeyCode::Char('R') => {
+                let state = cx.editor.sidebar.clone();
+                self.refresh(cx.editor, &state);
+            }
+            KeyCode::Char('.') => {
+                let current = {
+                    let (view, doc) = helix_view::current_ref!(cx.editor);
+                    let _ = view;
+                    doc.path().map(ToOwned::to_owned)
+                };
+                if let Some(path) = current {
+                    let mut ancestor = path.parent();
+                    while let Some(parent) = ancestor {
+                        if parent == self.root || !parent.starts_with(&self.root) {
+                            break;
+                        }
+                        cx.editor.sidebar.expanded.insert(parent.to_path_buf());
+                        ancestor = parent.parent();
+                    }
+                    self.rebuild_from_editor(cx);
+                    self.select_path(&path);
+                    cx.editor.sidebar.selected = Some(path);
+                }
+            }
+            KeyCode::Char('[') => {
+                let config = cx.editor.config().sidebar;
+                cx.editor.sidebar.width =
+                    cx.editor.sidebar.width.saturating_sub(2).max(config.min_width);
+            }
+            KeyCode::Char(']') => {
+                let config = cx.editor.config().sidebar;
+                cx.editor.sidebar.width =
+                    (cx.editor.sidebar.width + 2).min(config.max_width);
+            }
+            KeyCode::Char('q') | KeyCode::Esc => {
+                cx.editor.sidebar.focus = SidebarFocus::Editor;
+            }
+            _ => return false,
+        }
+
+        cx.editor.sidebar.selected =
+            self.selected_row().map(|row| row.path.clone());
+        cx.editor.needs_redraw = true;
+        true
     }
 
     fn clamp_scroll(&mut self) {
