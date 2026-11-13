@@ -116,6 +116,8 @@
 "ui.help" = { fg = "base7", bg = "base3" }
 "ui.menu" = { fg = "base8", bg = "base2" }
 "ui.menu.selected" = { fg = "base2", bg = "yellow" }
+"ui.breadcrumbs" = { fg = "#7dcfff" }
+"ui.breadcrumbs.current" = { fg = "#a6e3ff" }
 "ui.bufferline.background" = { bg = "base0" }
 "ui.bufferline" = { fg = "base5", bg = "base0" }
 "ui.bufferline.active" = { fg = "base8", bg = "base2" }

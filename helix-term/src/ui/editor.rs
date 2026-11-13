@@ -820,8 +820,12 @@ impl EditorView {
             parts.push(SCRATCH_BUFFER_NAME.to_string());
         }
 
-        let inactive = theme.get("ui.text.inactive");
-        let active = theme.get("ui.text");
+        let inactive = theme
+            .try_get_exact("ui.breadcrumbs")
+            .unwrap_or_else(|| theme.get("ui.text.inactive"));
+        let active = theme
+            .try_get_exact("ui.breadcrumbs.current")
+            .unwrap_or_else(|| theme.get("ui.text"));
         let separator = theme.get("ui.linenr");
         let right = viewport.right();
         let mut x = viewport.x;
