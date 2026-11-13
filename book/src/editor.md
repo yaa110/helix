@@ -36,7 +36,7 @@
 | `default-yank-register` | Default register used for yank/paste | `'"'` |
 | `scroll-lines` | Number of lines to scroll per scroll wheel step | `3` |
 | `shell` | Shell to use when running external commands | Unix: `["sh", "-c"]`<br/>Windows: `["cmd", "/C"]` |
-| `line-number` | Line number display: `absolute` shows each line's number, `relative` shows the distance from the current line, and `both` shows `relative │ absolute` side by side. When unfocused or in insert mode, `relative` will still show absolute line numbers | `"both"` |
+| `line-number` | Line number display: `absolute` shows each line's number, `relative` shows the distance from the current line, and `both` shows `absolute │ relative` side by side. When unfocused or in insert mode, `relative` will still show absolute line numbers | `"both"` |
 | `cursorline` | Highlight all lines with a cursor | `true` |
 | `cursorcolumn` | Highlight all columns with a cursor | `false` |
 | `continue-comments` | if helix should automatically add a line comment token if you create a new line inside a comment. | `true` |

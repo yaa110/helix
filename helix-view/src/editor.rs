@@ -891,7 +891,7 @@ pub enum LineNumber {
     Relative,
 
     /// Show relative and absolute line numbers next to each other, separated by
-    /// a gray divider (`relative │ absolute`).
+    /// a gray divider (`absolute │ relative`).
     Both,
 }
 

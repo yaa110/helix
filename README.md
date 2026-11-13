@@ -238,5 +238,5 @@ Code lenses use the same peek-style picker:
   NBSP, and newline markers are off.
 - Smooth scrolling: `Ctrl-Up` / `Ctrl-Down` moves by `scroll-lines` (default 3)
   in the editor and in the focused tree.
-- Line numbers default to `both`, rendering `relative │ absolute` side by side.
+- Line numbers default to `both`, rendering `absolute │ relative` side by side.
   Set `[editor] line-number = "absolute"` or `"relative"` to change it.

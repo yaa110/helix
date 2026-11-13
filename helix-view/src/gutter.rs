@@ -211,7 +211,8 @@ pub fn line_numbers<'doc>(
                         let relative = current_line.abs_diff(line);
                         let relative = format!("{:>part_width$}", relative);
                         let absolute = format!("{:>part_width$}", line + 1);
-                        let combined = format!("{relative} │ {absolute}");
+                        // Absolute first, then relative, separated by a line.
+                        let combined = format!("{absolute} │ {relative}");
                         write!(out, "{:>1$}", combined, width).unwrap();
                     }
                 }
