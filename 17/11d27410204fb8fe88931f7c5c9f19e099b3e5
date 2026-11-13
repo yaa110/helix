@@ -1,0 +1,28 @@
+README.md
+  h_20fc4d483d1064 173-179
+book/src/keymap.md
+  h_20fc4d483d1064 492,495-496,498-499
+helix-term/src/ui/editor.rs
+  h_20fc4d483d1064 1689-1692
+helix-term/src/ui/sidebar.rs
+  h_20fc4d483d1064 66-69
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 1184-1204
+helix-term/src/ui/sidebar/search.rs
+  h_20fc4d483d1064 88-91,720-725
+helix-term/tests/test/search.rs
+  h_20fc4d483d1064 117-138
+helix-term/tests/test/sidebar.rs
+  h_20fc4d483d1064 85-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1711d27410204fb8fe88931f7c5c9f19e099b3e5",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
