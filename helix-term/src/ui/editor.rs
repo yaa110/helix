@@ -741,13 +741,11 @@ impl EditorView {
             }
 
             let label = label_for(doc);
-            let active_tab = current_doc == doc.id();
-            let style = if active_tab { active } else { inactive };
-            if active_tab {
-                x = surface
-                    .set_stringn(x, viewport.y, "▐", right.saturating_sub(x) as usize, style)
-                    .0;
-            }
+            let style = if current_doc == doc.id() {
+                active
+            } else {
+                inactive
+            };
             x = surface
                 .set_stringn(
                     x,
@@ -757,11 +755,6 @@ impl EditorView {
                     style,
                 )
                 .0;
-            if active_tab {
-                x = surface
-                    .set_stringn(x, viewport.y, "▌", right.saturating_sub(x) as usize, style)
-                    .0;
-            }
             if doc.is_modified() && x < right {
                 x = surface
                     .set_stringn(
