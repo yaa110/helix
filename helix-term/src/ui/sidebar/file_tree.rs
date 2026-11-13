@@ -308,18 +308,10 @@ impl FileTree {
             .unwrap_or_else(|| self.root.display().to_string());
         let folder_name = self
             .selected_row()
-            .map(|row| {
-                let path = if row.kind == EntryKind::Dir {
-                    row.path.as_path()
-                } else {
-                    row.path.parent().unwrap_or(&row.path)
-                };
-                path.strip_prefix(&self.root)
-                    .ok()
-                    .filter(|path| !path.as_os_str().is_empty())
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| root_name.clone())
-            })
+            .and_then(|row| row.path.parent())
+            .and_then(|path| path.strip_prefix(&self.root).ok())
+            .filter(|path| !path.as_os_str().is_empty())
+            .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_else(|| root_name.clone());
         let header = if self.command_mode {
             format!("{root_name} | {folder_name}  [commands]")
@@ -1210,8 +1202,7 @@ impl FileTree {
             }
             KeyCode::Char('/') => {
                 self.leave_command_mode(cx);
-                cx.editor.sidebar.search_modal = true;
-                cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+                crate::commands::global_search(cx);
                 return true;
             }
             KeyCode::Char('b') => {

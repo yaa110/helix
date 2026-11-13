@@ -2573,7 +2573,7 @@ fn make_search_word_bounded(cx: &mut Context) {
     }
 }
 
-fn global_search(cx: &mut Context) {
+pub(crate) fn global_search(cx: &mut Context) {
     #[derive(Debug)]
     struct FileResult<'a> {
         path: Cow<'a, Path>,

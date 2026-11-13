@@ -141,41 +141,12 @@ Additional tree behavior:
 - `<space>e` / `<space>E` open the file explorer at the workspace / current
   working directory.
 
-### Search pane
+### Global search
 
-`<space>/` opens global search as a floating peek modal. Reopening it preserves
-the previous query, options, results, cursor position, and selection. The
-selected match is previewed with surrounding source code; `Enter` jumps to it
-and closes the modal, `Esc` closes without moving the cursor.
-
-- Visible `Find:` and `Replace:` inputs; long queries scroll inside the pane
-  instead of overflowing.
-- Empty query shows `Type to search`; no matches show `No results found`.
-- Options line: `[Aa] case`, `[ab] word`, `[.*] regex`, `[AB] keep`.
-- Results are grouped by file, streamed in, debounced, cancellable, and capped
-  at 10,000 matches.
-- Open buffers are searched from memory; other files are read from disk.
-- Results revalidate against current text before replacing.
-
-| Key | Action |
-| --- | --- |
-| `Tab` | Query → Replace → Results |
-| `Space` (Results) / `Alt-Space` | Open the search-options hint box |
-| `c` / `w` / `r` / `p` (options box) | Toggle case / word / regex / preserve-case |
-| `b` (options box) | Open the file tree |
-| `/` (options box) | Close the search modal |
-| `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle the same options directly |
-| `j` / `k` | Move through results |
-| `Ctrl-Down` / `Ctrl-Up` | Smooth-scroll results |
-| `h` / `l` | Collapse / expand a file group |
-| `Enter` | Open and select the match |
-| `s` / `v` | Open the match in a split |
-| `n` / `N`, `F4` / `Shift-F4` | Next / previous match |
-| `Alt-Enter` | Select all matches in the current file |
-| `Ctrl-r` | Replace the selected match (or all matches in the selected file) |
-| `Ctrl-Alt-Enter` | Replace all matches |
-| `R` | Re-run the query |
-| `Esc` | Close the search modal |
+`<space>/` opens global search in the same peek picker used by `<space>f`.
+Type to search workspace contents; each result shows `path:line` and a preview
+of the matching code. `Enter` opens the selection, `Esc` closes the picker.
+Query history is preserved by the picker's history register.
 
 ### Peek and code lenses
 
