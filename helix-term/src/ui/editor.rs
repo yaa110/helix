@@ -1939,13 +1939,6 @@ impl Component for EditorView {
             statusline::render(&mut context, powerline_area, surface);
         }
 
-        if config.auto_info {
-            if let Some(mut info) = cx.editor.autoinfo.take() {
-                info.render(area, surface, cx);
-                cx.editor.autoinfo = Some(info)
-            }
-        }
-
         let key_width = 15u16; // for showing pending keys
         let mut status_msg_width = 0;
 
@@ -2053,6 +2046,16 @@ impl Component for EditorView {
 
         if cx.editor.sidebar.search_modal {
             self.sidebar.render_search_modal(area, surface, cx);
+        }
+
+        // Render the which-key/info popup last so the global-search window
+        // cannot cover it. This matters for the Space options hint inside the
+        // search modal.
+        if config.auto_info {
+            if let Some(mut info) = cx.editor.autoinfo.take() {
+                info.render(area, surface, cx);
+                cx.editor.autoinfo = Some(info)
+            }
         }
     }
 
