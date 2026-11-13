@@ -1,0 +1,50 @@
+Cargo.lock
+  h_20fc4d483d1064 1530,1565,1585,1593,1606,1625,1659,1663,1683,1733,1749,1765,3585
+Cargo.toml
+  h_20fc4d483d1064 70
+Formula/helix.rb
+  h_20fc4d483d1064 5
+README.md
+  h_20fc4d483d1064 118-122,151-158,226-229,235-243,280-281
+book/src/keymap.md
+  h_20fc4d483d1064 379-383
+helix-loader/build.rs
+  h_20fc4d483d1064 26
+helix-term/src/application.rs
+  h_20fc4d483d1064 148-151,187-191,221-227,1590-1598
+helix-term/src/commands.rs
+  h_20fc4d483d1064 436-437,3859-3862,3870-3872,3889-4018,4031-4039
+helix-term/src/keymap/default.rs
+  h_20fc4d483d1064 250
+helix-term/src/ui/editor.rs
+  h_20fc4d483d1064 1700
+helix-term/src/ui/sidebar.rs
+  h_20fc4d483d1064 74-77
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 6,54-75,87-90,96,116-119,135,144,146-172,174-179,181-185,289,360,380-386,392-397,409-421,677-681,683-684,751,779-780,782,784,788,790,800-813,815-816,818-838,936-1023,1057,1089-1092,1123,1173-1176,1187-1188,1190-1194,1196-1198,1205,1210-1213,1217-1218,1220,1227-1246,1249-1269,1617-1618,1620,1625,1697-1708,1820-1822,1825-1832,1892-1895,1925-1988
+helix-term/src/ui/sidebar/search.rs
+  h_20fc4d483d1064 38-50,63,82,117-120,200-201,280-283,285-288,290-294,298-300,310,373-374,433-436,461-465,494-540,855-995,1085-1116,1272-1273,1277-1278
+helix-term/tests/test/search.rs
+  h_20fc4d483d1064 227,235-252,268,274
+helix-term/tests/test/sidebar.rs
+  h_20fc4d483d1064 85-150
+helix-view/src/document.rs
+  h_20fc4d483d1064 175-176,758,852-856,871,875,2881-2904
+helix-view/src/editor.rs
+  h_20fc4d483d1064 443-449,1081-1088,1295-1296,2357,2359-2363
+helix-view/src/session.rs
+  h_20fc4d483d1064 213-235,770-781
+runtime/tutor
+  h_20fc4d483d1064 1545-1595
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8f307ddf3f4f32c4bdd1de01a167c65afa720ad8",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
