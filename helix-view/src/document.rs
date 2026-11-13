@@ -2218,6 +2218,14 @@ impl Document {
             })
     }
 
+    /// A new, unmodified, pathless buffer used only as the initial editor view.
+    pub fn is_pristine_scratch(&self) -> bool {
+        self.path().is_none()
+            && !self.is_modified()
+            && self.text.len_chars() <= 1
+            && self.text.chars().all(|ch| ch == '\n' || ch == '\r')
+    }
+
     pub fn display_name(&self) -> Cow<'_, str> {
         self.relative_path()
             .map_or_else(|| SCRATCH_BUFFER_NAME.into(), |path| path.to_string_lossy())

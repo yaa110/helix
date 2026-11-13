@@ -420,9 +420,11 @@ impl Application {
             .and_then(|view| self.editor.document(view.doc))
             .and_then(|doc| doc.path())
             .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| helix_view::document::SCRATCH_BUFFER_NAME.to_string());
-        let title = format!("Hx | {title}");
+            .map(|name| name.to_string_lossy().into_owned());
+        let title = match title {
+            Some(title) => format!("Hx | {title}"),
+            None => "Hx".to_string(),
+        };
         if self.terminal_title != title {
             let _ = self.terminal.backend_mut().set_title(&title);
             self.terminal_title = title;

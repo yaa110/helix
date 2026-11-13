@@ -490,6 +490,9 @@ fn render_file_name<'a, F>(context: &mut RenderContext<'a>, write: F)
 where
     F: Fn(&mut RenderContext<'a>, Span<'a>) + Copy,
 {
+    if context.doc.is_pristine_scratch() {
+        return;
+    }
     let title = {
         let rel_path = context.doc.relative_path();
         let path = rel_path
