@@ -85,6 +85,10 @@ impl SearchPane {
         self.results.values().map(|file| file.matches.len()).sum()
     }
 
+    pub fn options_open(&self) -> bool {
+        self.options_mode
+    }
+
     pub fn handle_idle_timeout(&mut self, editor: &Editor) {
         if !self.pending {
             return;
@@ -713,6 +717,12 @@ impl SearchPane {
             ("w", "Whole word"),
             ("r", "Regex"),
             ("p", "Preserve case"),
+            ("", "── Replace ──"),
+            ("Tab", "Find → Replace → Results"),
+            ("Enter", "Replace current match (Replace field)"),
+            ("Ctrl-r", "Replace selected match / file"),
+            ("Ctrl-Alt-Enter", "Replace all"),
+            ("Alt-Enter", "Select all matches in file"),
             ("", "── Pane ──"),
             ("b", "Open file tree"),
             ("/", "Close search pane"),

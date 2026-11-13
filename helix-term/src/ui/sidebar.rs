@@ -63,6 +63,10 @@ impl Sidebar {
         self.search.handle_event(event, cx)
     }
 
+    pub fn search_options_open(&self) -> bool {
+        self.search.options_open()
+    }
+
     pub fn render_search_modal(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
         self.search.render_modal(area, surface, cx.editor);
     }

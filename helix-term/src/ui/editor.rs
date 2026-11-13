@@ -1686,7 +1686,10 @@ impl Component for EditorView {
                 cx.editor.status_msg = None;
 
                 if cx.editor.sidebar.search_modal {
-                    if key.code == KeyCode::Esc {
+                    // Esc first dismisses the options hint, then the search
+                    // window. Let the search pane handle Esc while its hint is
+                    // open.
+                    if key.code == KeyCode::Esc && !self.sidebar.search_options_open() {
                         cx.editor.sidebar.search_modal = false;
                         cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
                         cx.editor.needs_redraw = true;

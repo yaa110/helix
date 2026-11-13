@@ -83,6 +83,34 @@ async fn tree_navigation_opens_files_and_moves_focus() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn ctrl_up_down_scrolls_the_tree_while_focused() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    for name in ["a", "b", "c", "d", "e", "f", "g", "h"] {
+        std::fs::write(dir.path().join(format!("{name}.txt")), format!("{name}\n"))?;
+    }
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>b").await?;
+    let rows = app.sidebar_row_paths();
+    let lines = app.editor.config().scroll_lines.unsigned_abs().max(1) as usize;
+    assert!(rows.len() > lines);
+
+    helpers::send_keys(&mut app, "<C-down>").await?;
+    assert_eq!(
+        app.editor.sidebar.selected.as_deref(),
+        Some(rows[lines].as_path())
+    );
+
+    helpers::send_keys(&mut app, "<C-up>").await?;
+    assert_eq!(
+        app.editor.sidebar.selected.as_deref(),
+        Some(rows[0].as_path())
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn tree_refreshes_after_external_create() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let mut app = helpers::AppBuilder::new().build()?;

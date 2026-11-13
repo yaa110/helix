@@ -1181,12 +1181,27 @@ impl FileTree {
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
-            if self.search_mode
-                && key.modifiers.contains(KeyModifiers::CONTROL)
-                && key.code == KeyCode::Char('u')
-            {
-                self.set_query(String::new(), cx);
-                return true;
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+                match key.code {
+                    KeyCode::Down => {
+                        if !self.rows.is_empty() {
+                            self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
+                        }
+                        self.sync_selection(cx);
+                        return true;
+                    }
+                    KeyCode::Up => {
+                        self.cursor = self.cursor.saturating_sub(lines);
+                        self.sync_selection(cx);
+                        return true;
+                    }
+                    KeyCode::Char('u') if self.search_mode => {
+                        self.set_query(String::new(), cx);
+                        return true;
+                    }
+                    _ => {}
+                }
             }
             self.g_pending = false;
             return false;

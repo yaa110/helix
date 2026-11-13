@@ -115,6 +115,28 @@ async fn global_space_shortcuts_work_from_search_results() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn esc_dismisses_search_options_before_the_window() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "foo\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>/foo").await?;
+    wait_for_search_results(&mut app, 1).await;
+    helpers::send_keys(&mut app, "<ret><space>").await?;
+    assert!(app.editor.autoinfo.is_some());
+    assert!(app.editor.sidebar.search_modal);
+
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert!(app.editor.autoinfo.is_none());
+    assert!(app.editor.sidebar.search_modal);
+
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert!(!app.editor.sidebar.search_modal);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn replace_all_from_search_pane_updates_disk_and_reports() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let a = dir.path().join("a.txt");

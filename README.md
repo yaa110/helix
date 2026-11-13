@@ -170,12 +170,14 @@ from search returns to the tree.
 - `Find:` and `Replace:` inputs.
 - Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
 - `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
-- `<space>` opens a categorized options hint box; `c`/`w`/`r`/`p` toggle the
-  same settings, `/` closes the window, `b` opens the tree.
-- `Enter` previews/opens the selected match; `Esc` closes without moving the
-  cursor.
+- `<space>` opens a categorized options/replace hint box; `c`/`w`/`r`/`p`
+  toggle the same settings, `/` closes the window, `b` opens the tree.
+- `Esc` closes the hint box first; a second `Esc` closes the search window
+  without moving the cursor.
+- `Enter` previews/opens the selected match.
+- Replace: `Tab` to the `Replace:` field, `Enter` replaces the current match,
+  `Ctrl-r` replaces the selected match/file, and `Ctrl-Alt-Enter` replaces all.
 - Empty search shows a hint; no matches shows `No results found`.
-- Replace current/all with `Ctrl-r` / `Ctrl-Alt-Enter`.
 
 ### Peek and code lenses
 

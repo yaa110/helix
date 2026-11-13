@@ -489,12 +489,14 @@ window returns to the tree.
 | printable text | Edit the find query |
 | `Tab` | Find → Replace → Results |
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve-case |
-| `Space` | Categorized options hint box |
+| `Space` | Categorized options/replace hint box |
 | `j` / `k` | Move through results |
 | `Enter` | Open the selected match |
-| `Ctrl-r` | Replace selected match |
+| `Enter` in `Replace:` | Replace current match |
+| `Ctrl-r` | Replace selected match/file |
 | `Ctrl-Alt-Enter` | Replace all |
-| `Esc` | Close the window |
+| `Alt-Enter` | Select all matches in file |
+| `Esc` | Close hint box first, then the window |
 
 `:search-replace-all` and `:search-replace-current` remain available.
 
