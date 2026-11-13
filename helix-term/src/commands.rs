@@ -414,7 +414,7 @@ impl MappableCommand {
         close_buffer, "Close the current buffer (same as :buffer-close)",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
         toggle_bufferline, "Toggle the buffer tab bar",
-        focus_search, "Open/focus the search sidebar",
+        focus_search, "Open/focus the global search window",
         buffer_picker, "Open buffer picker",
         jumplist_picker, "Open jumplist picker",
         symbol_picker, "Open symbol picker",

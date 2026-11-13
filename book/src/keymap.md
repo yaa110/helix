@@ -464,32 +464,23 @@ These mappings are in the style of [vim-unimpaired](https://github.com/tpope/vim
 | `]Space` | Add newline below                            | `add_newline_below`     |
 | `[Space` | Add newline above                            | `add_newline_above`     |
 
-#### Search sidebar
+#### Global search window
 
-`Space + /` opens the search pane. Type the query; the search starts after the
-idle timeout. `Tab` moves between the query, replace, and result fields.
-`Esc` moves from the query to the results, and from the results back to the
-editor.
+`Space + /` opens global search in the same peek picker used by `Space + f`
+(the file picker). Type the query; results include the matching path, line, and
+a source preview. `Enter` opens the selected location and `Esc` closes the
+window.
 
 | Key | Description |
 | --- | --- |
-| `Tab` | Query → Replace → Results |
-| `Alt-c` | Toggle match case |
-| `Alt-w` | Toggle whole word |
-| `Alt-r` | Toggle regex |
-| `Alt-p` | Toggle preserve case |
-| `j` / `k` | Move through results |
-| `h` / `l` | Collapse / expand a file group |
+| printable text | Search workspace contents |
+| `j` / `k`, `Down` / `Up` | Move through results |
 | `Enter` | Open the selected match |
-| `s` / `v` | Open the selected match in a split |
-| `n` / `N`, `F4` / `Shift-F4` | Next / previous match |
-| `Alt-Enter` | Select all matches in the current file |
-| `Ctrl-r` | Replace the selected match (or all matches in the selected file) |
-| `Ctrl-Alt-Enter` | Replace all matches in the result set |
-| `R` | Re-run the query |
+| `Esc` | Close the search window |
+| `Ctrl-u` | Clear the query |
 
-`:search-replace-all` and `:search-replace-current` expose the same operations
-without the search pane.
+`:search-replace-all` and `:search-replace-current` remain available for
+replace workflows.
 
 ## Insert mode
 

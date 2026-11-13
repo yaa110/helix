@@ -3667,7 +3667,7 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
     TypableCommand {
         name: "search-replace-current",
         aliases: &[],
-        doc: "Replace matches in the focused document using the search pane inputs.",
+        doc: "Replace matches in the focused document using the stored global-search inputs.",
         fun: search_replace_current,
         completer: CommandCompleter::none(),
         signature: Signature {

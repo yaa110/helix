@@ -218,6 +218,6 @@ Code lenses use the same peek-style picker:
 - Spaces and tabs are visible by default using `·` and `→`; NBSP, narrow
   NBSP, and newline markers are off.
 - Smooth scrolling: `Ctrl-Up` / `Ctrl-Down` moves by `scroll-lines` (default 3)
-  in the editor and in focused tree/search panes.
+  in the editor and in the focused tree.
 - Line numbers default to `both`, rendering `relative │ absolute` side by side.
   Set `[editor] line-number = "absolute"` or `"relative"` to change it.

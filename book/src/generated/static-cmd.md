@@ -79,7 +79,7 @@
 | `search_selection` | Use current selection as search pattern | normal: `` <A-*> ``, select: `` <A-*> `` |
 | `search_selection_detect_word_boundaries` | Use current selection as the search pattern, automatically wrapping with `\b` on word boundaries | normal: `` * ``, select: `` * `` |
 | `make_search_word_bounded` | Modify current search to make it word bounded |  |
-| `global_search` | Global search in workspace folder |  |
+| `global_search` | Global search in workspace folder | normal: `` <space>/ ``, select: `` <space>/ `` |
 | `extend_line` | Select current line, if already selected, extend to another line based on the anchor |  |
 | `extend_line_below` | Select current line, if already selected, extend to next line | normal: `` x ``, select: `` x `` |
 | `extend_line_above` | Select current line, if already selected, extend to previous line |  |
@@ -110,7 +110,7 @@
 | `close_buffer` | Close the current buffer (same as :buffer-close) | normal: `` <space>x ``, select: `` <space>x `` |
 | `toggle_file_tree` | Toggle/focus the file tree sidebar | normal: `` <space>b ``, select: `` <space>b `` |
 | `toggle_bufferline` | Toggle the buffer tab bar | normal: `` <space>T ``, select: `` <space>T `` |
-| `focus_search` | Open/focus the search sidebar | normal: `` <space>/ ``, select: `` <space>/ `` |
+| `focus_search` | Open/focus the global search window |  |
 | `buffer_picker` | Open buffer picker | normal: `` <space>B ``, select: `` <space>B `` |
 | `jumplist_picker` | Open jumplist picker | normal: `` <space>j ``, select: `` <space>j `` |
 | `symbol_picker` | Open symbol picker |  |
