@@ -263,6 +263,7 @@ impl<'a> TextRenderer<'a> {
             indent_guide_style: text_style.patch(
                 theme
                     .try_get("ui.virtual.indent-guide")
+                    .or_else(|| theme.try_get("ui.linenr"))
                     .unwrap_or_else(|| theme.get("ui.virtual.whitespace")),
             ),
             text_style,

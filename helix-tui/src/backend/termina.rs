@@ -413,7 +413,7 @@ impl Backend for TerminaBackend {
 
         write!(
             self.terminal,
-            "{}{}{}{}",
+            "{}{}{}{}\x1b[?1007l",
             // Enter an alternate screen.
             decset!(ClearAndEnableAlternateScreen),
             decset!(BracketedPaste),

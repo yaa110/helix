@@ -165,6 +165,11 @@ where
             terminal::EnterAlternateScreen,
             EnableFocusChange
         )?;
+        // Disable xterm alternate-scroll mode: without this, terminals turn
+        // wheel events into Up/Down keys when mouse capture is off, which
+        // would move the tree/search selection unexpectedly.
+        self.buffer.write_all(b"\x1b[?1007l")?;
+        self.buffer.flush()?;
         match execute!(self.buffer, EnableBracketedPaste,) {
             Err(err) if err.kind() == io::ErrorKind::Unsupported => {
                 log::warn!("Bracketed paste is not supported on this terminal.");
@@ -222,6 +227,8 @@ where
             DisableFocusChange,
             terminal::LeaveAlternateScreen
         )?;
+        self.buffer.write_all(b"\x1b[?1007h")?;
+        self.buffer.flush()?;
         terminal::disable_raw_mode()
     }
 

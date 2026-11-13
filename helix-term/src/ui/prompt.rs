@@ -792,7 +792,7 @@ impl Component for Prompt {
                 .map_or(0, |g| g.width());
         }
 
-        let line = area.height as usize - 1;
+        let line = area.height.saturating_sub(2) as usize;
 
         (
             Some(Position::new(area.y as usize + line, col)),

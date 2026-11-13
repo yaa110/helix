@@ -1214,7 +1214,7 @@ impl Default for Config {
             } else {
                 vec!["sh".to_owned(), "-c".to_owned()]
             },
-            line_number: LineNumber::Absolute,
+            line_number: LineNumber::Both,
             cursorline: true,
             cursorcolumn: false,
             gutters: GutterConfig::default(),

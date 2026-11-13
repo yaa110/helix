@@ -134,28 +134,28 @@ impl FileTree {
         if self.dirty_only {
             rows.retain(|row| self.git_status.contains_key(&row.path));
         }
-        if !self.filter.is_empty() {
-            let names: Vec<String> = rows
-                .iter()
-                .map(|row| row.path.to_string_lossy().into_owned())
+        if self.filter.is_empty() {
+            self.rows = rows;
+        } else {
+            // Peek-style results: flatten and rank fuzzy matches instead of
+            // keeping the tree hierarchy around every match.
+            let by_name: HashMap<String, Row> = rows
+                .into_iter()
+                .map(|row| (row.path.to_string_lossy().into_owned(), row))
                 .collect();
-            let matched: HashSet<&str> =
-                fuzzy_match(&self.filter, names.iter().map(String::as_str), true)
-                    .into_iter()
-                    .map(|(name, _)| name)
-                    .collect();
-            let matches: HashSet<PathBuf> = rows
-                .iter()
-                .filter(|row| matched.contains(row.path.to_string_lossy().as_ref()))
-                .map(|row| row.path.clone())
+            let names: Vec<&str> = by_name.keys().map(String::as_str).collect();
+            let mut matches: Vec<(Row, u16)> = fuzzy_match(&self.filter, names, true)
+                .into_iter()
+                .filter_map(|(name, score)| {
+                    let mut row = by_name.get(name)?.clone();
+                    row.depth = 0;
+                    row.expanded = false;
+                    Some((row, score))
+                })
                 .collect();
-            rows.retain(|row| {
-                matches.contains(&row.path)
-                    || (row.kind == EntryKind::Dir
-                        && matches.iter().any(|path| path.starts_with(&row.path)))
-            });
+            matches.sort_by(|a, b| b.1.cmp(&a.1));
+            self.rows = matches.into_iter().map(|(row, _)| row).collect();
         }
-        self.rows = rows;
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         self.labels = None;
         self.label_prefix = None;
@@ -260,7 +260,6 @@ impl FileTree {
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
         let theme = &editor.theme;
-        let icons_enabled = editor.config().sidebar.icons;
         let title = if focused {
             theme
                 .try_get_exact("ui.sidebar.title.focused")
@@ -278,6 +277,7 @@ impl FileTree {
             .try_get_exact("ui.tree.directory")
             .or_else(|| theme.try_get_exact("ui.text.directory"))
             .unwrap_or_default();
+        let text_style = theme.try_get_exact("ui.text").unwrap_or_default();
         let selected = theme
             .try_get_exact(if focused {
                 "ui.tree.selected.focused"
@@ -292,40 +292,31 @@ impl FileTree {
         } else {
             selected.add_modifier(Modifier::DIM)
         };
-        let indicator = theme
-            .try_get_exact(if focused {
-                "ui.tree.selected.indicator"
-            } else {
-                "ui.tree.selected.indicator.unfocused"
-            })
-            .or_else(|| {
-                if focused {
-                    // Match the high-contrast focused border when the theme
-                    // has no dedicated indicator scope.
-                    theme.try_get_exact("ui.menu.selected")
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(menu);
 
         if area.height == 0 {
             return;
         }
 
-        let mut header = self
+        let root_name = self
             .root
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| self.root.display().to_string());
-        if self.command_mode {
-            header.push_str("  [commands]");
-        } else if self.filter.is_empty() {
-            header.push_str("  /type to filter");
+        let header = if self.command_mode {
+            format!("{root_name}  [commands]")
         } else {
-            header.push_str(&format!("  /{}", self.filter));
-        }
+            format!("{root_name}  /{}", self.filter)
+        };
         surface.set_stringn(area.x, area.y, &header, area.width as usize, title);
+        if focused && !self.command_mode {
+            let cursor_x = (root_name.width() + 3 + self.filter.width()) as u16;
+            if cursor_x < area.width {
+                surface.set_style(
+                    Rect::new(area.x + cursor_x, area.y, 1, 1),
+                    theme.get("ui.cursor"),
+                );
+            }
+        }
 
         let height = area.height.saturating_sub(1) as usize;
         if height == 0 {
@@ -340,24 +331,24 @@ impl FileTree {
         self.overflow_hint = None;
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
-            let marker = if icons_enabled {
-                match row.kind {
-                    EntryKind::Dir => super::icons::folder_icon(row.expanded),
-                    EntryKind::File => super::icons::file_icon(&row.path),
-                }
-            } else {
-                match row.kind {
-                    EntryKind::Dir if row.expanded => "▾",
-                    EntryKind::Dir => "▸",
-                    EntryKind::File => " ",
-                }
+            let marker = match row.kind {
+                EntryKind::Dir if row.expanded => "▾",
+                EntryKind::Dir => "▸",
+                EntryKind::File => " ",
             };
             let indent = "│ ".repeat(row.depth);
-            let name = row
-                .path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| row.path.display().to_string());
+            let name = if self.filter.is_empty() {
+                row.path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| row.path.display().to_string())
+            } else {
+                row.path
+                    .strip_prefix(&self.root)
+                    .unwrap_or(&row.path)
+                    .display()
+                    .to_string()
+            };
             let label = self.labels.as_ref().and_then(|labels| {
                 labels
                     .iter()
@@ -373,18 +364,19 @@ impl FileTree {
                         }
                     })
             });
-            let text = match label {
-                Some(label) => format!("{label} {indent}{marker} {name}"),
+            let label_prefix = label.map(|label| format!("{label} "));
+            let text = match &label_prefix {
+                Some(label) => format!("{label}{indent}{marker} {name}"),
                 None => format!("{indent}{marker} {name}"),
             };
             // Keep the selected row visible even when the editor owns focus,
             // so it is clear which file is currently open.
             let mut style = if index == self.cursor {
-                menu
+                menu.patch(text_style)
             } else if row.kind == EntryKind::Dir {
                 directory
             } else {
-                title
+                text_style
             };
             if let Some(status) = self.git_status.get(&row.path) {
                 let dirty = match status {
@@ -398,9 +390,8 @@ impl FileTree {
             }
 
             let selected_row = index == self.cursor;
-            let indicator_width = u16::from(selected_row);
-            let content_x = area.x + indicator_width;
-            let content_width = (area.width as usize).saturating_sub(indicator_width as usize);
+            let content_x = area.x;
+            let content_width = area.width as usize;
             let full_width = text.width();
             if selected_row {
                 let max_scroll = full_width.saturating_sub(content_width);
@@ -408,20 +399,45 @@ impl FileTree {
                 if full_width > content_width {
                     self.overflow_hint = Some(row.path.display().to_string());
                 }
-                // A focus-independent accent bar keeps the selected row
-                // discoverable; its style is muted while the tree is inactive.
-                surface.set_string(area.x, area.y + 1 + offset as u16, "▍", indicator);
             }
-            let visible = skip_columns(&text, self.horizontal_scroll);
-            // `set_stringn` is essential here: writing an overlong row with
-            // `set_string` spills the remaining cells into the editor pane.
-            surface.set_stringn(
-                content_x,
-                area.y + 1 + offset as u16,
-                visible,
-                content_width,
-                style,
-            );
+            let y = area.y + 1 + offset as u16;
+            if self.horizontal_scroll == 0 && !indent.is_empty() {
+                // Draw the hierarchy guides with a faded style while keeping
+                // the row's selection background intact.
+                let guide_style = style.patch(
+                    theme
+                        .try_get_exact("ui.tree.indent")
+                        .or_else(|| theme.try_get_exact("ui.virtual.indent-guide"))
+                        .or_else(|| theme.try_get_exact("ui.linenr"))
+                        .unwrap_or_default(),
+                );
+                let mut x = content_x;
+                if let Some(label) = &label_prefix {
+                    x = surface.set_stringn(x, y, label, content_width, style).0;
+                }
+                x = surface
+                    .set_stringn(
+                        x,
+                        y,
+                        &indent,
+                        content_width.saturating_sub((x - content_x) as usize),
+                        guide_style,
+                    )
+                    .0;
+                let rest = format!("{marker} {name}");
+                surface.set_stringn(
+                    x,
+                    y,
+                    &rest,
+                    content_width.saturating_sub((x - content_x) as usize),
+                    style,
+                );
+            } else {
+                let visible = skip_columns(&text, self.horizontal_scroll);
+                // `set_stringn` is essential here: writing an overlong row with
+                // `set_string` spills the remaining cells into the editor pane.
+                surface.set_stringn(content_x, y, visible, content_width, style);
+            }
         }
     }
 
@@ -1019,6 +1035,7 @@ impl FileTree {
             ("[ / ]", "Shrink / grow sidebar"),
             ("< / >", "Scroll tree left / right"),
             ("x", "Close current buffer"),
+            ("b", "Hide sidebar"),
             ("q / Esc", "Return to editor / close commands"),
         ];
         cx.editor.autoinfo = Some(Info::new("Tree commands (Space)", &body));
@@ -1095,6 +1112,12 @@ impl FileTree {
             KeyCode::Char('x') => {
                 self.leave_command_mode(cx);
                 crate::commands::close_buffer(cx);
+                return true;
+            }
+            KeyCode::Char('b') => {
+                self.leave_command_mode(cx);
+                cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
+                cx.editor.sidebar.focus = SidebarFocus::Editor;
                 return true;
             }
             KeyCode::Char('w') => {
@@ -1329,7 +1352,7 @@ mod tree_tests {
     fn filter_walks_collapsed_directories() {
         let root = PathBuf::from("/repo");
         let mut tree = FileTree::new(root.clone());
-        tree.filter = "needle".to_string();
+        tree.filter = "ndl".to_string();
         tree.rebuild_with(&root, &HashSet::new(), |dir| {
             Ok(match dir {
                 _ if dir == Path::new("/repo") => vec![
@@ -1343,7 +1366,6 @@ mod tree_tests {
             })
         });
         let paths: Vec<_> = tree.rows.iter().map(|row| row.path.as_path()).collect();
-        assert!(paths.contains(&Path::new("/repo/src")));
         assert!(paths.contains(&Path::new("/repo/src/needle.rs")));
         assert!(!paths.contains(&Path::new("/repo/README.md")));
     }

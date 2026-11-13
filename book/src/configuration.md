@@ -37,7 +37,6 @@ The sidebar width is configured with:
 width = 30
 min-width = 20
 max-width = 50
-icons = true
 git-status = true
 ```
 

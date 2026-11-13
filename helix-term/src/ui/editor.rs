@@ -26,7 +26,7 @@ use helix_view::{
     annotations::diagnostics::DiagnosticFilter,
     document::{Mode, SCRATCH_BUFFER_NAME},
     editor::{CompleteAction, CursorShapeConfig},
-    graphics::{Color, CursorKind, Modifier, Rect, Style},
+    graphics::{Color, CursorKind, Modifier, Rect, Style, UnderlineStyle},
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
     Document, Editor, Theme, View,
@@ -670,10 +670,14 @@ impl EditorView {
                 .unwrap_or_else(|| theme.get("ui.statusline")),
         );
 
+        let accent = theme.get("special").fg.unwrap_or(Color::Reset);
         let active = theme
             .try_get("ui.bufferline.active")
             .unwrap_or_else(|| theme.get("ui.statusline.active"))
-            .add_modifier(Modifier::BOLD);
+            .fg(accent)
+            .underline_color(accent)
+            .underline_style(UnderlineStyle::Line)
+            .remove_modifier(Modifier::BOLD);
         let inactive = theme
             .try_get("ui.bufferline")
             .unwrap_or_else(|| theme.get("ui.statusline.inactive"));
@@ -684,17 +688,45 @@ impl EditorView {
             .try_get("ui.bufferline.separator")
             .unwrap_or_else(|| theme.get("ui.linenr"));
 
-        let icons = editor.config().sidebar.icons;
         let current_doc = view!(editor).doc;
+        let docs: Vec<&Document> = editor.documents().collect();
+        let current_index = docs
+            .iter()
+            .position(|doc| doc.id() == current_doc)
+            .unwrap_or(0);
+
+        // Keep the active tab visible by scrolling the tab strip when needed.
+        let label_for = |doc: &Document| {
+            let path = doc.path().unwrap_or(&scratch);
+            let fname = path
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            format!(" {fname} ")
+        };
+        let widths: Vec<usize> = docs
+            .iter()
+            .map(|doc| label_for(doc).width() + usize::from(doc.is_modified()) * 3)
+            .collect();
+        let mut start = 0;
+        while start < current_index {
+            let width: usize = widths[start..=current_index].iter().sum();
+            let separators = current_index.saturating_sub(start);
+            if width + separators <= viewport.width as usize {
+                break;
+            }
+            start += 1;
+        }
+
         let right = viewport.right();
         let mut x = viewport.x;
-
-        for doc in editor.documents() {
+        for (index, doc) in docs.iter().enumerate().skip(start) {
             if x >= right {
                 break;
             }
 
-            if x > viewport.x {
+            if index > start {
                 x = surface
                     .set_stringn(
                         x,
@@ -709,18 +741,7 @@ impl EditorView {
                 }
             }
 
-            let path = doc.path().unwrap_or(&scratch);
-            let fname = path
-                .file_name()
-                .unwrap_or_default()
-                .to_str()
-                .unwrap_or_default();
-            let icon = if icons {
-                format!("{} ", crate::ui::sidebar::icons::file_icon(path))
-            } else {
-                String::new()
-            };
-            let label = format!(" {icon}{fname} ");
+            let label = label_for(doc);
             let style = if current_doc == doc.id() {
                 active
             } else {
@@ -1729,7 +1750,8 @@ impl Component for EditorView {
         //   [powerline spanning the full width]
         let powerline_area = area.clip_top(area.height.saturating_sub(1));
         let commandline_area = area.clip_top(area.height.saturating_sub(2)).with_height(1);
-        let page_area = area.clip_bottom(2);
+        let command_border_area = area.clip_top(area.height.saturating_sub(3)).with_height(1);
+        let page_area = area.clip_bottom(3);
         let commandline_y = commandline_area.y;
         let sidebar_width = cx.editor.sidebar.visible_width(area.width, &config.sidebar);
         let editor_full = if sidebar_width > 0 {
@@ -1760,6 +1782,18 @@ impl Component for EditorView {
         for (view, is_focused) in cx.editor.tree.views() {
             let doc = cx.editor.document(view.doc).unwrap();
             self.render_view(cx.editor, doc, view, code_area, surface, is_focused);
+        }
+
+        // A subtle rule separates the command/error line from the code.
+        if command_border_area.height > 0 {
+            let border = "─".repeat(command_border_area.width as usize);
+            surface.set_stringn(
+                command_border_area.x,
+                command_border_area.y,
+                &border,
+                command_border_area.width as usize,
+                cx.editor.theme.get("ui.linenr"),
+            );
         }
 
         // The powerline spans the full width, including the sidebar. It shows

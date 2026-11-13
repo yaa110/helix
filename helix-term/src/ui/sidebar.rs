@@ -10,7 +10,6 @@ use crate::commands;
 use crate::compositor::{Context, Event, EventResult};
 
 pub mod file_tree;
-pub(crate) mod icons;
 pub mod search;
 
 use file_tree::FileTree;
@@ -112,22 +111,10 @@ impl Sidebar {
             .unwrap_or_default();
         surface.clear_with(area, background);
         let focused = cx.editor.sidebar.focus == SidebarFocus::Sidebar;
-        let border = if focused {
-            theme
-                .try_get_exact("ui.sidebar.border.focused")
-                // High-contrast fallback for themes that do not define a
-                // focused sidebar scope (Monokai's menu selection is yellow).
-                .or_else(|| theme.try_get_exact("ui.menu.selected"))
-                .or_else(|| theme.try_get_exact("ui.sidebar.border"))
-                .or_else(|| theme.try_get_exact("ui.linenr"))
-                .unwrap_or_default()
-                .add_modifier(helix_view::graphics::Modifier::BOLD)
-        } else {
-            theme
-                .try_get_exact("ui.sidebar.border")
-                .or_else(|| theme.try_get_exact("ui.linenr"))
-                .unwrap_or_default()
-        };
+        let border = theme
+            .try_get_exact("ui.sidebar.border")
+            .or_else(|| theme.try_get_exact("ui.linenr"))
+            .unwrap_or_default();
         match cx.editor.sidebar.mode {
             SidebarMode::Files => {
                 self.tree.render(area, surface, cx.editor, focused);
@@ -147,9 +134,8 @@ impl Sidebar {
         }
 
         if area.width > 0 {
-            let border_char = if focused { "┃" } else { "│" };
             for y in area.y..area.y.saturating_add(area.height) {
-                surface.set_string(area.x + area.width - 1, y, border_char, border);
+                surface.set_string(area.x + area.width - 1, y, "│", border);
             }
         }
     }

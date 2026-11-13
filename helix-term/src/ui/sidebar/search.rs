@@ -278,13 +278,8 @@ impl SearchPane {
                         .get(path)
                         .map(|file| file.matches.len())
                         .unwrap_or(0);
-                    let icon = if editor.config().sidebar.icons {
-                        format!("{} ", super::icons::file_icon(path))
-                    } else {
-                        String::new()
-                    };
                     format!(
-                        "▾ {icon}{} ({count})",
+                        "▾ {} ({count})",
                         path.file_name()
                             .map(|name| name.to_string_lossy().into_owned())
                             .unwrap_or_else(|| path.display().to_string())
@@ -592,6 +587,7 @@ impl SearchPane {
             ("w", "Whole word"),
             ("r", "Regex"),
             ("p", "Preserve case"),
+            ("/", "Close search pane"),
             ("Space, Esc", "Close options"),
         ];
         cx.editor.autoinfo = Some(Info::new("Search options (Space)", &body));
@@ -630,6 +626,12 @@ impl SearchPane {
                     if let KeyCode::Char(option) = key.code {
                         self.toggle_option(option, cx);
                     }
+                }
+                KeyCode::Char('/') => {
+                    self.close_options(cx.editor);
+                    cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
+                    cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+                    cx.editor.needs_redraw = true;
                 }
                 KeyCode::Char(' ') | KeyCode::Esc | KeyCode::Tab => {
                     self.close_options(cx.editor);

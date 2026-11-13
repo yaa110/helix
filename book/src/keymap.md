@@ -370,6 +370,7 @@ live behind `Space`, which opens a which-key-style hint box.
 | `c`, `m`, `p`     | Copy / cut / paste                               |
 | `y`, `Y`          | Copy the absolute / relative path                |
 | `x`               | Close the current buffer                         |
+| `b`               | Hide the sidebar                                 |
 | `w`               | Show two-letter jump labels                      |
 | `g`, `G`          | First / last row                                 |
 | `J`, `K`          | Move ten rows                                    |
@@ -392,13 +393,10 @@ box; focus the editor first to use the global `Space` menu. Tree rows are
 clipped at the pane edge and the statusline shows the full path when the
 selected row is too long; use `Space` `<` / `Space` `>` to scroll.
 
-The selected row always shows a `▍` accent bar. While the tree is focused the
-sidebar border/header are bold/accented and the row uses the focused selection
-style; when focus returns to the editor the same row remains visible but uses
-the dimmed/unfocused style. Themes can override this with
-`ui.tree.selected.focused`, `ui.tree.selected.unfocused`,
-`ui.tree.selected.indicator`, `ui.tree.selected.indicator.unfocused`,
-`ui.sidebar.border.focused`, and `ui.sidebar.title.focused`.
+Selection is shown with the row background only; tree names stay regular (not
+bold), and the sidebar border keeps its normal color when focused. Themes can
+override the selection with `ui.tree.selected.focused` and
+`ui.tree.selected.unfocused`.
 
 ##### Popup
 

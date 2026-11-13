@@ -4,6 +4,7 @@
 
 "ui.text.focus" = { fg = "yellow", modifiers= ["bold"] }
 "ui.virtual.whitespace" = "base4"
+"ui.virtual.indent-guide" = { fg = "base4", modifiers = ["dim"] }
 "ui.virtual.ruler" = { bg = "base1" }
 "ui.virtual.jump-label" = { fg = "red", modifiers = ["bold"] }
 

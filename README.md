@@ -106,6 +106,7 @@ Press `<space>` in the tree to open a which-key-style command hint box:
 | `c` / `m` / `p` | Copy / cut / paste |
 | `y` / `Y` | Copy the absolute / relative path |
 | `x` | Close the current buffer |
+| `b` | Hide the sidebar |
 | `w` | Show two-letter jump labels |
 | `g` / `G` | First / last row |
 | `J` / `K` | Move ten rows |
@@ -118,15 +119,15 @@ Press `<space>` in the tree to open a which-key-style command hint box:
 
 Additional tree behavior:
 
-- File-type icons and indentation guides are enabled by default. Set
-  `[editor.sidebar] icons = false` if your terminal font lacks Nerd Font glyphs.
+- Indentation guides are enabled by default and use a muted gray, so deep
+  trees stay readable without competing with names or selection.
 - Git status colors: modified files use the `diff.delta` color, untracked files
   use `diff.plus`, conflicts use `diff.delta.conflict`, and directories inherit
   the color of changed children. `<space>D` shows dirty files only.
 - Long names are clipped at the pane boundary; the statusline shows the full
   selected path, and `<space><` / `<space>>` scroll long rows.
-- Focus is obvious: the selected row has a `▍` bar, the focused pane gets a
-  high-contrast border/header, and the inactive selection stays dimmed.
+- Selection is shown with the row background only; tree names stay regular
+  (not bold), and the sidebar border keeps its normal color when focused.
 - Opening a file from any picker expands and selects it in the tree.
 - `<space>x` closes the current buffer (same as `:buffer-close`).
 - `<space>e` / `<space>E` open the file explorer at the workspace / current
@@ -150,6 +151,7 @@ Additional tree behavior:
 | `Tab` | Query → Replace → Results |
 | `Space` (Results) / `Alt-Space` | Open the search-options hint box |
 | `c` / `w` / `r` / `p` (options box) | Toggle case / word / regex / preserve-case |
+| `/` (options box) | Hide the search pane |
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle the same options directly |
 | `j` / `k` | Move through results |
 | `Ctrl-Down` / `Ctrl-Up` | Smooth-scroll results |
@@ -189,7 +191,7 @@ Code lenses use the same peek-style picker:
 - **Searchable text transforms** with `F1` or `<space>t`: base64/hex encode and
   decode, case conversions, and line sorting.
 - **Always-visible VSCode-like buffer tabs** (`bufferline = "always"`) with
-  file icons, inactive separators, bold active tabs, and a colored modified dot.
+  inactive separators, bold active tabs, and a colored modified dot.
 - **Full-width powerline**: spans the tree and buffers. Left:
   `[mode][spinner][branch][file name][read-only][modified]`; right:
   `[diagnostics][selections][selection length] │ [position][total lines] │
@@ -223,11 +225,5 @@ Code lenses use the same peek-style picker:
   NBSP, and newline markers are off.
 - Smooth scrolling: `Ctrl-Up` / `Ctrl-Down` moves by `scroll-lines` (default 3)
   in the editor and in focused tree/search panes.
-- Line numbers can show both columns:
-
-```toml
-[editor]
-line-number = "both"   # absolute, relative, or both
-```
-
-The `both` mode renders `relative │ absolute` side by side.
+- Line numbers default to `both`, rendering `relative │ absolute` side by side.
+  Set `[editor] line-number = "absolute"` or `"relative"` to change it.
