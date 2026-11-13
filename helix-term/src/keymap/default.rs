@@ -247,6 +247,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "g" => changed_file_picker,
             "a" => code_action,
             "t" => transform_picker,
+            "i" => diagnostics,
             "l" => code_lens,
             "L" => code_lens_file,
             "'" => last_picker,

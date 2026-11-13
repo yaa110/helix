@@ -210,6 +210,29 @@ impl SessionStore {
         Ok(())
     }
 
+    fn running_path(&self, workspace: &Path) -> PathBuf {
+        self.path_for(workspace).with_extension("running")
+    }
+
+    /// Returns true when a previous run for this workspace did not exit
+    /// cleanly.
+    pub fn was_running(&self, workspace: &Path) -> bool {
+        self.running_path(workspace).exists()
+    }
+
+    pub fn mark_running(&self, workspace: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(&self.dir)?;
+        std::fs::write(self.running_path(workspace), b"running")
+    }
+
+    pub fn clear_running(&self, workspace: &Path) -> std::io::Result<()> {
+        match std::fs::remove_file(self.running_path(workspace)) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err),
+        }
+    }
+
     pub fn load(&self, workspace: &Path) -> Option<Session> {
         let path = self.path_for(workspace);
         let parsed = std::fs::read(&path)
@@ -742,6 +765,18 @@ mod tests {
             .unwrap();
         store.clear(&workspace).unwrap();
         assert!(!store.path_for(&workspace).exists());
+    }
+
+    #[test]
+    fn running_marker_tracks_unclean_exit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = SessionStore::new(tmp.path().to_path_buf());
+        let workspace = tmp.path().join("ws");
+        assert!(!store.was_running(&workspace));
+        store.mark_running(&workspace).unwrap();
+        assert!(store.was_running(&workspace));
+        store.clear_running(&workspace).unwrap();
+        assert!(!store.was_running(&workspace));
     }
 
     #[test]

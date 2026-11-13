@@ -376,8 +376,11 @@ which-key-style hint box.
 | `s`, `v`          | Open in a horizontal / vertical split            |
 | `a`, `A`          | Create a file / directory                        |
 | `r`               | Rename                                           |
-| `d`               | Delete (confirmation defaults to No)             |
-| `c`, `m`, `p`     | Copy / cut / paste                               |
+| `d`               | Move selected/marked items to trash              |
+| `u`               | Undo the last filesystem operation               |
+| `t`, `V`          | Mark an item / clear all marks                   |
+| `c`, `m`, `p`     | Copy / cut / paste selected/marked items          |
+| `I`               | Show / hide ignored files                        |
 | `y`, `Y`          | Copy the absolute / relative path                |
 | `x`               | Close the current buffer                         |
 | `X`               | Close all other buffers and their splits         |

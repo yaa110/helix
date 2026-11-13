@@ -83,6 +83,72 @@ async fn tree_navigation_opens_files_and_moves_focus() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn diagnostics_report_opens_in_a_buffer() -> anyhow::Result<()> {
+    let mut app = helpers::AppBuilder::new().build()?;
+    helpers::send_keys(&mut app, "<space>i").await?;
+    let report = doc!(app.editor).text().to_string();
+    assert!(report.contains("Helix diagnostics"));
+    assert!(report.contains("Session"));
+    assert!(report.contains("Buffers"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tree_batch_delete_and_undo() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    let c = dir.path().join("c.txt");
+    for file in [&a, &b, &c] {
+        std::fs::write(file, "data\n")?;
+    }
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>b").await?;
+    helpers::send_keys(&mut app, "<space>t<space>t").await?;
+    helpers::send_keys(&mut app, "<space>d<tab><ret>").await?;
+
+    assert!(!a.exists());
+    assert!(!b.exists());
+    assert!(c.exists());
+
+    helpers::send_keys(&mut app, "<space>u").await?;
+    assert!(a.exists());
+    assert!(b.exists());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tree_can_toggle_ignored_files() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join(".gitignore"), "ignored.txt\n")?;
+    std::fs::write(dir.path().join("ignored.txt"), "hidden\n")?;
+    std::fs::write(dir.path().join("visible.txt"), "shown\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>b").await?;
+    assert!(app
+        .sidebar_row_paths()
+        .iter()
+        .any(|path| path.ends_with("ignored.txt")));
+
+    helpers::send_keys(&mut app, "<space>I").await?;
+    assert!(!app
+        .sidebar_row_paths()
+        .iter()
+        .any(|path| path.ends_with("ignored.txt")));
+
+    helpers::send_keys(&mut app, "<space>I").await?;
+    assert!(app
+        .sidebar_row_paths()
+        .iter()
+        .any(|path| path.ends_with("ignored.txt")));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn ctrl_up_down_scrolls_the_tree_while_focused() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     for name in ["a", "b", "c", "d", "e", "f", "g", "h"] {

@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use helix_core::fuzzy::fuzzy_match;
@@ -50,6 +51,28 @@ struct FileClipboard {
     cut: bool,
 }
 
+#[derive(Debug, Clone)]
+struct SearchCache {
+    root: PathBuf,
+    epoch: u64,
+    built_at: Instant,
+    entries: Vec<PathBuf>,
+}
+
+struct GitStatusUpdate {
+    paths: Vec<PathBuf>,
+    full: bool,
+    statuses: HashMap<PathBuf, GitFileStatus>,
+}
+
+#[derive(Debug, Clone)]
+enum FsUndo {
+    Created(Vec<PathBuf>),
+    Moved(Vec<(PathBuf, PathBuf)>),
+    Copied(Vec<PathBuf>),
+    Trashed(Vec<(PathBuf, PathBuf)>),
+}
+
 pub struct FileTree {
     pub root: PathBuf,
     pub rows: Vec<Row>,
@@ -61,12 +84,16 @@ pub struct FileTree {
     pub overflow_hint: Option<String>,
     g_pending: bool,
     pub dirty_only: bool,
+    show_ignored: bool,
+    marked: HashSet<PathBuf>,
+    undo_log: Arc<Mutex<Vec<FsUndo>>>,
+    search_cache: Option<SearchCache>,
     git_status: HashMap<PathBuf, GitFileStatus>,
     ignored_paths: HashSet<PathBuf>,
     git_status_root: Option<PathBuf>,
     git_status_epoch: Option<u64>,
     git_status_last_refresh: Option<Instant>,
-    git_status_rx: Option<Receiver<HashMap<PathBuf, GitFileStatus>>>,
+    git_status_rx: Option<Receiver<GitStatusUpdate>>,
     clipboard: Option<FileClipboard>,
     labels: Option<Vec<(String, usize)>>,
     label_prefix: Option<char>,
@@ -86,6 +113,10 @@ impl FileTree {
             overflow_hint: None,
             g_pending: false,
             dirty_only: false,
+            show_ignored: true,
+            marked: HashSet::new(),
+            undo_log: Arc::new(Mutex::new(Vec::new())),
+            search_cache: None,
             git_status: HashMap::new(),
             ignored_paths: HashSet::new(),
             git_status_root: None,
@@ -101,7 +132,7 @@ impl FileTree {
 
     pub fn rebuild(&mut self, editor: &Editor, state: &SidebarState) {
         if !self.filter.is_empty() {
-            self.rebuild_search();
+            self.rebuild_search(editor.sidebar.refresh_epoch);
             return;
         }
         let root = self.root.clone();
@@ -110,32 +141,48 @@ impl FileTree {
         });
     }
 
-    fn rebuild_search(&mut self) {
+    fn rebuild_search(&mut self, epoch: u64) {
         let root = self.root.clone();
-        let mut candidates = Vec::new();
-        for entry in WalkBuilder::new(&root)
-            .hidden(false)
-            .parents(true)
-            .ignore(true)
-            .git_ignore(true)
-            .git_global(true)
-            .git_exclude(true)
-            .follow_links(false)
-            .filter_entry(|entry| {
-                !matches!(
-                    entry.file_name().to_str(),
-                    Some(".git" | ".pijul" | ".jj" | ".hg" | ".svn")
-                )
-            })
-            .build()
-            .filter_map(Result::ok)
-            .take(50_000)
-        {
-            let path = entry.path();
-            if path != root {
-                candidates.push(path.to_path_buf());
+        let cache_valid = self.search_cache.as_ref().is_some_and(|cache| {
+            cache.root == root && cache.epoch == epoch && cache.built_at.elapsed().as_secs() < 10
+        });
+        if !cache_valid {
+            let mut entries = Vec::new();
+            for entry in WalkBuilder::new(&root)
+                .hidden(false)
+                .parents(true)
+                .ignore(true)
+                .git_ignore(true)
+                .git_global(true)
+                .git_exclude(true)
+                .follow_links(false)
+                .filter_entry(|entry| {
+                    !matches!(
+                        entry.file_name().to_str(),
+                        Some(".git" | ".pijul" | ".jj" | ".hg" | ".svn")
+                    )
+                })
+                .build()
+                .filter_map(Result::ok)
+                .take(50_000)
+            {
+                let path = entry.path();
+                if path != root {
+                    entries.push(path.to_path_buf());
+                }
             }
+            self.search_cache = Some(SearchCache {
+                root: root.clone(),
+                epoch,
+                built_at: Instant::now(),
+                entries,
+            });
         }
+        let candidates = self
+            .search_cache
+            .as_ref()
+            .map(|cache| cache.entries.clone())
+            .unwrap_or_default();
 
         let by_name: HashMap<String, PathBuf> = candidates
             .iter()
@@ -239,7 +286,7 @@ impl FileTree {
         // huge grammar caches and makes the UI unresponsive.
         push_dir(&mut rows, root, 0, expanded, &list);
         self.mark_ignored(&rows);
-        if !self.filter.is_empty() {
+        if !self.filter.is_empty() || !self.show_ignored {
             rows.retain(|row| !self.ignored_paths.contains(&row.path));
         }
         if self.dirty_only {
@@ -310,7 +357,7 @@ impl FileTree {
                 .is_none_or(|last| last.elapsed() >= interval)
     }
 
-    pub fn request_git_status(&mut self, editor: &Editor) {
+    pub fn request_git_status(&mut self, editor: &mut Editor) {
         let root = self.root.clone();
         self.git_status_root = Some(root.clone());
         self.git_status_epoch = Some(editor.sidebar.refresh_epoch);
@@ -330,13 +377,24 @@ impl FileTree {
             return;
         }
 
+        // When the watcher told us what changed, refresh only those paths.
+        // Otherwise fall back to a full workspace status scan.
+        let mut paths: Vec<PathBuf> = editor.sidebar.refresh_dirs.drain().collect();
+        paths.retain(|path| path.starts_with(&root));
+        paths.sort();
+        let full = paths.is_empty();
+
         let (tx, rx) = std::sync::mpsc::channel();
         // `request_redraw` uses runtime-local state. Carry the runtime handle
         // into the worker so integration builds do not panic when it completes.
         let runtime = tokio::runtime::Handle::current();
         std::thread::spawn(move || {
-            let statuses = load_git_status(&root);
-            let _ = tx.send(statuses);
+            let statuses = load_git_status(&root, &paths);
+            let _ = tx.send(GitStatusUpdate {
+                paths,
+                full,
+                statuses,
+            });
             let _guard = runtime.enter();
             helix_event::request_redraw();
         });
@@ -348,9 +406,19 @@ impl FileTree {
             return;
         };
         match receiver.try_recv() {
-            Ok(statuses) => {
-                let changed = self.git_status != statuses;
-                self.git_status = statuses;
+            Ok(update) => {
+                let changed = if update.full {
+                    let changed = self.git_status != update.statuses;
+                    self.git_status = update.statuses;
+                    changed
+                } else {
+                    for path in &update.paths {
+                        self.git_status
+                            .retain(|entry, _| entry != path && !entry.starts_with(path));
+                    }
+                    self.git_status.extend(update.statuses);
+                    true
+                };
                 self.git_status_rx = None;
                 if changed {
                     if self.dirty_only {
@@ -606,9 +674,14 @@ impl FileTree {
                     })
             });
             let label_prefix = label.map(|label| format!("{label} "));
+            let mark = if self.marked.contains(&row.path) {
+                "● "
+            } else {
+                "  "
+            };
             let text = match &label_prefix {
-                Some(label) => format!("{label}{indent}{marker} {name}"),
-                None => format!("{indent}{marker} {name}"),
+                Some(label) => format!("{label}{indent}{mark}{marker} {name}"),
+                None => format!("{indent}{mark}{marker} {name}"),
             };
             // Keep the selected row visible even when the editor owns focus,
             // so it is clear which file is currently open.
@@ -675,7 +748,7 @@ impl FileTree {
                         guide_style,
                     )
                     .0;
-                let rest = format!("{marker} {name}");
+                let rest = format!("{mark}{marker} {name}");
                 surface.set_stringn(
                     x,
                     y,
@@ -703,17 +776,18 @@ impl FileTree {
     }
 
     fn remember_for_paste(&mut self, cx: &mut commands::Context, cut: bool) {
-        let Some(row) = self.selected_row().cloned() else {
+        let paths = self.selected_paths();
+        if paths.is_empty() {
             return;
-        };
+        }
         self.clipboard = Some(FileClipboard {
-            paths: vec![row.path.clone()],
+            paths: paths.clone(),
             cut,
         });
         cx.editor.set_status(format!(
-            "{} {}",
+            "{} {} item(s)",
             if cut { "cut" } else { "copied" },
-            row.path.display()
+            paths.len()
         ));
     }
 
@@ -723,44 +797,45 @@ impl FileTree {
             return;
         };
         let target_dir = self.target_parent();
-        let mut pasted = Vec::new();
-        for source in &clipboard.paths {
-            let Some(name) = source.file_name() else {
-                continue;
-            };
-            let destination = target_dir.join(name);
-            if destination == *source {
-                continue;
+        let conflicts: Vec<PathBuf> = clipboard
+            .paths
+            .iter()
+            .filter_map(|source| {
+                let name = source.file_name()?;
+                let destination = target_dir.join(name);
+                (destination != *source && destination.exists()).then_some(destination)
+            })
+            .collect();
+
+        if conflicts.is_empty() {
+            paste_paths(cx.editor, &clipboard, &target_dir, false, &self.undo_log);
+            if clipboard.cut {
+                self.clipboard = None;
             }
-            if destination.exists() {
-                cx.editor
-                    .set_error(format!("{} already exists", destination.display()));
-                continue;
-            }
-            let result = if clipboard.cut {
-                move_recursively(source, &destination).map(|_| {
-                    move_open_documents(cx.editor, source, &destination);
-                })
-            } else {
-                copy_recursively(source, &destination)
-            };
-            match result {
-                Ok(()) => {
-                    Self::mark_changed(cx.editor, &destination);
-                    pasted.push(destination);
+            self.rebuild_from_editor(cx.editor);
+            return;
+        }
+
+        let undo_log = self.undo_log.clone();
+        let count = conflicts.len();
+        let select = Select::new(
+            format!("Overwrite {count} existing item(s)?"),
+            [DeleteChoice::No, DeleteChoice::Yes],
+            (),
+            move |editor, choice, event| {
+                if event != crate::ui::PromptEvent::Validate {
+                    return;
                 }
-                Err(err) => cx
-                    .editor
-                    .set_error(format!("failed to paste {}: {err}", source.display())),
-            }
-        }
-        if clipboard.cut {
-            self.clipboard = None;
-        }
-        if let Some(last) = pasted.last() {
-            cx.editor.sidebar.selected = Some(last.clone());
-        }
-        self.rebuild_from_editor(cx.editor);
+                paste_paths(
+                    editor,
+                    &clipboard,
+                    &target_dir,
+                    *choice == DeleteChoice::Yes,
+                    &undo_log,
+                );
+            },
+        );
+        cx.push_layer(Box::new(select));
     }
 
     /// Expand all ancestors of `path` below `root`, rebuild, and select it.
@@ -858,6 +933,94 @@ impl FileTree {
         self.rows.get(self.cursor)
     }
 
+    fn selected_paths(&self) -> Vec<PathBuf> {
+        if !self.marked.is_empty() {
+            let mut paths: Vec<_> = self.marked.iter().cloned().collect();
+            paths.sort();
+            paths
+        } else {
+            self.selected_row()
+                .map(|row| vec![row.path.clone()])
+                .unwrap_or_default()
+        }
+    }
+
+    fn toggle_mark(&mut self, cx: &mut commands::Context) {
+        let Some(row) = self.selected_row().cloned() else {
+            return;
+        };
+        if !self.marked.insert(row.path.clone()) {
+            self.marked.remove(&row.path);
+        }
+        if !self.rows.is_empty() {
+            self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
+        }
+        cx.editor
+            .set_status(format!("{} marked", self.marked.len()));
+        self.sync_selection(cx);
+    }
+
+    fn clear_marks(&mut self, cx: &mut commands::Context) {
+        self.marked.clear();
+        cx.editor.set_status("cleared marks");
+        cx.editor.needs_redraw = true;
+    }
+
+    fn undo_last(&mut self, cx: &mut commands::Context) {
+        let Some(undo) = self.undo_log.lock().unwrap().pop() else {
+            cx.editor.set_status("nothing to undo");
+            return;
+        };
+        let result: io::Result<()> = (|| {
+            match undo {
+                FsUndo::Created(paths) => {
+                    for path in paths.iter().rev() {
+                        if path.is_dir() {
+                            std::fs::remove_dir_all(path)?;
+                        } else {
+                            std::fs::remove_file(path)?;
+                        }
+                    }
+                }
+                FsUndo::Moved(pairs) => {
+                    for (old, new) in pairs.iter().rev() {
+                        if let Some(parent) = old.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        move_recursively(new, old)?;
+                        move_open_documents(cx.editor, new, old);
+                    }
+                }
+                FsUndo::Copied(paths) => {
+                    for path in paths.iter().rev() {
+                        if path.is_dir() {
+                            std::fs::remove_dir_all(path)?;
+                        } else {
+                            std::fs::remove_file(path)?;
+                        }
+                    }
+                }
+                FsUndo::Trashed(pairs) => {
+                    for (original, trashed) in pairs.iter().rev() {
+                        if let Some(parent) = original.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        move_recursively(trashed, original)?;
+                    }
+                }
+            }
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                cx.editor.sidebar.refresh_epoch = cx.editor.sidebar.refresh_epoch.wrapping_add(1);
+                cx.editor.set_status("undid filesystem operation");
+                self.rebuild_from_editor(cx.editor);
+            }
+            Err(err) => cx.editor.set_error(format!("undo failed: {err}")),
+        }
+    }
+
     fn target_parent(&self) -> PathBuf {
         match self.selected_row() {
             Some(row) if row.kind == EntryKind::Dir => row.path.clone(),
@@ -891,6 +1054,7 @@ impl FileTree {
         } else {
             "New file:"
         };
+        let undo_log = self.undo_log.clone();
         ui::prompt(
             cx,
             label.into(),
@@ -922,6 +1086,10 @@ impl FileTree {
                 };
                 match result {
                     Ok(()) => {
+                        undo_log
+                            .lock()
+                            .unwrap()
+                            .push(FsUndo::Created(vec![path.clone()]));
                         Self::mark_changed(cx.editor, &path);
                         cx.editor.set_status(format!(
                             "created {}",
@@ -952,6 +1120,7 @@ impl FileTree {
             .parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| self.root.clone());
+        let undo_log = self.undo_log.clone();
         ui::prompt_with_input(
             cx,
             "Rename:".into(),
@@ -1001,6 +1170,10 @@ impl FileTree {
                         for (doc_id, path) in affected {
                             cx.editor.set_doc_path(doc_id, &path);
                         }
+                        undo_log
+                            .lock()
+                            .unwrap()
+                            .push(FsUndo::Moved(vec![(old.clone(), new_path.clone())]));
                         Self::mark_changed(cx.editor, &new_path);
                         cx.editor.set_status(format!("renamed to {}", name));
                     }
@@ -1011,70 +1184,89 @@ impl FileTree {
     }
 
     pub fn delete(&mut self, cx: &mut commands::Context) {
-        let Some(row) = self.selected_row().cloned() else {
+        let paths = self.selected_paths();
+        if paths.is_empty() {
             return;
-        };
-        let path = row.path;
+        }
+        if paths.iter().any(|path| path == &self.root) {
+            cx.editor.set_error("refusing to delete the workspace root");
+            return;
+        }
         let modified_open = cx.editor.documents().any(|doc| {
-            doc.path()
-                .is_some_and(|doc_path| doc_path.starts_with(&path) && doc.is_modified())
+            doc.path().is_some_and(|doc_path| {
+                paths.iter().any(|path| doc_path.starts_with(path)) && doc.is_modified()
+            })
         });
         if modified_open {
             cx.editor
                 .set_error("refusing to delete a file with unsaved changes");
             return;
         }
-        let target = path.clone();
+
         let open_docs: Vec<_> = cx
             .editor
             .documents()
             .filter_map(|doc| {
-                doc.path()
-                    .is_some_and(|doc_path| doc_path.starts_with(&path))
+                let doc_path = doc.path()?;
+                paths
+                    .iter()
+                    .any(|path| doc_path.starts_with(path))
                     .then(|| doc.id())
             })
             .collect();
-        let fallback = self
-            .rows
-            .iter()
-            .skip(self.cursor + 1)
-            .find(|row| row.kind == EntryKind::File)
-            .or_else(|| {
-                self.rows[..self.cursor]
-                    .iter()
-                    .rev()
-                    .find(|row| row.kind == EntryKind::File)
-            })
-            .map(|row| row.path.clone());
-        let has_open = !open_docs.is_empty();
+        let count = paths.len();
+        let undo_log = self.undo_log.clone();
         let select = Select::new(
-            format!("Delete {}?", path.display()),
+            format!("Delete {count} item(s)? (moved to trash; u undoes)"),
             [DeleteChoice::No, DeleteChoice::Yes],
             (),
             move |editor, choice, event| {
                 if event != crate::ui::PromptEvent::Validate || *choice != DeleteChoice::Yes {
                     return;
                 }
-                let result = if target.is_dir() {
-                    std::fs::remove_dir_all(&target)
-                } else {
-                    std::fs::remove_file(&target)
-                };
-                match result {
-                    Ok(()) => {
-                        for doc_id in &open_docs {
-                            let _ = editor.close_document(*doc_id, false);
-                        }
-                        if has_open {
-                            editor.sidebar.reveal_current = true;
-                            Self::mark_changed_select(editor, &target, None);
-                        } else {
-                            Self::mark_changed_select(editor, &target, fallback.clone());
-                        }
-                        editor.set_status("deleted");
-                    }
-                    Err(err) => editor.set_error(format!("failed to delete: {err}")),
+                let trash = trash_dir();
+                if let Err(err) = std::fs::create_dir_all(&trash) {
+                    editor.set_error(format!("failed to create trash: {err}"));
+                    return;
                 }
+                let mut trashed = Vec::new();
+                let mut failed = 0;
+                for path in &paths {
+                    let Some(name) = path.file_name() else {
+                        continue;
+                    };
+                    let mut destination = trash.join(name);
+                    let mut counter = 1;
+                    while destination.exists() {
+                        destination = trash.join(format!("{}.{counter}", name.to_string_lossy()));
+                        counter += 1;
+                    }
+                    match move_recursively(path, &destination) {
+                        Ok(()) => trashed.push((path.clone(), destination)),
+                        Err(_) => failed += 1,
+                    }
+                }
+                for doc_id in &open_docs {
+                    let _ = editor.close_document(*doc_id, false);
+                }
+                if !trashed.is_empty() {
+                    undo_log
+                        .lock()
+                        .unwrap()
+                        .push(FsUndo::Trashed(trashed.clone()));
+                }
+                let last = trashed.last().map(|(path, _)| path.clone());
+                if let Some(last) = last {
+                    FileTree::mark_changed_select(editor, &last, None);
+                } else {
+                    editor.sidebar.refresh_epoch = editor.sidebar.refresh_epoch.wrapping_add(1);
+                }
+                editor.sidebar.reveal_current = true;
+                editor.set_status(if failed == 0 {
+                    format!("moved {count} item(s) to trash (u to undo)")
+                } else {
+                    format!("moved {} item(s) to trash; {failed} failed", count - failed)
+                });
             },
         );
         cx.push_layer(Box::new(select));
@@ -1422,12 +1614,15 @@ impl FileTree {
             ("", "── Files ──"),
             ("a / A", "Create file / directory"),
             ("r", "Rename"),
-            ("d", "Delete"),
+            ("d", "Delete to trash (undo with u)"),
+            ("t / V", "Mark item / clear marks"),
             ("c / m / p", "Copy / cut / paste"),
+            ("u", "Undo filesystem operation"),
             ("y / Y", "Copy absolute / relative path"),
             ("x", "Close current buffer"),
             ("", "── View ──"),
             ("D", "Show dirty files only"),
+            ("I", "Show / hide ignored files"),
             (".", "Reveal current buffer"),
             ("H / R", "Collapse all / refresh"),
             ("[ / ]", "Shrink / grow sidebar"),
@@ -1499,6 +1694,18 @@ impl FileTree {
             KeyCode::Char('c') => self.remember_for_paste(cx, false),
             KeyCode::Char('m') => self.remember_for_paste(cx, true),
             KeyCode::Char('p') => self.paste_clipboard(cx),
+            KeyCode::Char('t') => self.toggle_mark(cx),
+            KeyCode::Char('V') => self.clear_marks(cx),
+            KeyCode::Char('u') => self.undo_last(cx),
+            KeyCode::Char('I') => {
+                self.show_ignored = !self.show_ignored;
+                self.rebuild_from_editor(cx.editor);
+                cx.editor.set_status(if self.show_ignored {
+                    "Showing ignored files"
+                } else {
+                    "Hiding ignored files"
+                });
+            }
             KeyCode::Char('y') => self.copy_path(cx, false),
             KeyCode::Char('Y') => self.copy_path(cx, true),
             KeyCode::Char('D') => {
@@ -1610,12 +1817,19 @@ impl FileTree {
     }
 }
 
-fn load_git_status(root: &Path) -> HashMap<PathBuf, GitFileStatus> {
-    let output = Command::new("git")
+fn load_git_status(root: &Path, paths: &[PathBuf]) -> HashMap<PathBuf, GitFileStatus> {
+    let mut command = Command::new("git");
+    command
         .arg("-C")
         .arg(root)
-        .args(["status", "--porcelain=v1", "--untracked-files=all"])
-        .output();
+        .args(["status", "--porcelain=v1", "--untracked-files=all"]);
+    if !paths.is_empty() {
+        command.arg("--");
+        for path in paths {
+            command.arg(path.strip_prefix(root).unwrap_or(path));
+        }
+    }
+    let output = command.output();
     let Ok(output) = output else {
         return HashMap::new();
     };
@@ -1675,6 +1889,10 @@ fn skip_columns(text: &str, columns: usize) -> &str {
     ""
 }
 
+fn trash_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("helix-trash-{}", std::process::id()))
+}
+
 fn copy_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
     if source.is_dir() {
         std::fs::create_dir_all(destination)?;
@@ -1701,6 +1919,70 @@ fn move_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
                 std::fs::remove_file(source)
             }
         }
+    }
+}
+
+fn paste_paths(
+    editor: &mut Editor,
+    clipboard: &FileClipboard,
+    target_dir: &Path,
+    overwrite: bool,
+    undo_log: &Arc<Mutex<Vec<FsUndo>>>,
+) {
+    let mut pasted = Vec::new();
+    let mut moved = Vec::new();
+    for source in &clipboard.paths {
+        let Some(name) = source.file_name() else {
+            continue;
+        };
+        let destination = target_dir.join(name);
+        if destination == *source {
+            continue;
+        }
+        if destination.exists() {
+            if !overwrite {
+                editor.set_status(format!("skipped existing {}", destination.display()));
+                continue;
+            }
+            let removed = if destination.is_dir() {
+                std::fs::remove_dir_all(&destination)
+            } else {
+                std::fs::remove_file(&destination)
+            };
+            if let Err(err) = removed {
+                editor.set_error(format!(
+                    "failed to overwrite {}: {err}",
+                    destination.display()
+                ));
+                continue;
+            }
+        }
+        let result = if clipboard.cut {
+            move_recursively(source, &destination).map(|_| {
+                move_open_documents(editor, source, &destination);
+                moved.push((source.clone(), destination.clone()));
+            })
+        } else {
+            copy_recursively(source, &destination)
+        };
+        match result {
+            Ok(()) => {
+                FileTree::mark_changed(editor, &destination);
+                pasted.push(destination);
+            }
+            Err(err) => editor.set_error(format!("failed to paste {}: {err}", source.display())),
+        }
+    }
+    if !pasted.is_empty() {
+        undo_log.lock().unwrap().push(if clipboard.cut {
+            FsUndo::Moved(moved)
+        } else {
+            FsUndo::Copied(pasted.clone())
+        });
+        if let Some(last) = pasted.last() {
+            editor.sidebar.selected = Some(last.clone());
+        }
+        editor.set_status(format!("pasted {} item(s)", pasted.len()));
     }
 }
 

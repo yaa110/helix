@@ -172,6 +172,8 @@ pub struct Document {
     has_bom: bool,
 
     pub restore_cursor: bool,
+    /// Set when the file exceeds the configured large-file limit.
+    pub large_file: bool,
 
     /// Current indent style.
     pub indent_style: IndentStyle,
@@ -753,6 +755,7 @@ impl Document {
             editor_config: EditorConfig::default(),
             line_ending,
             restore_cursor: false,
+            large_file: false,
             syntax: None,
             language: None,
             changes,
@@ -846,6 +849,11 @@ impl Document {
             return Err(DocumentOpenError::BinaryFile);
         }
 
+        let large_file = path
+            .metadata()
+            .map(|metadata| metadata.len() > config.load().large_file_size_limit)
+            .unwrap_or(false);
+
         // Open the file if it exists, otherwise assume it is a new file (and thus empty).
         let (rope, encoding, has_bom) = if path.exists() {
             let mut file = std::fs::File::open(path)?;
@@ -860,10 +868,11 @@ impl Document {
 
         let loader = syn_loader.load();
         let mut doc = Self::from(rope, Some((encoding, has_bom)), config, syn_loader);
+        doc.large_file = large_file;
 
         // set the path and try detecting the language
         doc.set_path(Some(path));
-        if detect_language {
+        if detect_language && !large_file {
             doc.detect_language(&loader);
         }
 
@@ -2869,6 +2878,30 @@ mod test {
 #[cfg(test)]
 mod binary_detection_tests {
     use super::Document;
+    use crate::editor::Config;
+    use arc_swap::ArcSwap;
+    use helix_core::syntax;
+    use std::sync::Arc;
+
+    #[test]
+    fn large_files_skip_syntax_detection() {
+        let mut config = Config::default();
+        config.large_file_size_limit = 1;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("large.txt");
+        std::fs::write(&path, "hello\n").unwrap();
+        let doc = Document::open(
+            &path,
+            None,
+            true,
+            Arc::new(ArcSwap::new(Arc::new(config))),
+            Arc::new(ArcSwap::from_pointee(syntax::Loader::default())),
+        )
+        .unwrap();
+        assert!(doc.large_file);
+        assert!(doc.language.is_none());
+        assert!(doc.syntax.is_none());
+    }
 
     #[test]
     fn detects_nul_bytes_as_binary() {

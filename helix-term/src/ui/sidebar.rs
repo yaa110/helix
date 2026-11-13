@@ -71,6 +71,10 @@ impl Sidebar {
         self.search.editing()
     }
 
+    pub fn search_preview_open(&self) -> bool {
+        self.search.replace_preview_open()
+    }
+
     pub fn render_search_modal(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
         self.search.render_modal(area, surface, cx.editor);
     }

@@ -2,7 +2,7 @@ class Helix < Formula
   desc "Unofficial AI-assisted Helix fork with VSCode-style tree/search/session features"
   homepage "https://github.com/yaa110/helix"
   url "https://github.com/yaa110/helix.git", branch: "main"
-  version "1.0.5"
+  version "1.2.1"
   license "MPL-2.0"
   head "https://github.com/yaa110/helix.git", branch: "main"
 

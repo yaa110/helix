@@ -115,8 +115,11 @@ Press `<space>` in the tree to open a categorized which-key-style hint box:
 | `s` / `v` | Open in a horizontal / vertical split |
 | `a` / `A` | Create a file / directory |
 | `r` | Rename |
-| `d` | Delete (confirmation defaults to No) |
-| `c` / `m` / `p` | Copy / cut / paste |
+| `d` | Move selected/marked items to trash |
+| `u` | Undo the last filesystem operation |
+| `t` / `V` | Mark an item / clear all marks |
+| `c` / `m` / `p` | Copy / cut / paste selected/marked items |
+| `I` | Show / hide ignored files |
 | `y` / `Y` | Copy the absolute / relative path |
 | `x` | Close the current buffer |
 | `X` | Close all other buffers and their splits |
@@ -145,7 +148,14 @@ Additional tree behavior:
 - `.git`/VCS directories are never listed, expanded, or searched. Fuzzy tree
   search walks the full workspace (up to 50k entries) while skipping `.git`,
   gitignored files, and build/cache trees, so collapsed folders are searchable
-  without hanging.
+  without hanging. The candidate list is cached per workspace/revision and
+  refreshed when the file watcher reports changes.
+- Multi-select is available with `t`; marked rows show `●`. Batch copy/move
+  prompts before overwriting existing paths. Delete moves items to a temporary
+  trash directory instead of permanently removing them, and `u` restores the
+  last filesystem operation. `I` toggles ignored files in the tree.
+- Git status refreshes only paths reported by the file watcher, with periodic
+  full refreshes as a fallback.
 - Long names are clipped at the pane boundary; the statusline shows the full
   selected path, and `<space><` / `<space>>` scroll long rows.
 - Selection is shown with the row background only; tree names stay regular
@@ -213,13 +223,24 @@ Code lenses use the same peek-style picker:
   compact binary format. Split layout and each view's selection/scroll are
   restored; hidden buffers are reopened after the visible views. Missing or
   unreadable entries are skipped so a broken restore never blocks startup. An
-  untouched empty scratch buffer is hidden from tabs, breadcrumbs, the
-  statusline file name, and the buffer picker when no file is open.
+  unclean-exit marker enables crash recovery by default; set
+  `[editor] crash-recovery = false` to start clean instead. An untouched empty
+  scratch buffer is hidden from tabs, breadcrumbs, the statusline file name,
+  and the buffer picker when no file is open.
 - **Automatic file reload** with silent reload for clean buffers and a
   Keep/Reload/Overwrite prompt for dirty buffers.
 - **F1 action picker** (`F1` or `<space>t`): base64/hex encode/decode, case
   conversions, line sorting, minify/beautify, format document, and create
   file/folder from a relative path (parent folders are created automatically).
+  The picker uses a compact centered overlay.
+- **Diagnostics report** (`:diagnostics` or `<space>i`): version,
+  config/theme/log paths, session state, pane layout, and per-buffer
+  language/syntax/diagnostic/LSP information.
+- **Current-file diff** (`:diff`): opens a read-only scratch buffer with
+  `git diff HEAD` for the current file.
+- **Large-file guard**: files over `large-file-size-limit` (default 5 MB) open
+  without language detection, syntax highlighting, or LSP, with a status
+  warning.
 - **Always-visible Zellij-style buffer tabs** (`bufferline = "always"`):
   numbered compact tabs with file-type icons, muted separators, an
   accent-colored active tab (no bold/underline), and a modified dot. The active
@@ -256,6 +277,8 @@ Code lenses use the same peek-style picker:
 - `scrolloff = 0`, `insert-final-newline = false`, and `popup-border = "all"`.
 - File picker/tree show hidden files (`hidden = false`); symlink
   deduplication is off (`deduplicate-links = false`).
+- Large-file guard: `large-file-size-limit = 5242880` bytes.
+- Crash recovery: `crash-recovery = true`.
 - Smart tab is disabled.
 - The statusline defaults to:
   - left: mode, spinner, branch, file name, read-only, modified

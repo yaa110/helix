@@ -1543,5 +1543,56 @@ letters! that is not good grammar. you can fix this.
 
 
 =================================================================
+=                  CHAPTER 14 FORKED NEW FEATURES               =
+=================================================================
+
+ This fork keeps Helix's modal editing while adding VSCode-style
+ workspace, search, and session features.
+
+ Tabs and buffers:
+   space T        toggle the buffer-tab bar
+   space B        search open buffers
+   space x        close the current buffer
+   space X        close all other buffers and splits
+
+ File tree:
+   space b        open/focus the tree
+   /              edit the tree search (Enter not required)
+   Space          open tree actions
+   t / V          mark an item / clear all marks
+   c / m / p      copy / cut / paste marks
+   d              move items to trash
+   u              undo the last filesystem operation
+   I              show or hide ignored files
+   gw             jump labels
+   Ctrl-w Left    focus the tree from the leftmost buffer
+   Ctrl-w Right   return to the editor without clearing search
+
+ Global search:
+   space /        open search-and-replace
+   /              edit Find (existing text is kept)
+   Enter          run the search from edit mode
+   Tab            cycle Find and Replace while editing
+   Enter          open the selected result
+   r              preview and replace the selected item
+   R              preview and replace all
+   Esc            cancel preview / leave edit mode / close
+
+ Workspaces and sessions:
+   space W        recent workspaces
+   :session-save  save the current workspace session
+   space i        open the diagnostics report
+   :diff          show the git diff for the current file
+
+ Other additions:
+   F1 or space t  text transforms, minify/beautify, format, create paths
+   Monokai Community (Filter Spectrum) is the default theme.
+   Sessions and crash recovery are enabled by default.
+   Large files skip syntax highlighting and LSP with a warning.
+   Tree search results are cached and git status refreshes incrementally.
+
+
+
+=================================================================
  This tutorial is still a work-in-progress.
  More sections are planned.

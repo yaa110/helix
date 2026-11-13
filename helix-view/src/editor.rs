@@ -440,6 +440,13 @@ pub struct Config {
     /// Restore the previous buffer set, selections, and scroll positions when
     /// starting in a workspace. Defaults to `true`.
     pub restore_session: bool,
+    /// Restore the last session after an unclean exit. Defaults to `true`.
+    #[serde(default = "default_crash_recovery")]
+    pub crash_recovery: bool,
+    /// Files larger than this many bytes skip syntax detection and LSP.
+    /// Defaults to 5 MB.
+    #[serde(default = "default_large_file_size_limit")]
+    pub large_file_size_limit: u64,
     /// Left sidebar layout configuration.
     pub sidebar: SidebarConfig,
     /// Reload open documents when they change on disk. Defaults to `true`.
@@ -1071,6 +1078,14 @@ impl Default for AutoSaveAfterDelay {
     }
 }
 
+fn default_crash_recovery() -> bool {
+    true
+}
+
+fn default_large_file_size_limit() -> u64 {
+    5 * 1024 * 1024
+}
+
 fn default_auto_save_delay() -> u64 {
     DEFAULT_AUTO_SAVE_DELAY
 }
@@ -1277,6 +1292,8 @@ impl Default for Config {
             buffer_picker: BufferPickerConfig::default(),
             workspace_trust: WorkspaceTrustConfig::default(),
             restore_session: true,
+            crash_recovery: true,
+            large_file_size_limit: default_large_file_size_limit(),
             sidebar: SidebarConfig::default(),
             auto_reload: true,
             auto_reload_debounce: 300,
@@ -2337,8 +2354,13 @@ impl Editor {
                 self.diff_providers.get_current_head_name(&path, trust_full),
             );
 
+            let large_file = doc.large_file;
             let id = self.new_document(doc);
-            self.launch_language_servers(id);
+            if large_file {
+                self.set_status("Large file: syntax highlighting and LSP disabled");
+            } else {
+                self.launch_language_servers(id);
+            }
 
             helix_event::dispatch(DocumentDidOpen {
                 editor: self,

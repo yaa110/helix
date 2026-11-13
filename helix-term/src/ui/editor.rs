@@ -1697,6 +1697,7 @@ impl Component for EditorView {
                     if key.code == KeyCode::Esc
                         && !self.sidebar.search_options_open()
                         && !self.sidebar.search_editing()
+                        && !self.sidebar.search_preview_open()
                     {
                         cx.editor.sidebar.search_modal = false;
                         cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;

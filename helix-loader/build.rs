@@ -23,7 +23,7 @@ fn main() {
         MINOR.to_string()
     };
     let calver = if MAJOR.len() < 2 {
-        // The fork uses a plain semantic version (for example 1.0.5)
+        // The fork uses a plain semantic version (for example 1.2.1)
         // instead of upstream's calendar versioning (25.07.1).
         VERSION.to_string()
     } else if PATCH == "0" {

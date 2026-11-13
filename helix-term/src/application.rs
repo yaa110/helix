@@ -145,7 +145,10 @@ impl Application {
             || args.load_tutor
             || (args.files.is_empty() && !stdin().is_terminal());
         let session_active = starts_with_folder;
-        let restore_enabled = config.editor.restore_session && !args.load_tutor;
+        let crash_recovery = config.editor.crash_recovery;
+        let crashed = session_active && session_store.was_running(&workspace_root);
+        let restore_enabled =
+            config.editor.restore_session && !args.load_tutor && (!crashed || crash_recovery);
 
         let mut theme_parent_dirs = vec![helix_loader::config_dir()];
         theme_parent_dirs.extend(helix_loader::runtime_dirs().iter().cloned());
@@ -181,6 +184,11 @@ impl Application {
         editor.workspace_root = workspace_root;
         editor.session_store = session_store;
         editor.session_active = session_active;
+        if session_active {
+            if let Err(err) = editor.session_store.mark_running(&editor.workspace_root) {
+                log::warn!("failed to mark session running: {err}");
+            }
+        }
         // Only folder launches represent a reusable pane layout. File launches
         // temporarily hide the tree and tabs; saving that would hide them for
         // the next `hx .` launch too.
@@ -209,6 +217,13 @@ impl Application {
                 }
             }
             editor.session_dirty = false;
+        }
+        if crashed {
+            editor.set_status(if crash_recovery {
+                "Recovered session after unclean exit"
+            } else {
+                "Crash recovery disabled; starting clean"
+            });
         }
 
         let keys = Box::new(Map::new(Arc::clone(&config), |config: &Config| {
@@ -1571,6 +1586,15 @@ impl Application {
 
         if let Err(err) = self.editor.save_session_if_active() {
             log::warn!("failed to save session: {err}");
+        }
+        if self.editor.session_active {
+            if let Err(err) = self
+                .editor
+                .session_store
+                .clear_running(&self.editor.workspace_root)
+            {
+                log::warn!("failed to clear session running marker: {err}");
+            }
         }
 
         errs

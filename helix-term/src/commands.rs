@@ -433,6 +433,8 @@ impl MappableCommand {
         lsp_or_syntax_workspace_symbol_picker, "Open workspace symbol picker from LSP or syntax information",
         diagnostics_picker, "Open diagnostic picker",
         workspace_diagnostics_picker, "Open workspace diagnostic picker",
+        diagnostics, "Show editor/config/session/LSP diagnostics",
+        diff_current_file, "Show git diff for the current file",
         last_picker, "Open last picker",
         insert_at_line_start, "Insert at start of line",
         insert_at_line_end, "Insert at end of line",
@@ -3854,6 +3856,10 @@ fn toggle_file_tree(cx: &mut Context) {
 
 fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     let _ = editor.save_session_if_active();
+    let old_workspace = editor.workspace_root.clone();
+    if editor.session_active {
+        let _ = editor.session_store.clear_running(&old_workspace);
+    }
     editor.ui_state_persist = !cfg!(feature = "integration");
     let docs: Vec<_> = editor.documents().map(|doc| doc.id()).collect();
     for doc_id in docs {
@@ -3861,6 +3867,9 @@ fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     }
 
     editor.workspace_root = workspace.to_path_buf();
+    if editor.session_active {
+        let _ = editor.session_store.mark_running(&editor.workspace_root);
+    }
     editor.sidebar = helix_view::sidebar::SidebarState::default();
     editor.sidebar.mode = SidebarMode::Files;
     editor.bufferline_visible = true;
@@ -3877,6 +3886,136 @@ fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     let _ = state.save();
 }
 
+fn diagnostics(cx: &mut Context) {
+    let config = cx.editor.config();
+    let theme = cx.editor.theme.name().to_string();
+    let workspace = cx.editor.workspace_root.clone();
+    let session_file = cx.editor.session_store.path_for(&workspace);
+    let session_exists = session_file.exists();
+    let recent_count = helix_view::ui_state::UiState::load()
+        .recent_workspaces
+        .len();
+    let config_path = helix_loader::config_dir().join("config.toml");
+    let log_path = helix_loader::default_log_file();
+
+    let mut text = String::new();
+    text.push_str("Helix diagnostics\n");
+    text.push_str("=================\n\n");
+    text.push_str(&format!(
+        "Version: {}\nWorkspace: {}\nConfig: {}{}\nLog: {}\nTheme: {}\n\n",
+        helix_loader::VERSION_AND_GIT_HASH,
+        workspace.display(),
+        config_path.display(),
+        if config_path.exists() {
+            ""
+        } else {
+            " (not found)"
+        },
+        log_path.display(),
+        theme,
+    ));
+    text.push_str("Session\n-------\n");
+    text.push_str(&format!(
+        "active: {}\nrestore-session: {}\nsession file: {}{}\nrecent workspaces: {}\n\n",
+        cx.editor.session_active,
+        config.restore_session,
+        session_file.display(),
+        if session_exists { "" } else { " (none)" },
+        recent_count,
+    ));
+    text.push_str(&format!(
+        "Panes\n-----\nsidebar: {:?} ({} cols)\nbufferline: {}\nauto-save: {:?}\n\n",
+        cx.editor.sidebar.mode,
+        cx.editor.sidebar.width,
+        cx.editor.bufferline_visible,
+        config.auto_save,
+    ));
+
+    text.push_str("Buffers\n-------\n");
+    for doc in cx.editor.documents() {
+        let lsp: Vec<&str> = doc.language_servers().map(|server| server.name()).collect();
+        text.push_str(&format!(
+            "{} | {} | syntax: {} | diagnostics: {} | LSP: {}\n",
+            doc.path()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "[scratch]".to_string()),
+            doc.language_name().unwrap_or("plain text"),
+            if doc.syntax().is_some() { "yes" } else { "no" },
+            doc.diagnostics().len(),
+            if lsp.is_empty() {
+                "none".to_string()
+            } else {
+                lsp.join(", ")
+            },
+        ));
+    }
+    drop(config);
+
+    let _doc_id = cx.editor.new_file(Action::VerticalSplit);
+    let (view, doc) = current!(cx.editor);
+    let len = doc.text().len_chars();
+    let transaction = Transaction::change(doc.text(), std::iter::once((0, len, Some(text.into()))));
+    doc.apply(&transaction, view.id);
+    doc.append_changes_to_history(view);
+    doc.readonly = true;
+    cx.editor.set_status("diagnostics report");
+}
+
+fn diff_current_file(cx: &mut Context) {
+    let path = {
+        let (_, doc) = current_ref!(cx.editor);
+        doc.path().map(Path::to_path_buf)
+    };
+    let Some(path) = path else {
+        cx.editor.set_error("current buffer has no file on disk");
+        return;
+    };
+
+    let root = cx.editor.workspace_root.clone();
+    let pathspec = path.strip_prefix(&root).unwrap_or(&path);
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["diff", "--no-color", "HEAD", "--"])
+        .arg(pathspec)
+        .output();
+
+    let text = match output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).into_owned()
+        }
+        Ok(output) => {
+            cx.editor.set_error(
+                String::from_utf8_lossy(&output.stderr)
+                    .lines()
+                    .next()
+                    .unwrap_or("git diff failed")
+                    .to_string(),
+            );
+            return;
+        }
+        Err(err) => {
+            cx.editor
+                .set_error(format!("failed to run git diff: {err}"));
+            return;
+        }
+    };
+
+    if text.trim().is_empty() {
+        cx.editor.set_status("No changes for the current file");
+        return;
+    }
+
+    let _doc_id = cx.editor.new_file(Action::VerticalSplit);
+    let (view, doc) = current!(cx.editor);
+    let len = doc.text().len_chars();
+    let transaction = Transaction::change(doc.text(), std::iter::once((0, len, Some(text.into()))));
+    doc.apply(&transaction, view.id);
+    doc.append_changes_to_history(view);
+    doc.readonly = true;
+    cx.editor.set_status(format!("diff {}", pathspec.display()));
+}
+
 fn recent_workspaces(cx: &mut Context) {
     let state = helix_view::ui_state::UiState::load();
     let workspaces = state.recent_workspaces;
@@ -3889,7 +4028,15 @@ fn recent_workspaces(cx: &mut Context) {
         path.display().to_string().into()
     })];
     let picker = Picker::new(columns, 0, workspaces, (), |cx, path, _| {
-        switch_workspace(cx.editor, path);
+        let path = path.clone();
+        let name = path.display().to_string();
+        cx.editor.set_status(format!("Opening {name}…"));
+        cx.editor.needs_redraw = true;
+        // Let the status line render before the synchronous workspace switch.
+        crate::job::dispatch_blocking(move |editor, _compositor| {
+            switch_workspace(editor, &path);
+            editor.set_status(format!("Opened {name}"));
+        });
     });
     cx.push_layer(Box::new(overlaid(picker)));
 }

@@ -35,6 +35,19 @@ enum ResultRow {
     Match(PathBuf, usize),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReplaceScope {
+    Item,
+    All,
+}
+
+#[derive(Debug, Clone)]
+struct ReplacePreview {
+    scope: ReplaceScope,
+    lines: Vec<String>,
+    scroll: usize,
+}
+
 pub struct SearchPane {
     query: TextInput,
     replacement: TextInput,
@@ -47,6 +60,7 @@ pub struct SearchPane {
     pending: bool,
     editing: bool,
     options_mode: bool,
+    replace_preview: Option<ReplacePreview>,
     capped: bool,
     error: Option<String>,
 }
@@ -65,6 +79,7 @@ impl SearchPane {
             pending: false,
             editing: false,
             options_mode: false,
+            replace_preview: None,
             capped: false,
             error: None,
         }
@@ -97,6 +112,10 @@ impl SearchPane {
 
     pub fn editing(&self) -> bool {
         self.editing
+    }
+
+    pub fn replace_preview_open(&self) -> bool {
+        self.replace_preview.is_some()
     }
 
     fn begin_edit(&mut self, cx: &mut commands::Context, focus: SearchFocus) {
@@ -178,6 +197,8 @@ impl SearchPane {
         } else {
             editor.sidebar.search_files = self.results.keys().cloned().collect();
         }
+        let match_count = self.result_count();
+        let file_count = self.results.len();
 
         if area.width <= 2 || area.height == 0 {
             return;
@@ -256,14 +277,27 @@ impl SearchPane {
         if y < area.y + area.height {
             let (focus_name, hints) = if self.editing {
                 if self.focus == SearchFocus::Replace {
-                    ("Replace", "Enter search · Tab Find · Esc results")
+                    (
+                        "Replace",
+                        "Enter search · Tab Find · Esc results".to_string(),
+                    )
                 } else {
-                    ("Find", "Enter search · Tab Replace · Esc results")
+                    (
+                        "Find",
+                        "Enter search · Tab Replace · Esc results".to_string(),
+                    )
                 }
+            } else if self.pending || self.receiver.is_some() {
+                (
+                    "Results",
+                    format!("Searching… ({match_count} matches so far)"),
+                )
             } else {
                 (
                     "Results",
-                    "j/k move · Enter open · r replace · R replace all · / edit",
+                    format!(
+                        "{match_count} matches in {file_count} files · j/k move · Enter open · r preview replace · R preview all · / edit"
+                    ),
                 )
             };
             let prefix = format!("▸ {focus_name}  ");
@@ -273,7 +307,7 @@ impl SearchPane {
                 surface.set_stringn(
                     area.x + 1 + prefix_width,
                     y,
-                    hints,
+                    &hints,
                     width.saturating_sub(prefix_width) as usize,
                     dim,
                 );
@@ -336,7 +370,8 @@ impl SearchPane {
             return;
         }
         if self.pending || self.receiver.is_some() {
-            surface.set_stringn(area.x + 1, y, "Searching…", width as usize, dim);
+            let text = format!("Searching… ({match_count} matches so far)");
+            surface.set_stringn(area.x + 1, y, &text, width as usize, dim);
             return;
         }
         if self.results.is_empty() {
@@ -395,8 +430,10 @@ impl SearchPane {
         if area.width < 20 || area.height < 8 {
             return;
         }
-        let width = area.width.saturating_sub(4).min(120);
-        let height = area.height.saturating_sub(4).min(34);
+        // Use nearly the whole screen so search results and replace previews
+        // have room to breathe.
+        let width = area.width.saturating_sub(4);
+        let height = area.height.saturating_sub(4);
         let modal = Rect::new(
             area.x + (area.width - width) / 2,
             area.y + (area.height - height) / 2,
@@ -418,6 +455,11 @@ impl SearchPane {
         block.render(modal, surface);
 
         if inner.width < 20 || inner.height < 3 {
+            return;
+        }
+
+        if self.replace_preview.is_some() {
+            self.render_replace_preview(inner, surface, editor);
             return;
         }
 
@@ -446,6 +488,53 @@ impl SearchPane {
             if let Some(right) = right {
                 self.render_preview(right, surface, editor);
             }
+        }
+    }
+
+    fn render_replace_preview(&mut self, area: Rect, surface: &mut Surface, editor: &Editor) {
+        let theme = &editor.theme;
+        surface.clear_with(area, theme.get("ui.background"));
+        let Some(preview) = self.replace_preview.as_mut() else {
+            return;
+        };
+
+        let title = "Replace preview — Enter confirm · Esc cancel · j/k scroll";
+        surface.set_stringn(
+            area.x + 1,
+            area.y,
+            title,
+            area.width.saturating_sub(1) as usize,
+            theme.get("ui.text.focus"),
+        );
+
+        let visible = area.height.saturating_sub(2) as usize;
+        if visible == 0 {
+            return;
+        }
+        preview.scroll = preview
+            .scroll
+            .min(preview.lines.len().saturating_sub(visible));
+        for (index, line) in preview
+            .lines
+            .iter()
+            .skip(preview.scroll)
+            .take(visible)
+            .enumerate()
+        {
+            let style = if line.starts_with("+ ") {
+                theme.get("diff.plus")
+            } else if line.starts_with("- ") {
+                theme.get("diff.minus")
+            } else {
+                theme.get("ui.linenr")
+            };
+            surface.set_stringn(
+                area.x + 1,
+                area.y + 1 + index as u16,
+                line,
+                area.width.saturating_sub(1) as usize,
+                style,
+            );
         }
     }
 
@@ -763,6 +852,147 @@ impl SearchPane {
         }
     }
 
+    fn replace_selected_item(&mut self, cx: &mut commands::Context) -> anyhow::Result<usize> {
+        if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_))) {
+            self.selected_file()
+                .map(|path| self.replace_file(cx, &path))
+                .unwrap_or(Ok(0))
+        } else {
+            self.replace_current_match(cx)
+        }
+    }
+
+    fn build_replace_preview(
+        &mut self,
+        cx: &mut commands::Context,
+        scope: ReplaceScope,
+    ) -> Option<ReplacePreview> {
+        let options = Self::replace_options(cx.editor);
+        let inputs = cx.editor.sidebar.search.clone();
+        let regex = match search::build_regex(&inputs.query, options) {
+            Ok(regex) => regex,
+            Err(err) => {
+                cx.editor.set_error(err.to_string());
+                return None;
+            }
+        };
+
+        let selected_file = match self.rows.get(self.cursor) {
+            Some(ResultRow::File(path)) => Some(path.clone()),
+            _ => None,
+        };
+        let selected_match = self.selected_match();
+        let mut body = Vec::new();
+        let mut matches = 0usize;
+        let mut files = 0usize;
+
+        'files: for (path, file) in &self.results {
+            if scope == ReplaceScope::Item {
+                let include_file = selected_file.as_ref() == Some(path);
+                if !include_file
+                    && selected_match.as_ref().is_none_or(|matched| {
+                        &matched.path != path
+                            || !file
+                                .matches
+                                .iter()
+                                .any(|candidate| candidate.start == matched.start)
+                    })
+                {
+                    continue;
+                }
+            }
+
+            let mut included_any = false;
+            for matched in &file.matches {
+                if scope == ReplaceScope::Item
+                    && selected_file.as_ref() != Some(path)
+                    && selected_match.as_ref().is_none_or(|selected| {
+                        selected.path != matched.path || selected.start != matched.start
+                    })
+                {
+                    continue;
+                }
+
+                let replacement = regex
+                    .captures(&matched.text)
+                    .map(|caps| {
+                        search::replacement_for(
+                            Some(&caps),
+                            &matched.text,
+                            &inputs.replacement,
+                            options,
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        search::replacement_for(None, &matched.text, &inputs.replacement, options)
+                    });
+                let relative = path.strip_prefix(&cx.editor.workspace_root).unwrap_or(path);
+                body.push(format!(
+                    "- {}:{}  {}",
+                    relative.display(),
+                    matched.line + 1,
+                    matched.text
+                ));
+                body.push(format!(
+                    "+ {}:{}  {}",
+                    relative.display(),
+                    matched.line + 1,
+                    replacement
+                ));
+                matches += 1;
+                included_any = true;
+                if body.len() >= 600 {
+                    body.push("… preview truncated".to_string());
+                    break 'files;
+                }
+            }
+            if included_any {
+                files += 1;
+            }
+        }
+
+        if matches == 0 {
+            cx.editor.set_status("No replacements to preview");
+            return None;
+        }
+
+        let mut lines = vec![
+            format!(
+                "Replace {} preview",
+                if scope == ReplaceScope::All {
+                    "all"
+                } else {
+                    "selected item"
+                }
+            ),
+            format!("{matches} match(es) in {files} file(s)"),
+            String::new(),
+        ];
+        lines.extend(body);
+        Some(ReplacePreview {
+            scope,
+            lines,
+            scroll: 0,
+        })
+    }
+
+    fn apply_replace_scope(
+        &mut self,
+        cx: &mut commands::Context,
+        scope: ReplaceScope,
+    ) -> anyhow::Result<()> {
+        match scope {
+            ReplaceScope::All => self.replace_all(cx),
+            ReplaceScope::Item => {
+                let count = self.replace_selected_item(cx)?;
+                self.pending = true;
+                cx.editor
+                    .set_status(format!("replaced {count} occurrence(s)"));
+                Ok(())
+            }
+        }
+    }
+
     fn replace_all(&mut self, cx: &mut commands::Context) -> anyhow::Result<()> {
         let paths: Vec<PathBuf> = self.results.keys().cloned().collect();
         let mut replaced = 0;
@@ -851,6 +1081,38 @@ impl SearchPane {
         let Event::Key(key) = event else {
             return EventResult::Consumed(None);
         };
+
+        if self.replace_preview.is_some() {
+            match key.code {
+                KeyCode::Enter => {
+                    let scope = self
+                        .replace_preview
+                        .as_ref()
+                        .map(|preview| preview.scope)
+                        .unwrap();
+                    self.replace_preview = None;
+                    if let Err(err) = self.apply_replace_scope(cx, scope) {
+                        cx.editor.set_error(err.to_string());
+                    }
+                }
+                KeyCode::Esc => {
+                    self.replace_preview = None;
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    if let Some(preview) = self.replace_preview.as_mut() {
+                        preview.scroll = preview.scroll.saturating_add(1);
+                    }
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    if let Some(preview) = self.replace_preview.as_mut() {
+                        preview.scroll = preview.scroll.saturating_sub(1);
+                    }
+                }
+                _ => {}
+            }
+            cx.editor.needs_redraw = true;
+            return EventResult::Consumed(None);
+        }
 
         // Cmd/Alt + Backspace/Delete clears the active search field. This must
         // run before the generic Alt chord handling below, which would
@@ -1007,26 +1269,13 @@ impl SearchPane {
             }
             SearchFocus::Results => match key.code {
                 KeyCode::Char('r') => {
-                    let result = if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_)))
-                    {
-                        self.selected_file()
-                            .map(|path| self.replace_file(cx, &path))
-                            .unwrap_or(Ok(0))
-                    } else {
-                        self.replace_current_match(cx)
-                    };
-                    match result {
-                        Ok(count) => {
-                            self.pending = true;
-                            cx.editor
-                                .set_status(format!("replaced {count} occurrence(s)"));
-                        }
-                        Err(err) => cx.editor.set_error(err.to_string()),
+                    if let Some(preview) = self.build_replace_preview(cx, ReplaceScope::Item) {
+                        self.replace_preview = Some(preview);
                     }
                 }
                 KeyCode::Char('R') => {
-                    if let Err(err) = self.replace_all(cx) {
-                        cx.editor.set_error(err.to_string());
+                    if let Some(preview) = self.build_replace_preview(cx, ReplaceScope::All) {
+                        self.replace_preview = Some(preview);
                     }
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
