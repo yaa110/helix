@@ -137,10 +137,10 @@ impl FileTree {
         if self.filter.is_empty() {
             self.rows = rows;
         } else {
-            // Peek-style results: flatten and rank fuzzy matches instead of
-            // keeping the tree hierarchy around every match.
-            let by_name: HashMap<String, Row> = rows
-                .into_iter()
+            // Fuzzy matches keep their tree structure: show matching rows and
+            // their ancestor directories, rather than a flat result list.
+            let by_name: HashMap<String, PathBuf> = rows
+                .iter()
                 .map(|row| {
                     let name = row
                         .path
@@ -148,21 +148,20 @@ impl FileTree {
                         .unwrap_or(&row.path)
                         .to_string_lossy()
                         .into_owned();
-                    (name, row)
+                    (name, row.path.clone())
                 })
                 .collect();
             let names: Vec<&str> = by_name.keys().map(String::as_str).collect();
-            let mut matches: Vec<(Row, u16)> = fuzzy_match(&self.filter, names, true)
+            let matches: HashSet<PathBuf> = fuzzy_match(&self.filter, names, true)
                 .into_iter()
-                .filter_map(|(name, score)| {
-                    let mut row = by_name.get(name)?.clone();
-                    row.depth = 0;
-                    row.expanded = false;
-                    Some((row, score))
-                })
+                .filter_map(|(name, _)| by_name.get(name).cloned())
                 .collect();
-            matches.sort_by(|a, b| b.1.cmp(&a.1));
-            self.rows = matches.into_iter().map(|(row, _)| row).collect();
+            rows.retain(|row| {
+                matches.contains(&row.path)
+                    || (row.kind == EntryKind::Dir
+                        && matches.iter().any(|path| path.starts_with(&row.path)))
+            });
+            self.rows = rows;
         }
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         self.labels = None;
@@ -286,6 +285,10 @@ impl FileTree {
             .or_else(|| theme.try_get_exact("ui.text.directory"))
             .unwrap_or_default();
         let text_style = theme.try_get_exact("ui.text").unwrap_or_default();
+        let header_bg = theme
+            .try_get_exact("ui.tree.header")
+            .or_else(|| theme.try_get_exact("ui.statusline"))
+            .unwrap_or_default();
         let selected = theme
             .try_get_exact(if focused {
                 "ui.tree.selected.focused"
@@ -310,12 +313,34 @@ impl FileTree {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| self.root.display().to_string());
+        let folder_name = self
+            .selected_row()
+            .map(|row| {
+                let path = if row.kind == EntryKind::Dir {
+                    row.path.as_path()
+                } else {
+                    row.path.parent().unwrap_or(&row.path)
+                };
+                path.strip_prefix(&self.root)
+                    .ok()
+                    .filter(|path| !path.as_os_str().is_empty())
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| root_name.clone())
+            })
+            .unwrap_or_else(|| root_name.clone());
         let header = if self.command_mode {
-            format!("{root_name}  [commands]")
+            format!("{root_name} | {folder_name}  [commands]")
         } else {
-            root_name
+            format!("{root_name} | {folder_name}")
         };
-        surface.set_stringn(area.x, area.y, &header, area.width as usize, title);
+        surface.clear_with(Rect::new(area.x, area.y, area.width, 1), header_bg);
+        surface.set_stringn(
+            area.x,
+            area.y,
+            &header,
+            area.width as usize,
+            title.patch(header_bg),
+        );
 
         // Dedicated fuzzy-search input beneath the project name.
         if area.height > 1 {
@@ -380,18 +405,11 @@ impl FileTree {
                 EntryKind::File => " ",
             };
             let indent = "│ ".repeat(row.depth);
-            let name = if self.filter.is_empty() {
-                row.path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| row.path.display().to_string())
-            } else {
-                row.path
-                    .strip_prefix(&self.root)
-                    .unwrap_or(&row.path)
-                    .display()
-                    .to_string()
-            };
+            let name = row
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| row.path.display().to_string());
             let label = self.labels.as_ref().and_then(|labels| {
                 labels
                     .iter()
@@ -663,11 +681,15 @@ impl FileTree {
     }
 
     fn mark_changed(editor: &mut Editor, path: &Path) {
+        Self::mark_changed_select(editor, path, Some(path.to_path_buf()));
+    }
+
+    fn mark_changed_select(editor: &mut Editor, path: &Path, selected: Option<PathBuf>) {
         if let Some(parent) = path.parent() {
             editor.sidebar.refresh_dirs.insert(parent.to_path_buf());
         }
         editor.sidebar.refresh_epoch = editor.sidebar.refresh_epoch.wrapping_add(1);
-        editor.sidebar.selected = Some(path.to_path_buf());
+        editor.sidebar.selected = selected;
         editor.session_dirty = true;
         editor.needs_redraw = true;
     }
@@ -813,6 +835,28 @@ impl FileTree {
             return;
         }
         let target = path.clone();
+        let open_docs: Vec<_> = cx
+            .editor
+            .documents()
+            .filter_map(|doc| {
+                doc.path()
+                    .is_some_and(|doc_path| doc_path.starts_with(&path))
+                    .then(|| doc.id())
+            })
+            .collect();
+        let fallback = self
+            .rows
+            .iter()
+            .skip(self.cursor + 1)
+            .find(|row| row.kind == EntryKind::File)
+            .or_else(|| {
+                self.rows[..self.cursor]
+                    .iter()
+                    .rev()
+                    .find(|row| row.kind == EntryKind::File)
+            })
+            .map(|row| row.path.clone());
+        let has_open = !open_docs.is_empty();
         let select = Select::new(
             format!("Delete {}?", path.display()),
             [DeleteChoice::No, DeleteChoice::Yes],
@@ -828,7 +872,15 @@ impl FileTree {
                 };
                 match result {
                     Ok(()) => {
-                        Self::mark_changed(editor, &target);
+                        for doc_id in &open_docs {
+                            let _ = editor.close_document(*doc_id, false);
+                        }
+                        if has_open {
+                            editor.sidebar.reveal_current = true;
+                            Self::mark_changed_select(editor, &target, None);
+                        } else {
+                            Self::mark_changed_select(editor, &target, fallback.clone());
+                        }
                         editor.set_status("deleted");
                     }
                     Err(err) => editor.set_error(format!("failed to delete: {err}")),
@@ -1083,6 +1135,7 @@ impl FileTree {
             ("[ / ]", "Shrink / grow sidebar"),
             ("< / >", "Scroll tree left / right"),
             ("", "── Session ──"),
+            ("/", "Open global search"),
             ("b", "Hide sidebar"),
             ("q / Esc", "Return to editor / close commands"),
         ];
@@ -1160,6 +1213,12 @@ impl FileTree {
             KeyCode::Char('x') => {
                 self.leave_command_mode(cx);
                 crate::commands::close_buffer(cx);
+                return true;
+            }
+            KeyCode::Char('/') => {
+                self.leave_command_mode(cx);
+                cx.editor.sidebar.search_modal = true;
+                cx.editor.sidebar.focus = SidebarFocus::Sidebar;
                 return true;
             }
             KeyCode::Char('b') => {
@@ -1415,6 +1474,7 @@ mod tree_tests {
             })
         });
         let paths: Vec<_> = tree.rows.iter().map(|row| row.path.as_path()).collect();
+        assert!(paths.contains(&Path::new("/repo/src")));
         assert!(paths.contains(&Path::new("/repo/src/needle.rs")));
         assert!(!paths.contains(&Path::new("/repo/README.md")));
     }

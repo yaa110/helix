@@ -171,11 +171,25 @@ where
     let visible = context.focused;
     let config = context.editor.config();
     let modenames = &config.statusline.mode;
-    let mode_str = match context.editor.mode() {
+    let sidebar_label =
+        if context.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar {
+            if context.editor.sidebar.search_modal {
+                Some("SRC")
+            } else {
+                match context.editor.sidebar.mode {
+                    helix_view::sidebar::SidebarMode::Files => Some("TRE"),
+                    helix_view::sidebar::SidebarMode::Search => Some("SEA"),
+                    helix_view::sidebar::SidebarMode::Hidden => None,
+                }
+            }
+        } else {
+            None
+        };
+    let mode_str = sidebar_label.unwrap_or(match context.editor.mode() {
         Mode::Insert => &modenames.insert,
         Mode::Select => &modenames.select,
         Mode::Normal => &modenames.normal,
-    };
+    });
     let content = if visible {
         format!(" {mode_str} ")
     } else {
@@ -183,10 +197,14 @@ where
         " ".repeat(mode_str.width() + 2)
     };
     let style = if visible && config.color_modes {
-        match context.editor.mode() {
-            Mode::Insert => context.editor.theme.get("ui.statusline.insert"),
-            Mode::Select => context.editor.theme.get("ui.statusline.select"),
-            Mode::Normal => context.editor.theme.get("ui.statusline.normal"),
+        if sidebar_label.is_some() {
+            context.editor.theme.get("ui.statusline.normal")
+        } else {
+            match context.editor.mode() {
+                Mode::Insert => context.editor.theme.get("ui.statusline.insert"),
+                Mode::Select => context.editor.theme.get("ui.statusline.select"),
+                Mode::Normal => context.editor.theme.get("ui.statusline.normal"),
+            }
         }
     } else {
         Style::default()

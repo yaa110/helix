@@ -3657,11 +3657,14 @@ fn toggle_bufferline(cx: &mut Context) {
 }
 
 fn focus_search(cx: &mut Context) {
-    cx.editor.sidebar.mode = SidebarMode::Search;
-    cx.editor.sidebar.focus = SidebarFocus::Sidebar;
-    cx.editor.sidebar.search_focus_query = true;
+    if cx.editor.sidebar.search_modal {
+        cx.editor.sidebar.search_modal = false;
+        cx.editor.sidebar.focus = SidebarFocus::Editor;
+    } else {
+        cx.editor.sidebar.search_modal = true;
+        cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+    }
     cx.editor.needs_redraw = true;
-    cx.editor.save_ui_state();
 }
 
 fn buffer_picker(cx: &mut Context) {

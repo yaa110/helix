@@ -371,6 +371,7 @@ live behind `Space`, which opens a which-key-style hint box.
 | `c`, `m`, `p`     | Copy / cut / paste                               |
 | `y`, `Y`          | Copy the absolute / relative path                |
 | `x`               | Close the current buffer                         |
+| `/`               | Open global search                               |
 | `b`               | Hide the sidebar                                 |
 | `w`               | Show two-letter jump labels                      |
 | `g`, `G`          | First / last row                                 |

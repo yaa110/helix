@@ -1299,6 +1299,23 @@ impl EditorView {
             ..
         } = *event;
 
+        // Only the code area participates in mouse selection. Mouse activity
+        // over the tree/search sidebar is swallowed so drags cannot create a
+        // selection from the pane into the buffer.
+        let code_area = cxt
+            .editor
+            .tree
+            .views()
+            .find_map(|(view, focused)| focused.then_some(view.area))
+            .or_else(|| cxt.editor.tree.views().next().map(|(view, _)| view.area));
+        if let Some(area) = code_area {
+            let inside =
+                column >= area.x && column < area.right() && row >= area.y && row < area.bottom();
+            if !inside {
+                return EventResult::Consumed(None);
+            }
+        }
+
         let pos_and_view = |editor: &Editor, row, column, ignore_virtual_text| {
             editor.tree.views().find_map(|(view, _focus)| {
                 view.pos_at_screen_coords(
@@ -1575,6 +1592,16 @@ impl Component for EditorView {
                 // clear status
                 cx.editor.status_msg = None;
 
+                if cx.editor.sidebar.search_modal {
+                    if key.code == KeyCode::Esc {
+                        cx.editor.sidebar.search_modal = false;
+                        cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+                        cx.editor.needs_redraw = true;
+                        return EventResult::Consumed(None);
+                    }
+                    return self.sidebar.handle_search_modal(event, &mut cx);
+                }
+
                 if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
                     && cx.editor.sidebar.mode != helix_view::sidebar::SidebarMode::Hidden
                     && self.keymaps.pending().is_empty()
@@ -1837,7 +1864,11 @@ impl Component for EditorView {
                 commandline_y,
                 " Type : to run a command",
                 commandline_area.width as usize,
-                cx.editor.theme.get("ui.text.inactive"),
+                cx.editor
+                    .theme
+                    .try_get_exact("ui.linenr")
+                    .or_else(|| cx.editor.theme.try_get_exact("ui.text.inactive"))
+                    .unwrap_or_default(),
             );
         }
 
@@ -1898,6 +1929,10 @@ impl Component for EditorView {
 
         if let Some(completion) = self.completion.as_mut() {
             completion.render(area, surface, cx);
+        }
+
+        if cx.editor.sidebar.search_modal {
+            self.sidebar.render_search_modal(area, surface, cx);
         }
     }
 

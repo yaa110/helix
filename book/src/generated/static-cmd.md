@@ -3,16 +3,16 @@
 | `no_op` | Do nothing |  |
 | `move_char_left` | Move left | normal: `` h ``, `` <left> ``, insert: `` <left> `` |
 | `move_char_right` | Move right | normal: `` l ``, `` <right> ``, insert: `` <right> `` |
-| `move_line_up` | Move up | normal: `` gk `` |
-| `move_line_down` | Move down | normal: `` gj `` |
-| `move_visual_line_up` | Move up | normal: `` k ``, `` <up> ``, insert: `` <up> `` |
-| `move_visual_line_down` | Move down | normal: `` j ``, `` <down> ``, insert: `` <down> `` |
+| `move_line_up` | Move up | normal: `` k ``, `` gk ``, `` <up> ``, insert: `` <up> `` |
+| `move_line_down` | Move down | normal: `` j ``, `` gj ``, `` <down> ``, insert: `` <down> `` |
+| `move_visual_line_up` | Move up |  |
+| `move_visual_line_down` | Move down |  |
 | `extend_char_left` | Extend left | select: `` h ``, `` <left> `` |
 | `extend_char_right` | Extend right | select: `` l ``, `` <right> `` |
-| `extend_line_up` | Extend up | select: `` gk `` |
-| `extend_line_down` | Extend down | select: `` gj `` |
-| `extend_visual_line_up` | Extend up | select: `` k ``, `` <up> `` |
-| `extend_visual_line_down` | Extend down | select: `` j ``, `` <down> `` |
+| `extend_line_up` | Extend up | select: `` k ``, `` gk ``, `` <up> `` |
+| `extend_line_down` | Extend down | select: `` j ``, `` gj ``, `` <down> `` |
+| `extend_visual_line_up` | Extend up |  |
+| `extend_visual_line_down` | Extend down |  |
 | `copy_selection_on_next_line` | Copy selection on next line | normal: `` C ``, select: `` C `` |
 | `copy_selection_on_prev_line` | Copy selection on previous line | normal: `` <A-C> ``, select: `` <A-C> `` |
 | `move_next_word_start` | Move to start of next word | normal: `` w `` |
@@ -109,6 +109,7 @@
 | `transform_picker` | Open the searchable text-transform picker | normal: `` <F1> ``, `` <space>t ``, select: `` <F1> ``, `` <space>t `` |
 | `close_buffer` | Close the current buffer (same as :buffer-close) | normal: `` <space>x ``, select: `` <space>x `` |
 | `toggle_file_tree` | Toggle/focus the file tree sidebar | normal: `` <space>b ``, select: `` <space>b `` |
+| `toggle_bufferline` | Toggle the buffer tab bar | normal: `` <space>T ``, select: `` <space>T `` |
 | `focus_search` | Open/focus the search sidebar | normal: `` <space>/ ``, select: `` <space>/ `` |
 | `buffer_picker` | Open buffer picker | normal: `` <space>B ``, select: `` <space>B `` |
 | `jumplist_picker` | Open jumplist picker | normal: `` <space>j ``, select: `` <space>j `` |

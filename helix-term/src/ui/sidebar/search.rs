@@ -8,6 +8,7 @@ use helix_view::input::{KeyCode, KeyModifiers};
 use helix_view::sidebar::SearchInputs;
 use helix_view::Editor;
 use tui::buffer::Buffer as Surface;
+use tui::widgets::{Block, BorderType, Widget};
 
 use crate::commands;
 use crate::compositor::{Event, EventResult};
@@ -309,6 +310,130 @@ impl SearchPane {
         }
     }
 
+    pub fn render_modal(&mut self, area: Rect, surface: &mut Surface, editor: &mut Editor) {
+        if area.width < 20 || area.height < 8 {
+            return;
+        }
+        let width = area.width.saturating_sub(4).min(120);
+        let height = area.height.saturating_sub(4).min(34);
+        let modal = Rect::new(
+            area.x + (area.width - width) / 2,
+            area.y + (area.height - height) / 2,
+            width,
+            height,
+        );
+        let background = editor.theme.get("ui.background");
+        let border = editor
+            .theme
+            .try_get_exact("ui.window")
+            .or_else(|| editor.theme.try_get_exact("ui.linenr"))
+            .unwrap_or_default();
+        let divider_style = editor.theme.get("ui.linenr");
+        surface.clear_with(modal, background);
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(border);
+        let inner = block.inner(modal);
+        block.render(modal, surface);
+
+        if inner.width < 20 || inner.height < 3 {
+            return;
+        }
+
+        let preview = if inner.width >= 80 {
+            Some(inner.width * 45 / 100)
+        } else {
+            None
+        };
+        let left_width = preview.unwrap_or(inner.width);
+        let left = Rect::new(inner.x, inner.y, left_width, inner.height);
+        let right = preview.map(|width| {
+            Rect::new(
+                inner.x + width + 1,
+                inner.y,
+                inner.width.saturating_sub(width + 1),
+                inner.height,
+            )
+        });
+
+        self.render(left, surface, editor);
+
+        if let Some(width) = preview {
+            for y in inner.y..inner.y + inner.height {
+                surface.set_string(inner.x + width, y, "│", divider_style);
+            }
+            if let Some(right) = right {
+                self.render_preview(right, surface, editor);
+            }
+        }
+    }
+
+    fn render_preview(&self, area: Rect, surface: &mut Surface, editor: &Editor) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        let theme = &editor.theme;
+        let Some(matched) = self.selected_match() else {
+            surface.set_stringn(
+                area.x,
+                area.y,
+                "Select a result to preview",
+                area.width as usize,
+                theme.get("ui.text.inactive"),
+            );
+            return;
+        };
+
+        let text = if let Some(doc_id) = editor.document_id_by_path(&matched.path) {
+            editor
+                .document(doc_id)
+                .map(|doc| doc.text().to_string())
+                .unwrap_or_default()
+        } else {
+            std::fs::read_to_string(&matched.path).unwrap_or_default()
+        };
+        let lines: Vec<&str> = text.lines().collect();
+        if lines.is_empty() {
+            return;
+        }
+        let current = matched.line.min(lines.len().saturating_sub(1));
+        let start = current.saturating_sub(8);
+        let end = (current + 9).min(lines.len());
+        let header = format!("{}:{}", matched.path.display(), current + 1);
+        surface.set_stringn(
+            area.x,
+            area.y,
+            &header,
+            area.width as usize,
+            theme.get("ui.text.inactive"),
+        );
+        let height = area.height.saturating_sub(1) as usize;
+        let number_width = (end + 1).to_string().len();
+        let text_style = theme.get("ui.text");
+        let selected_style = theme.get("ui.selection");
+        for (offset, line) in lines[start..end].iter().take(height).enumerate() {
+            let line_number = start + offset + 1;
+            let is_current = start + offset == current;
+            let text = format!(
+                "{:>width$} {}",
+                line_number,
+                line.trim_end_matches('\r'),
+                width = number_width
+            );
+            surface.set_stringn(
+                area.x,
+                area.y + 1 + offset as u16,
+                &text,
+                area.width as usize,
+                if is_current {
+                    selected_style
+                } else {
+                    text_style
+                },
+            );
+        }
+    }
+
     fn drain(&mut self) {
         let Some(receiver) = &self.receiver else {
             return;
@@ -589,6 +714,7 @@ impl SearchPane {
             ("r", "Regex"),
             ("p", "Preserve case"),
             ("", "── Pane ──"),
+            ("b", "Open file tree"),
             ("/", "Close search pane"),
             ("Space, Esc", "Close options"),
         ];
@@ -631,9 +757,15 @@ impl SearchPane {
                 }
                 KeyCode::Char('/') => {
                     self.close_options(cx.editor);
-                    cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
+                    cx.editor.sidebar.search_modal = false;
                     cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
-                    cx.editor.save_ui_state();
+                    cx.editor.needs_redraw = true;
+                }
+                KeyCode::Char('b') => {
+                    self.close_options(cx.editor);
+                    cx.editor.sidebar.search_modal = false;
+                    cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Files;
+                    cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Sidebar;
                     cx.editor.needs_redraw = true;
                 }
                 KeyCode::Char(' ') | KeyCode::Esc | KeyCode::Tab => {
@@ -869,5 +1001,6 @@ fn open_match_with_action(
     doc.set_selection(view.id, helix_core::Selection::single(start, end));
     view.ensure_cursor_in_view_center(doc, scrolloff);
     editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+    editor.sidebar.search_modal = false;
     Ok(())
 }

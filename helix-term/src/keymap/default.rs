@@ -7,8 +7,8 @@ use helix_core::hashmap;
 pub fn default() -> HashMap<Mode, KeyTrie> {
     let normal = keymap!({ "Normal mode"
         "h" | "left" => move_char_left,
-        "j" | "down" => move_visual_line_down,
-        "k" | "up" => move_visual_line_up,
+        "j" | "down" => move_line_down,
+        "k" | "up" => move_line_up,
         "C-down" => scroll_down_smooth,
         "C-up" => scroll_up_smooth,
         "l" | "right" => move_char_right,
@@ -358,8 +358,8 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
     let mut select = normal.clone();
     select.merge_nodes(keymap!({ "Select mode"
         "h" | "left" => extend_char_left,
-        "j" | "down" => extend_visual_line_down,
-        "k" | "up" => extend_visual_line_up,
+        "j" | "down" => extend_line_down,
+        "k" | "up" => extend_line_up,
         "l" | "right" => extend_char_right,
 
         "w" => extend_next_word_start,
@@ -411,8 +411,8 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "tab" => smart_tab,
         "S-tab" => insert_tab,
 
-        "up" => move_visual_line_up,
-        "down" => move_visual_line_down,
+        "up" => move_line_up,
+        "down" => move_line_down,
         "left" => move_char_left,
         "right" => move_char_right,
         "pageup" => page_up,

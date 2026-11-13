@@ -43,10 +43,22 @@ impl Sidebar {
     }
 
     pub fn handle_idle_timeout(&mut self, cx: &mut commands::Context) {
-        if cx.editor.sidebar.mode == SidebarMode::Search {
+        if cx.editor.sidebar.mode == SidebarMode::Search || cx.editor.sidebar.search_modal {
             self.search.handle_idle_timeout(cx.editor);
             cx.editor.needs_redraw = true;
         }
+    }
+
+    pub fn handle_search_modal(
+        &mut self,
+        event: &Event,
+        cx: &mut commands::Context,
+    ) -> EventResult {
+        self.search.handle_event(event, cx)
+    }
+
+    pub fn render_search_modal(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
+        self.search.render_modal(area, surface, cx.editor);
     }
 
     pub fn ensure_init(&mut self, editor: &mut Editor) {

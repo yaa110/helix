@@ -109,6 +109,7 @@ Press `<space>` in the tree to open a categorized which-key-style hint box:
 | `c` / `m` / `p` | Copy / cut / paste |
 | `y` / `Y` | Copy the absolute / relative path |
 | `x` | Close the current buffer |
+| `/` | Open global search |
 | `b` | Hide the sidebar |
 | `w` | Show two-letter jump labels |
 | `g` / `G` | First / last row |
@@ -133,12 +134,18 @@ Additional tree behavior:
   (not bold), and the sidebar border keeps its normal color when focused.
 - Opening a file from any picker expands and selects it in the tree.
 - `<space>x` closes the current buffer (same as `:buffer-close`).
+- Deleting an open file closes its buffer and reveals the next/previous buffer;
+  deleting a closed file selects the adjacent file instead of jumping to the
+  bottom of the tree.
 - `<space>e` / `<space>E` open the file explorer at the workspace / current
   working directory.
 
 ### Search pane
 
-`<space>/` opens the sidebar search pane.
+`<space>/` opens global search as a floating peek modal. Reopening it preserves
+the previous query, options, results, cursor position, and selection. The
+selected match is previewed with surrounding source code; `Enter` jumps to it
+and closes the modal, `Esc` closes without moving the cursor.
 
 - Visible `Find:` and `Replace:` inputs; long queries scroll inside the pane
   instead of overflowing.
@@ -154,7 +161,8 @@ Additional tree behavior:
 | `Tab` | Query → Replace → Results |
 | `Space` (Results) / `Alt-Space` | Open the search-options hint box |
 | `c` / `w` / `r` / `p` (options box) | Toggle case / word / regex / preserve-case |
-| `/` (options box) | Hide the search pane |
+| `b` (options box) | Open the file tree |
+| `/` (options box) | Close the search modal |
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle the same options directly |
 | `j` / `k` | Move through results |
 | `Ctrl-Down` / `Ctrl-Up` | Smooth-scroll results |
@@ -166,7 +174,7 @@ Additional tree behavior:
 | `Ctrl-r` | Replace the selected match (or all matches in the selected file) |
 | `Ctrl-Alt-Enter` | Replace all matches |
 | `R` | Re-run the query |
-| `Esc` | Results → editor |
+| `Esc` | Close the search modal |
 
 ### Peek and code lenses
 
@@ -228,7 +236,8 @@ Code lenses use the same peek-style picker:
   - right: diagnostics, selections, selection length, position, total lines,
     encoding, line ending, indentation style, file type
   - diagnostics severity: warning, error, hint
-- Soft wrap is enabled; counts such as `5x` still select five real lines.
+- Soft wrap is enabled; wrapped rows count as one logical line for `j`/`k`,
+  arrow keys, selections, and counts such as `5x`.
 - Indent guides are enabled with `▏`, skipping the first level.
 - Spaces and tabs are visible by default using `·` and `→`; NBSP, narrow
   NBSP, and newline markers are off.
