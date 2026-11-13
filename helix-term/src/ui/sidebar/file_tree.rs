@@ -1522,6 +1522,8 @@ impl FileTree {
                 self.leave_command_mode(cx);
                 cx.editor.sidebar.search_modal = true;
                 cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+                // Reopen in results mode: typing starts only after `/`.
+                cx.editor.sidebar.search_focus_query = true;
                 return true;
             }
             KeyCode::Char('b') => {

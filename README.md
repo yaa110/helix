@@ -167,21 +167,25 @@ It keeps the previous query, replacement, options, results, cursor, and
 selection when reopened. `<space>/` from the tree opens it too, and `<space>b`
 from search returns to the tree.
 
-- `Find:` and `Replace:` inputs.
-- Terminal paste (`Cmd-V`, `Ctrl-Shift-V`, etc.) inserts into the focused
-  Find/Replace input instead of the document behind the window.
+- `Find:` and `Replace:` inputs. The window opens in results mode; plain typing
+  does nothing until `/` is pressed.
+- `/` edits Find without clearing the existing text. `Enter` runs the search
+  and returns to results. Pressing `/` again resumes editing.
+- While editing, `Tab` cycles between Find and Replace.
+- Terminal paste (`Cmd-V`, `Ctrl-Shift-V`, etc.) enters edit mode and inserts
+  into the focused Find/Replace input instead of the document.
 - `Cmd-Backspace`/`Cmd-Delete` (or `Alt-Backspace`/`Alt-Delete`) clears the
   focused Find/Replace field.
 - Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
 - `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
 - `<space>` opens a categorized options/replace hint box; `c`/`w`/`r`/`p`
-  toggle the same settings, `/` closes the window, `b` opens the tree.
-- `Esc` closes the hint box first; a second `Esc` closes the search window
-  without moving the cursor.
-- `Enter` previews/opens the selected match.
-- Replace: `Tab` to the `Replace:` field, `Enter` replaces the current match,
-  `Ctrl-r` replaces the selected match/file, and `Ctrl-Alt-Enter` replaces all.
-- Empty search shows a hint; no matches shows `No results found`.
+  toggle the same settings, `/` starts editing, `b` opens the tree.
+- `Esc` leaves edit mode, then closes the hint box, then closes the search
+  window without moving the cursor.
+- `Enter` previews/opens the selected match while browsing results.
+- Replace: `Ctrl-r` replaces the selected match/file, and `Ctrl-Alt-Enter`
+  replaces all.
+- Empty search shows hints; no matches shows `No results found`.
 
 ### Peek and code lenses
 

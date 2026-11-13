@@ -3902,6 +3902,8 @@ fn focus_search(cx: &mut Context) {
     } else {
         cx.editor.sidebar.search_modal = true;
         cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+        // Reopen in results mode: typing only starts after `/`.
+        cx.editor.sidebar.search_focus_query = true;
     }
     cx.editor.needs_redraw = true;
 }

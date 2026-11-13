@@ -486,19 +486,20 @@ window returns to the tree.
 
 | Key | Description |
 | --- | --- |
-| printable text | Edit the find query |
-| terminal paste | Insert into the focused Find/Replace input |
-| `Cmd/Alt-Backspace`, `Cmd/Alt-Delete` | Clear the focused Find/Replace field |
-| `Tab` | Find → Replace → Results |
+| `/` | Edit Find without clearing it |
+| printable text | Edit Find/Replace while in edit mode |
+| `Enter` in edit mode | Run the search and return to results |
+| `Tab` in edit mode | Cycle Find ⇄ Replace |
+| terminal paste | Enter edit mode and insert into the active input |
+| `Cmd/Alt-Backspace`, `Cmd/Alt-Delete` | Clear the active Find/Replace field |
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve-case |
 | `Space` | Categorized options/replace hint box |
 | `j` / `k` | Move through results |
-| `Enter` | Open the selected match |
-| `Enter` in `Replace:` | Replace current match |
+| `Enter` in results | Open the selected match |
 | `Ctrl-r` | Replace selected match/file |
 | `Ctrl-Alt-Enter` | Replace all |
 | `Alt-Enter` | Select all matches in file |
-| `Esc` | Close hint box first, then the window |
+| `Esc` | Leave edit mode, then close hint box, then window |
 
 `:search-replace-all` and `:search-replace-current` remain available.
 

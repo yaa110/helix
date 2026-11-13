@@ -44,6 +44,7 @@ pub struct SearchPane {
     scroll: usize,
     receiver: Option<Receiver<SearchEvent>>,
     pending: bool,
+    editing: bool,
     options_mode: bool,
     capped: bool,
     error: Option<String>,
@@ -54,13 +55,14 @@ impl SearchPane {
         Self {
             query: TextInput::new(inputs.query.clone()),
             replacement: TextInput::new(inputs.replacement.clone()),
-            focus: SearchFocus::Query,
+            focus: SearchFocus::Results,
             results: BTreeMap::new(),
             rows: Vec::new(),
             cursor: 0,
             scroll: 0,
             receiver: None,
             pending: false,
+            editing: false,
             options_mode: false,
             capped: false,
             error: None,
@@ -76,8 +78,11 @@ impl SearchPane {
         }
     }
 
+    /// Called when the search window is opened. Results mode is the default:
+    /// typing does nothing until `/` is pressed.
     pub fn focus_query(&mut self, editor: &mut Editor) {
-        self.focus = SearchFocus::Query;
+        self.focus = SearchFocus::Results;
+        self.editing = false;
         self.close_options(editor);
     }
 
@@ -87,6 +92,32 @@ impl SearchPane {
 
     pub fn options_open(&self) -> bool {
         self.options_mode
+    }
+
+    pub fn editing(&self) -> bool {
+        self.editing
+    }
+
+    fn begin_edit(&mut self, cx: &mut commands::Context, focus: SearchFocus) {
+        self.close_options(cx.editor);
+        self.editing = true;
+        self.focus = focus;
+        cx.editor.needs_redraw = true;
+    }
+
+    fn finish_edit(&mut self, cx: &mut commands::Context, run_search: bool) {
+        self.editing = false;
+        self.focus = SearchFocus::Results;
+        if run_search {
+            self.pending = true;
+        }
+        cx.editor.needs_redraw = true;
+    }
+
+    fn sync_inputs(&self, editor: &mut Editor) {
+        let inputs = &mut editor.sidebar.search;
+        inputs.query = self.query.value().to_string();
+        inputs.replacement = self.replacement.value().to_string();
     }
 
     pub fn handle_idle_timeout(&mut self, editor: &Editor) {
@@ -171,7 +202,7 @@ impl SearchPane {
                 Rect::new(area.x + 1 + query_label_width, y, query_width, 1),
                 surface,
                 theme,
-                self.focus == SearchFocus::Query,
+                self.editing && self.focus == SearchFocus::Query,
             );
         }
         y += 1;
@@ -210,13 +241,12 @@ impl SearchPane {
         }
 
         if y < area.y + area.height {
-            surface.set_stringn(
-                area.x + 1,
-                y,
-                "Alt-c/w/r/p · Space options",
-                width as usize,
-                dim,
-            );
+            let hints = if self.editing {
+                "Enter search · Tab Find/Replace · Esc results · Space options"
+            } else {
+                "/ edit · Space options · Alt-c/w/r/p"
+            };
+            surface.set_stringn(area.x + 1, y, hints, width as usize, dim);
             y += 1;
         }
 
@@ -231,7 +261,7 @@ impl SearchPane {
                     Rect::new(area.x + 1 + replace_label_width, y, replace_width, 1),
                     surface,
                     theme,
-                    self.focus == SearchFocus::Replace,
+                    self.editing && self.focus == SearchFocus::Replace,
                 );
             }
             y += 1;
@@ -255,7 +285,12 @@ impl SearchPane {
         }
 
         if editor.sidebar.search.query.is_empty() {
-            surface.set_stringn(area.x + 1, y, "Type to search", width as usize, dim);
+            let empty_hint = if self.editing {
+                "Type to search · Enter to run · Tab for Replace"
+            } else {
+                "Press / to search · Space options"
+            };
+            surface.set_stringn(area.x + 1, y, empty_hint, width as usize, dim);
             return;
         }
         if self.pending || self.receiver.is_some() {
@@ -717,15 +752,16 @@ impl SearchPane {
             ("w", "Whole word"),
             ("r", "Regex"),
             ("p", "Preserve case"),
+            ("", "── Search ──"),
+            ("/", "Edit Find (without clearing)"),
+            ("Enter", "Run search / leave edit mode"),
+            ("Tab", "Switch Find ⇄ Replace while editing"),
             ("", "── Replace ──"),
-            ("Tab", "Find → Replace → Results"),
-            ("Enter", "Replace current match (Replace field)"),
             ("Ctrl-r", "Replace selected match / file"),
             ("Ctrl-Alt-Enter", "Replace all"),
             ("Alt-Enter", "Select all matches in file"),
             ("", "── Pane ──"),
             ("b", "Open file tree"),
-            ("/", "Close search pane"),
             ("Space, Esc", "Close options"),
         ];
         cx.editor.autoinfo = Some(Info::new("Search options (Space)", &body));
@@ -757,17 +793,14 @@ impl SearchPane {
         if let Event::Paste(contents) = event {
             self.close_options(cx.editor);
             match self.focus {
-                SearchFocus::Query => self.query.insert_str(contents),
-                SearchFocus::Replace => self.replacement.insert_str(contents),
-                SearchFocus::Results => {
+                SearchFocus::Replace if self.editing => self.replacement.insert_str(contents),
+                _ => {
                     self.focus = SearchFocus::Query;
                     self.query.insert_str(contents);
                 }
             }
-            let inputs = &mut cx.editor.sidebar.search;
-            inputs.query = self.query.value().to_string();
-            inputs.replacement = self.replacement.value().to_string();
-            self.pending = true;
+            self.editing = true;
+            self.sync_inputs(cx.editor);
             cx.editor.needs_redraw = true;
             return EventResult::Consumed(None);
         }
@@ -786,17 +819,14 @@ impl SearchPane {
         {
             self.close_options(cx.editor);
             match self.focus {
-                SearchFocus::Query => self.query.set_value(""),
-                SearchFocus::Replace => self.replacement.set_value(""),
-                SearchFocus::Results => {
+                SearchFocus::Replace if self.editing => self.replacement.set_value(""),
+                _ => {
                     self.focus = SearchFocus::Query;
                     self.query.set_value("");
                 }
             }
-            let inputs = &mut cx.editor.sidebar.search;
-            inputs.query = self.query.value().to_string();
-            inputs.replacement = self.replacement.value().to_string();
-            self.pending = true;
+            self.editing = true;
+            self.sync_inputs(cx.editor);
             cx.editor.needs_redraw = true;
             return EventResult::Consumed(None);
         }
@@ -809,10 +839,7 @@ impl SearchPane {
                     }
                 }
                 KeyCode::Char('/') => {
-                    self.close_options(cx.editor);
-                    cx.editor.sidebar.search_modal = false;
-                    cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
-                    cx.editor.needs_redraw = true;
+                    self.begin_edit(cx, SearchFocus::Query);
                 }
                 KeyCode::Char('b') => {
                     self.close_options(cx.editor);
@@ -827,6 +854,16 @@ impl SearchPane {
                 }
                 _ => {}
             }
+            return EventResult::Consumed(None);
+        }
+
+        if !self.editing
+            && key.code == KeyCode::Char('/')
+            && !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            self.begin_edit(cx, SearchFocus::Query);
             return EventResult::Consumed(None);
         }
 
@@ -882,49 +919,49 @@ impl SearchPane {
             return EventResult::Consumed(None);
         }
 
-        match self.focus {
-            SearchFocus::Query | SearchFocus::Replace => match key.code {
+        if self.editing {
+            match key.code {
                 KeyCode::Tab => {
                     self.focus = if self.focus == SearchFocus::Query {
                         SearchFocus::Replace
                     } else {
-                        SearchFocus::Results
+                        SearchFocus::Query
                     };
+                }
+                KeyCode::Enter => {
+                    self.finish_edit(cx, true);
+                    return EventResult::Consumed(None);
                 }
                 KeyCode::Esc => {
-                    self.focus = SearchFocus::Results;
-                }
-                KeyCode::Enter if self.focus == SearchFocus::Query => {
-                    self.focus = SearchFocus::Results;
-                }
-                KeyCode::Enter if self.focus == SearchFocus::Replace => {
-                    match self.replace_current_match(cx) {
-                        Ok(count) => {
-                            self.pending = true;
-                            cx.editor
-                                .set_status(format!("replaced {count} occurrence(s)"));
-                        }
-                        Err(err) => cx.editor.set_error(err.to_string()),
-                    }
+                    self.finish_edit(cx, false);
+                    return EventResult::Consumed(None);
                 }
                 _ => {
-                    let handled = if self.focus == SearchFocus::Query {
-                        self.query.handle_key(*key)
-                    } else {
+                    let handled = if self.focus == SearchFocus::Replace {
                         self.replacement.handle_key(*key)
+                    } else {
+                        self.query.handle_key(*key)
                     };
                     if handled {
-                        let inputs = &mut cx.editor.sidebar.search;
-                        inputs.query = self.query.value().to_string();
-                        inputs.replacement = self.replacement.value().to_string();
-                        self.pending = true;
+                        self.sync_inputs(cx.editor);
                     } else if key.modifiers.contains(KeyModifiers::CONTROL)
                         || key.modifiers.contains(KeyModifiers::ALT)
                     {
                         return EventResult::Ignored(None);
                     }
                 }
-            },
+            }
+            cx.editor.needs_redraw = true;
+            return EventResult::Consumed(None);
+        }
+
+        match self.focus {
+            // Results is the normal mode. Query/Replace are only focusable
+            // while `editing` is true; fall back to results if needed.
+            SearchFocus::Query | SearchFocus::Replace => {
+                self.focus = SearchFocus::Results;
+                return EventResult::Consumed(None);
+            }
             SearchFocus::Results => match key.code {
                 KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     let result = if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_)))
@@ -1001,9 +1038,6 @@ impl SearchPane {
                 }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
-                }
-                KeyCode::Tab => {
-                    self.focus = SearchFocus::Query;
                 }
                 _ if key.modifiers.contains(KeyModifiers::CONTROL)
                     || key.modifiers.contains(KeyModifiers::ALT) =>
