@@ -1,0 +1,18 @@
+book/src/configuration.md
+  h_20fc4d483d1064 37
+helix-term/src/ui/sidebar/search.rs
+  h_20fc4d483d1064 930-936,941,947,1375-1431,1452-1474
+helix-view/src/sidebar.rs
+  h_20fc4d483d1064 28,41,143-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "97349bafc6a66cd7351e751b08612470427c2e81",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
