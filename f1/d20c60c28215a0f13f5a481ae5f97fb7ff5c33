@@ -1,0 +1,14 @@
+README.md
+  h_20fc4d483d1064 114,199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1d20c60c28215a0f13f5a481ae5f97fb7ff5c33",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
