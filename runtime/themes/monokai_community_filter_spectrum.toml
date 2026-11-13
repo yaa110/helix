@@ -1,5 +1,5 @@
-# Mirrors VSCode's "Monokai Pro (Filter Spectrum)", including its TextMate
-# token colors. VSCode theme source: monokai.theme-monokai-pro-vscode.
+# Monokai Community (Filter Spectrum) for Helix.
+# Token colors mirror VSCode's Monokai theme extension.
 # UI colors below are adapted to Helix's sidebar/statusline widgets.
 
 "ui.text.focus" = { fg = "yellow", modifiers= ["bold"] }
@@ -97,7 +97,7 @@
 "diagnostic.unnecessary" = { modifiers = ["dim"] }
 "diagnostic.deprecated" = { modifiers = ["crossed_out"] }
 
-# Markdown and other markup, matching VSCode Monokai Pro:
+# Markdown and other markup, matching the VSCode Monokai theme:
 # headings yellow, bold/italic inherit the base text color, inline/block raw
 # orange, link URLs green+underlined, link titles pink, quotes italic.
 "markup.heading" = "yellow"
@@ -124,7 +124,7 @@
 "markup.ignored" = "base6"
 "markup.untracked" = "base6"
 
-# VSCode "Monokai Pro (Filter Spectrum)" UI mappings.
+# VSCode Monokai UI mappings.
 # Sidebar/explorer
 "ui.sidebar" = { bg = "#252526" }
 "ui.sidebar.border" = { fg = "base0" }

@@ -651,15 +651,15 @@ impl Application {
             })
             .unwrap_or_else(|| {
                 // This fork's default theme mirrors VSCode's
-                // "Monokai Pro (Filter Spectrum)". The fork targets modern
+                // "Monokai Community (Filter Spectrum)". The fork targets modern
                 // true-color terminals (Ghostty, kitty, WezTerm, iTerm2, ...).
                 // Only fall back if the theme file itself cannot be loaded.
                 editor
                     .theme_loader
-                    .load("monokai_pro_filter_spectrum")
+                    .load("monokai_community_filter_spectrum")
                     .map_err(|e| {
                         log::warn!(
-                            "failed to load default theme `monokai_pro_filter_spectrum` - {e}"
+                            "failed to load default theme `monokai_community_filter_spectrum` - {e}"
                         );
                         e
                     })

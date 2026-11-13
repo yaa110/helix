@@ -672,27 +672,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn monokai_filter_spectrum_parses() {
+    fn monokai_community_filter_spectrum_parses() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .join("runtime");
         let loader = Loader::new(&[root]);
         let theme = loader
-            .load("monokai_pro_filter_spectrum")
+            .load("monokai_community_filter_spectrum")
             .expect("default fork theme should parse");
-        assert_eq!(theme.name(), "monokai_pro_filter_spectrum");
+        assert_eq!(theme.name(), "monokai_community_filter_spectrum");
     }
 
     #[test]
-    fn monokai_filter_spectrum_matches_vscode_markdown() {
+    fn monokai_community_filter_spectrum_matches_vscode_markdown() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .join("runtime");
         let loader = Loader::new(&[root]);
         let theme = loader
-            .load("monokai_pro_filter_spectrum")
+            .load("monokai_community_filter_spectrum")
             .expect("default fork theme should parse");
 
         let yellow = Color::Rgb(0xfc, 0xe5, 0x66);

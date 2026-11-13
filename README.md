@@ -216,9 +216,9 @@ Code lenses use the same peek-style picker:
   and git status is collected in a background worker.
 - **Binary-file guard**: images and other binary files are detected before
   decoding and reported instead of rendering terminal garbage.
-- **Monokai Pro (Filter Spectrum)** as the default theme, with token colors
-  mirrored from VSCode's Monokai Pro extension (including Markdown headings,
-  code, links, and quotes).
+- **Monokai Community (Filter Spectrum)** as the default theme, with token
+  colors mirrored from VSCode's Monokai theme extension (including Markdown
+  headings, code, links, and quotes).
 
 ### Defaults
 
