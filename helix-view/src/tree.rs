@@ -269,6 +269,18 @@ impl Tree {
         self.recalculate()
     }
 
+    /// Layout of the container that directly owns this view, if any.
+    pub fn view_split_kind(&self, view: ViewId) -> Option<Layout> {
+        let parent = self.nodes.get(view)?.parent;
+        if parent == self.root {
+            return None;
+        }
+        match &self.nodes.get(parent)?.content {
+            Content::Container(container) => Some(container.layout),
+            Content::View(_) => None,
+        }
+    }
+
     pub fn views(&self) -> impl Iterator<Item = (&View, bool)> {
         let focus = self.focus;
         self.nodes.iter().filter_map(move |(key, node)| match node {

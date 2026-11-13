@@ -297,6 +297,10 @@ where
         )
     }
 
+    fn set_title(&mut self, title: &str) -> io::Result<()> {
+        execute!(self.buffer, terminal::SetTitle(title))
+    }
+
     fn hide_cursor(&mut self) -> io::Result<()> {
         queue!(self.buffer, Hide)
     }

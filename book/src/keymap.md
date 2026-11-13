@@ -371,6 +371,8 @@ live behind `Space`, which opens a which-key-style hint box.
 | `c`, `m`, `p`     | Copy / cut / paste                               |
 | `y`, `Y`          | Copy the absolute / relative path                |
 | `x`               | Close the current buffer                         |
+| `X`               | Close all other buffers and their splits         |
+| `W`               | Open a recently used workspace                   |
 | `/`               | Open global search                               |
 | `b`               | Hide the sidebar                                 |
 | `w`               | Show two-letter jump labels                      |

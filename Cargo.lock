@@ -1768,6 +1768,7 @@ dependencies = [
  "arc-swap",
  "bitflags",
  "chardetng",
+ "ciborium",
  "clipboard-win",
  "criterion",
  "crossterm",

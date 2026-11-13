@@ -83,6 +83,7 @@ pub struct Application {
 
     theme_mode: Option<theme::Mode>,
     last_session_save: std::time::Instant,
+    terminal_title: String,
     file_watcher: Option<crate::file_watcher::FileWatcher>,
     fs_events: UnboundedReceiver<Vec<PathBuf>>,
     /// Kept alive when the watcher is disabled so the select branch stays inert.
@@ -334,10 +335,14 @@ impl Application {
             editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             editor.bufferline_visible = false;
         } else {
-            let ui_state = helix_view::ui_state::UiState::load();
+            let mut ui_state = helix_view::ui_state::UiState::load();
             editor.sidebar.mode = ui_state.sidebar_mode;
             editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             editor.bufferline_visible = ui_state.bufferline_visible;
+            ui_state.record_workspace(editor.workspace_root.clone());
+            if let Err(err) = ui_state.save() {
+                log::warn!("failed to record recent workspace: {err}");
+            }
         }
 
         #[cfg(windows)]
@@ -362,6 +367,7 @@ impl Application {
             lsp_progress: LspProgressMap::new(),
             theme_mode,
             last_session_save: std::time::Instant::now(),
+            terminal_title: String::new(),
             file_watcher,
             fs_events,
             _fs_tx: fs_tx,
@@ -406,6 +412,21 @@ impl Application {
 
         let pos = pos.map(|pos| (pos.col as u16, pos.row as u16));
         self.terminal.draw(pos, kind).unwrap();
+
+        let title = self
+            .editor
+            .tree
+            .try_get(self.editor.tree.focus)
+            .and_then(|view| self.editor.document(view.doc))
+            .and_then(|doc| doc.path())
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| helix_view::document::SCRATCH_BUFFER_NAME.to_string());
+        let title = format!("Hx | {title}");
+        if self.terminal_title != title {
+            let _ = self.terminal.backend_mut().set_title(&title);
+            self.terminal_title = title;
+        }
     }
 
     pub async fn event_loop<S>(&mut self, input_stream: &mut S)

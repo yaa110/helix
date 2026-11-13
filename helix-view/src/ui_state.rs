@@ -10,6 +10,8 @@ use crate::sidebar::SidebarMode;
 pub struct UiState {
     pub sidebar_mode: SidebarMode,
     pub bufferline_visible: bool,
+    #[serde(default)]
+    pub recent_workspaces: Vec<PathBuf>,
 }
 
 impl Default for UiState {
@@ -17,6 +19,7 @@ impl Default for UiState {
         Self {
             sidebar_mode: SidebarMode::Files,
             bufferline_visible: true,
+            recent_workspaces: Vec::new(),
         }
     }
 }
@@ -31,6 +34,16 @@ impl UiState {
             .ok()
             .and_then(|contents| serde_json::from_str(&contents).ok())
             .unwrap_or_default()
+    }
+
+    pub fn record_workspace(&mut self, workspace: impl Into<PathBuf>) {
+        let workspace = workspace.into();
+        if workspace.as_os_str().is_empty() {
+            return;
+        }
+        self.recent_workspaces.retain(|path| path != &workspace);
+        self.recent_workspaces.insert(0, workspace);
+        self.recent_workspaces.truncate(15);
     }
 
     pub fn save(&self) -> std::io::Result<()> {

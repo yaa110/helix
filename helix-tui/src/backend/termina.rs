@@ -554,6 +554,10 @@ impl Backend for TerminaBackend {
         Ok(())
     }
 
+    fn set_title(&mut self, title: &str) -> io::Result<()> {
+        write!(self.terminal, "\x1b]0;{title}\x07")
+    }
+
     fn hide_cursor(&mut self) -> io::Result<()> {
         write!(self.terminal, "{}", decreset!(ShowCursor))
     }

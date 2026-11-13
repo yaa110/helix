@@ -17,8 +17,9 @@ plugin layer.
 
 ## How to Install
 
-Both installers build from the `main` branch. There are no release tags or
-prebuilt artifacts.
+Both installers build from the `main` branch with native-CPU optimizations
+(`-C target-cpu=native`), fat LTO, one codegen unit, and stripped binaries.
+There are no release tags or prebuilt artifacts.
 
 ### Homebrew
 
@@ -109,6 +110,8 @@ Press `<space>` in the tree to open a categorized which-key-style hint box:
 | `c` / `m` / `p` | Copy / cut / paste |
 | `y` / `Y` | Copy the absolute / relative path |
 | `x` | Close the current buffer |
+| `X` | Close all other buffers and their splits |
+| `W` | Open a recently used workspace |
 | `/` | Open global search |
 | `b` | Hide the sidebar |
 | `w` | Show two-letter jump labels |
@@ -134,7 +137,9 @@ Additional tree behavior:
 - Selection is shown with the row background only; tree names stay regular
   (not bold), and the sidebar border keeps its normal color when focused.
 - Opening a file from any picker expands and selects it in the tree.
-- `<space>x` closes the current buffer (same as `:buffer-close`).
+- `<space>x` closes the current buffer; `<space>X` force-closes every other
+  buffer and its splits.
+- `<space>W` reopens a recently used workspace from a global LRU list.
 - Deleting an open file closes its buffer and reveals the next/previous buffer;
   deleting a closed file selects the adjacent file instead of jumping to the
   bottom of the tree.
@@ -177,8 +182,10 @@ Code lenses use the same peek-style picker:
 
 ### Editing and workflow
 
-- **Session restore** of buffers, selections, cursor/scroll, sidebar state, and
-  search inputs per workspace.
+- **Session restore** of buffers, split layout, per-view selections and scroll,
+  sidebar state, and search inputs per workspace. Sessions are stored in a
+  compact binary format. Split layout and each view's selection/scroll are
+  restored; hidden buffers are reopened after the visible views.
 - **Automatic file reload** with silent reload for clean buffers and a
   Keep/Reload/Overwrite prompt for dirty buffers.
 - **F1 action picker** (`F1` or `<space>t`): base64/hex encode/decode, case
@@ -192,6 +199,7 @@ Code lenses use the same peek-style picker:
   `[mode][spinner][branch][file name][read-only][modified]`; right:
   `[diagnostics][selections][selection length] │ [position][total lines] │
   [encoding][line ending][indent style][file type]`.
+- **Terminal title**: the window/tab title is set to `Hx | <buffer>`.
 - **Layout**: `[panes][tabs]`, then `[panes][breadcrumbs]`, then
   `[panes][code]`, then a full-width command/error line, with the full-width
   powerline at the very bottom. Breadcrumbs show the current file path relative

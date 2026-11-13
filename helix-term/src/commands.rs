@@ -412,8 +412,10 @@ impl MappableCommand {
         code_lens_file, "Show all LSP code lenses in the current file",
         transform_picker, "Open the searchable text-transform picker",
         close_buffer, "Close the current buffer (same as :buffer-close)",
+        close_other_buffers, "Close all other buffers and their splits",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
         toggle_bufferline, "Toggle the buffer tab bar",
+        recent_workspaces, "Open a recently used workspace",
         focus_search, "Open/focus the global search window",
         buffer_picker, "Open buffer picker",
         jumplist_picker, "Open jumplist picker",
@@ -3803,6 +3805,20 @@ pub(crate) fn close_buffer(cx: &mut Context) {
     }
 }
 
+fn close_other_buffers(cx: &mut Context) {
+    let current = view!(cx.editor).doc;
+    let others: Vec<_> = cx
+        .editor
+        .documents()
+        .filter_map(|doc| (doc.id() != current).then_some(doc.id()))
+        .collect();
+    for doc_id in others {
+        let _ = cx.editor.close_document(doc_id, true);
+    }
+    cx.editor.sidebar.reveal_current = true;
+    cx.editor.needs_redraw = true;
+}
+
 fn toggle_file_tree(cx: &mut Context) {
     let sidebar = &mut cx.editor.sidebar;
     match (sidebar.mode, sidebar.focus) {
@@ -3825,6 +3841,47 @@ fn toggle_file_tree(cx: &mut Context) {
     }
     cx.editor.needs_redraw = true;
     cx.editor.save_ui_state();
+}
+
+fn switch_workspace(editor: &mut Editor, workspace: &Path) {
+    let _ = editor.save_session_if_active();
+    let docs: Vec<_> = editor.documents().map(|doc| doc.id()).collect();
+    for doc_id in docs {
+        let _ = editor.close_document(doc_id, true);
+    }
+
+    editor.workspace_root = workspace.to_path_buf();
+    editor.sidebar = helix_view::sidebar::SidebarState::default();
+    editor.sidebar.mode = SidebarMode::Files;
+    editor.bufferline_visible = true;
+    editor.new_file(Action::Replace);
+
+    if let Some(session) = editor.session_store.load(workspace) {
+        helix_view::session::restore(editor, &session);
+    }
+    editor.session_dirty = true;
+    editor.needs_redraw = true;
+
+    let mut state = helix_view::ui_state::UiState::load();
+    state.record_workspace(workspace);
+    let _ = state.save();
+}
+
+fn recent_workspaces(cx: &mut Context) {
+    let state = helix_view::ui_state::UiState::load();
+    let workspaces = state.recent_workspaces;
+    if workspaces.is_empty() {
+        cx.editor.set_error("No recent workspaces");
+        return;
+    }
+
+    let columns = [PickerColumn::new("workspace", |path: &PathBuf, _: &()| {
+        path.display().to_string().into()
+    })];
+    let picker = Picker::new(columns, 0, workspaces, (), |cx, path, _| {
+        switch_workspace(cx.editor, path);
+    });
+    cx.push_layer(Box::new(overlaid(picker)));
 }
 
 fn toggle_bufferline(cx: &mut Context) {

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -10,7 +11,7 @@ use crate::sidebar::{SearchInputs, SidebarConfig, SidebarMode};
 use crate::view::ViewPosition;
 use crate::{DocumentId, Editor};
 
-pub const SESSION_VERSION: u32 = 1;
+pub const SESSION_VERSION: u32 = 2;
 
 /// A character position stored as a line and a character column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +56,22 @@ impl Default for ScrollState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SplitKind {
+    Replace,
+    Vertical,
+    Horizontal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewSession {
+    pub path: PathBuf,
+    pub selections: Vec<SelectionState>,
+    pub primary: usize,
+    pub scroll: ScrollState,
+    pub split: SplitKind,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BufferState {
     pub path: PathBuf,
@@ -89,6 +106,8 @@ pub struct Session {
     pub workspace: PathBuf,
     pub focused: Option<PathBuf>,
     pub buffers: Vec<BufferState>,
+    pub views: Vec<ViewSession>,
+    pub focused_view: usize,
     pub sidebar: SidebarSession,
     pub search: SearchInputs,
 }
@@ -100,6 +119,8 @@ impl Default for Session {
             workspace: PathBuf::new(),
             focused: None,
             buffers: Vec::new(),
+            views: Vec::new(),
+            focused_view: 0,
             sidebar: SidebarSession::default(),
             search: SearchInputs::default(),
         }
@@ -168,14 +189,14 @@ impl SessionStore {
         hasher.update(workspace.as_os_str().to_string_lossy().as_bytes());
         let digest = hasher.finalize();
         let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
-        self.dir.join(format!("{hex}.json"))
+        self.dir.join(format!("{hex}.bin"))
     }
 
     pub fn save(&self, session: &Session) -> anyhow::Result<()> {
         std::fs::create_dir_all(&self.dir)?;
         let path = self.path_for(&session.workspace);
         let mut tmp = tempfile::NamedTempFile::new_in(&self.dir)?;
-        serde_json::to_writer_pretty(&mut tmp, session)?;
+        ciborium::ser::into_writer(session, &mut tmp)?;
         tmp.flush()?;
         tmp.as_file().sync_all()?;
 
@@ -190,31 +211,38 @@ impl SessionStore {
 
     pub fn load(&self, workspace: &Path) -> Option<Session> {
         let path = self.path_for(workspace);
-        let contents = match std::fs::read_to_string(&path) {
-            Ok(contents) => contents,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
-            Err(err) => {
-                log::warn!("failed to read session {:?}: {err}", path);
-                return None;
-            }
-        };
-
-        let parsed = serde_json::from_str::<Session>(&contents)
+        let parsed = std::fs::read(&path)
             .ok()
+            .and_then(|bytes| ciborium::de::from_reader::<Session, _>(bytes.as_slice()).ok())
             .filter(|session| session.version == SESSION_VERSION);
         if parsed.is_some() {
             return parsed;
         }
 
-        let backup = path.with_extension("json.bak");
-        if let Err(err) = std::fs::rename(&path, &backup) {
-            log::warn!("failed to back up corrupt session {:?}: {err}", path);
-        } else {
-            log::warn!(
-                "ignored corrupt session {:?} (backed up to {:?})",
-                path,
-                backup
-            );
+        // One-time migration from the old human-readable JSON sessions.
+        let legacy = path.with_extension("json");
+        if let Ok(contents) = std::fs::read_to_string(&legacy) {
+            if let Some(session) = serde_json::from_str::<Session>(&contents)
+                .ok()
+                .filter(|session| session.version == SESSION_VERSION)
+            {
+                let _ = self.save(&session);
+                let _ = std::fs::remove_file(&legacy);
+                return Some(session);
+            }
+        }
+
+        if path.exists() {
+            let backup = path.with_extension("bin.bak");
+            if let Err(err) = std::fs::rename(&path, &backup) {
+                log::warn!("failed to back up corrupt session {:?}: {err}", path);
+            } else {
+                log::warn!(
+                    "ignored corrupt session {:?} (backed up to {:?})",
+                    path,
+                    backup
+                );
+            }
         }
         None
     }
@@ -300,11 +328,76 @@ pub fn collect(editor: &Editor) -> Session {
         });
     }
 
+    let views = editor
+        .tree
+        .views()
+        .enumerate()
+        .filter_map(|(index, (view, _))| {
+            let doc = editor.documents.get(&view.doc)?;
+            let path = doc.path()?;
+            let text = doc.text().slice(..);
+            let (selections, primary, scroll) = match doc.selections().get(&view.id) {
+                Some(selection) => {
+                    let selections = selection
+                        .ranges()
+                        .iter()
+                        .map(|range| SelectionState {
+                            anchor: encode_point(text, range.anchor),
+                            head: encode_point(text, range.head),
+                        })
+                        .collect();
+                    let offset = doc.view_offset(view.id);
+                    let anchor_line = text.char_to_line(offset.anchor.min(text.len_chars()));
+                    (
+                        selections,
+                        selection.primary_index(),
+                        ScrollState {
+                            anchor_line,
+                            vertical_offset: offset.vertical_offset,
+                            horizontal_offset: offset.horizontal_offset,
+                        },
+                    )
+                }
+                None => (
+                    vec![SelectionState {
+                        anchor: Point { line: 0, col: 0 },
+                        head: Point { line: 0, col: 0 },
+                    }],
+                    0,
+                    ScrollState::default(),
+                ),
+            };
+            let split = if index == 0 {
+                SplitKind::Replace
+            } else {
+                match editor.tree.view_split_kind(view.id) {
+                    Some(crate::tree::Layout::Vertical) => SplitKind::Vertical,
+                    Some(crate::tree::Layout::Horizontal) => SplitKind::Horizontal,
+                    None => SplitKind::Vertical,
+                }
+            };
+            Some(ViewSession {
+                path: encode_path(&workspace, path),
+                selections,
+                primary,
+                scroll,
+                split,
+            })
+        })
+        .collect();
+    let focused_view = editor
+        .tree
+        .views()
+        .position(|(view, _)| view.id == editor.tree.focus)
+        .unwrap_or(0);
+
     Session {
         version: SESSION_VERSION,
         workspace,
         focused,
         buffers,
+        views,
+        focused_view,
         sidebar: SidebarSession {
             mode: editor.sidebar.mode,
             width: editor.sidebar.width,
@@ -330,8 +423,129 @@ pub struct RestoreOutcome {
     pub skipped: Vec<PathBuf>,
 }
 
+fn restore_sidebar(editor: &mut Editor, session: &Session) {
+    editor.sidebar.mode = session.sidebar.mode;
+    editor.sidebar.width = session.sidebar.width;
+    editor.sidebar.expanded = session
+        .sidebar
+        .expanded
+        .iter()
+        .map(|path| decode_path(&editor.workspace_root, path))
+        .collect();
+    editor.sidebar.selected = session
+        .sidebar
+        .selected
+        .as_ref()
+        .map(|path| decode_path(&editor.workspace_root, path));
+    editor.sidebar.search = session.search.clone();
+    editor.sidebar.reveal_current = true;
+}
+
+fn restore_views(editor: &mut Editor, session: &Session) -> RestoreOutcome {
+    let mut outcome = RestoreOutcome::default();
+    let scratch = if editor.tree.views().next().is_none() {
+        Some(editor.new_file(Action::VerticalSplit))
+    } else {
+        None
+    };
+
+    let mut restored = Vec::new();
+    for (index, view_session) in session.views.iter().enumerate() {
+        let path = decode_path(&editor.workspace_root, &view_session.path);
+        if !path.exists() {
+            outcome.skipped.push(path);
+            continue;
+        }
+        let action = if index == 0 {
+            Action::Replace
+        } else {
+            match view_session.split {
+                SplitKind::Horizontal => Action::HorizontalSplit,
+                SplitKind::Vertical | SplitKind::Replace => Action::VerticalSplit,
+            }
+        };
+        match editor.open(&path, action) {
+            Ok(doc_id) => {
+                let view_id = editor.tree.focus;
+                outcome.restored += 1;
+                restored.push((index, view_id, doc_id, view_session));
+            }
+            Err(_) => outcome.skipped.push(path),
+        }
+    }
+
+    if let Some(scratch) = scratch {
+        if !restored.iter().any(|(_, _, doc_id, _)| *doc_id == scratch) {
+            let _ = editor.close_document(scratch, true);
+        }
+    }
+
+    for (_, view_id, doc_id, view_session) in &restored {
+        let doc = crate::doc_mut!(editor, doc_id);
+        let (selection, offset) = {
+            let text = doc.text().slice(..);
+            let ranges: SmallVec<[Range; 1]> = view_session
+                .selections
+                .iter()
+                .map(|selection| {
+                    Range::new(
+                        decode_point(text, selection.anchor),
+                        decode_point(text, selection.head),
+                    )
+                })
+                .collect();
+            let primary = view_session.primary.min(ranges.len().saturating_sub(1));
+            let anchor = text.line_to_char(
+                view_session
+                    .scroll
+                    .anchor_line
+                    .min(text.len_lines().saturating_sub(1)),
+            );
+            (
+                Selection::new(ranges, primary),
+                ViewPosition {
+                    anchor,
+                    vertical_offset: view_session.scroll.vertical_offset,
+                    horizontal_offset: view_session.scroll.horizontal_offset,
+                },
+            )
+        };
+        doc.set_selection(*view_id, selection);
+        doc.set_view_offset(*view_id, offset);
+    }
+
+    let view_paths: HashSet<PathBuf> = session
+        .views
+        .iter()
+        .map(|view| decode_path(&editor.workspace_root, &view.path))
+        .collect();
+    for buffer in &session.buffers {
+        let path = decode_path(&editor.workspace_root, &buffer.path);
+        if !view_paths.contains(&path) && path.exists() {
+            let _ = editor.open(&path, Action::Load);
+        }
+    }
+
+    let focused = restored
+        .iter()
+        .find(|(index, _, _, _)| *index == session.focused_view)
+        .or_else(|| restored.first());
+    if let Some((_, view_id, doc_id, _)) = focused {
+        editor.tree.focus = *view_id;
+        let doc = crate::doc_mut!(editor, doc_id);
+        doc.mark_as_focused();
+        doc.ensure_view_init(*view_id);
+    }
+
+    restore_sidebar(editor, session);
+    outcome
+}
+
 /// Restore buffers, selections, scroll, and sidebar state from a session.
 pub fn restore(editor: &mut Editor, session: &Session) -> RestoreOutcome {
+    if !session.views.is_empty() {
+        return restore_views(editor, session);
+    }
     let mut outcome = RestoreOutcome::default();
     let mut restored: Vec<(DocumentId, &BufferState)> = Vec::new();
 
@@ -416,21 +630,7 @@ pub fn restore(editor: &mut Editor, session: &Session) -> RestoreOutcome {
         doc.mark_as_focused();
     }
 
-    editor.sidebar.mode = session.sidebar.mode;
-    editor.sidebar.width = session.sidebar.width;
-    editor.sidebar.expanded = session
-        .sidebar
-        .expanded
-        .iter()
-        .map(|path| decode_path(&editor.workspace_root, path))
-        .collect();
-    editor.sidebar.selected = session
-        .sidebar
-        .selected
-        .as_ref()
-        .map(|path| decode_path(&editor.workspace_root, path));
-    editor.sidebar.search = session.search.clone();
-    editor.sidebar.reveal_current = true;
+    restore_sidebar(editor, session);
 
     // Do not call `ensure_cursor_in_view` here: it would re-scroll to satisfy
     // scrolloff and override the saved viewport. The saved selection and
@@ -464,9 +664,11 @@ mod tests {
     #[test]
     fn session_json_round_trip() {
         let session = Session {
-            version: 1,
+            version: SESSION_VERSION,
             workspace: "/tmp/ws".into(),
             focused: Some("src/main.rs".into()),
+            views: Vec::new(),
+            focused_view: 0,
             buffers: vec![BufferState {
                 path: "src/main.rs".into(),
                 selections: vec![SelectionState {
@@ -504,7 +706,7 @@ mod tests {
         assert_eq!(store.load(&workspace), None);
         assert!(store
             .path_for(&workspace)
-            .with_extension("json.bak")
+            .with_extension("bin.bak")
             .exists());
 
         store
