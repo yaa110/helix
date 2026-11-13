@@ -488,6 +488,7 @@ window returns to the tree.
 | --- | --- |
 | printable text | Edit the find query |
 | terminal paste | Insert into the focused Find/Replace input |
+| `Cmd/Alt-Backspace`, `Cmd/Alt-Delete` | Clear the focused Find/Replace field |
 | `Tab` | Find → Replace → Results |
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve-case |
 | `Space` | Categorized options/replace hint box |

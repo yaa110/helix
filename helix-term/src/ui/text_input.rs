@@ -61,6 +61,15 @@ impl TextInput {
                 self.cursor += c.len_utf8();
                 true
             }
+            KeyCode::Backspace | KeyCode::Delete
+                if key
+                    .modifiers
+                    .intersects(KeyModifiers::SUPER | KeyModifiers::ALT) =>
+            {
+                self.value.clear();
+                self.cursor = 0;
+                true
+            }
             KeyCode::Backspace if control => {
                 self.delete_word_backward();
                 true
@@ -223,5 +232,17 @@ mod tests {
         assert_eq!(input.value(), "one two ");
         input.handle_key(ctrl('u'));
         assert_eq!(input.value(), "");
+    }
+
+    #[test]
+    fn alt_or_super_delete_clears_the_field() {
+        for modifiers in [KeyModifiers::ALT, KeyModifiers::SUPER] {
+            for code in [KeyCode::Backspace, KeyCode::Delete] {
+                let mut input = TextInput::new("query");
+                assert!(input.handle_key(KeyEvent { code, modifiers }));
+                assert_eq!(input.value(), "");
+                assert_eq!(input.cursor(), 0);
+            }
+        }
     }
 }

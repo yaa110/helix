@@ -170,6 +170,8 @@ from search returns to the tree.
 - `Find:` and `Replace:` inputs.
 - Terminal paste (`Cmd-V`, `Ctrl-Shift-V`, etc.) inserts into the focused
   Find/Replace input instead of the document behind the window.
+- `Cmd-Backspace`/`Cmd-Delete` (or `Alt-Backspace`/`Alt-Delete`) clears the
+  focused Find/Replace field.
 - Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
 - `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
 - `<space>` opens a categorized options/replace hint box; `c`/`w`/`r`/`p`

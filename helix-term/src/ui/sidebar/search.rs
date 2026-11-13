@@ -776,6 +776,31 @@ impl SearchPane {
             return EventResult::Consumed(None);
         };
 
+        // Cmd/Alt + Backspace/Delete clears the active search field. This must
+        // run before the generic Alt chord handling below, which would
+        // otherwise consume the key without forwarding it to the text input.
+        if key
+            .modifiers
+            .intersects(KeyModifiers::SUPER | KeyModifiers::ALT)
+            && matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+        {
+            self.close_options(cx.editor);
+            match self.focus {
+                SearchFocus::Query => self.query.set_value(""),
+                SearchFocus::Replace => self.replacement.set_value(""),
+                SearchFocus::Results => {
+                    self.focus = SearchFocus::Query;
+                    self.query.set_value("");
+                }
+            }
+            let inputs = &mut cx.editor.sidebar.search;
+            inputs.query = self.query.value().to_string();
+            inputs.replacement = self.replacement.value().to_string();
+            self.pending = true;
+            cx.editor.needs_redraw = true;
+            return EventResult::Consumed(None);
+        }
+
         if self.options_mode {
             match key.code {
                 KeyCode::Char('c' | 'w' | 'r' | 'p') => {

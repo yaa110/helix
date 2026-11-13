@@ -115,6 +115,20 @@ async fn global_space_shortcuts_work_from_search_results() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn alt_or_cmd_delete_clears_search_inputs() -> anyhow::Result<()> {
+    let mut app = helpers::AppBuilder::new().build()?;
+
+    helpers::send_keys(&mut app, "<space>/foo").await?;
+    assert_eq!(app.editor.sidebar.search.query, "foo");
+    helpers::send_keys(&mut app, "<A-backspace>").await?;
+    assert_eq!(app.editor.sidebar.search.query, "");
+
+    helpers::send_keys(&mut app, "<tab>bar<A-del>").await?;
+    assert_eq!(app.editor.sidebar.search.replacement, "");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn paste_goes_into_the_global_search_inputs() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::write(dir.path().join("a.txt"), "foo\n")?;
