@@ -182,6 +182,7 @@ impl Application {
         Self::load_configured_theme(&mut editor, &config.load(), &mut terminal, theme_mode);
 
         editor.workspace_root = workspace_root;
+        editor.refresh_workspace_branch();
         editor.session_store = session_store;
         editor.session_active = session_active;
         if session_active {

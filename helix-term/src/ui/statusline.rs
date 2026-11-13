@@ -586,8 +586,9 @@ where
     let head = context
         .doc
         .version_control_head()
-        .unwrap_or_default()
-        .to_string();
+        .map(|head| head.to_string())
+        .or_else(|| context.editor.workspace_branch.clone())
+        .unwrap_or_default();
     if !head.is_empty() {
         write(context, format!(" {head} ").into());
     }

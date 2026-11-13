@@ -94,6 +94,38 @@ async fn diagnostics_report_opens_in_a_buffer() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn empty_workspace_has_a_branch_fallback() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a\n")?;
+    let status = std::process::Command::new("git")
+        .args(["init", "-q", "-b", "main"])
+        .current_dir(dir.path())
+        .status()?;
+    assert!(status.success());
+    let status = std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "init",
+            "--allow-empty",
+        ])
+        .current_dir(dir.path())
+        .status()?;
+    assert!(status.success());
+
+    let app = helpers::AppBuilder::new()
+        .with_workspace_dir(dir.path())
+        .build()?;
+    assert_eq!(app.editor.workspace_branch.as_deref(), Some("main"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn tree_search_cursor_supports_arrows_and_modifiers() -> anyhow::Result<()> {
     let mut app = helpers::AppBuilder::new().build()?;
     helpers::send_keys(&mut app, "<space>b/foo bar").await?;

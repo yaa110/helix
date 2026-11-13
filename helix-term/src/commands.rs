@@ -3868,6 +3868,7 @@ fn switch_workspace(editor: &mut Editor, workspace: &Path) {
 
     let sidebar_width = editor.sidebar.width;
     editor.workspace_root = workspace.to_path_buf();
+    editor.refresh_workspace_branch();
     if editor.session_active {
         let _ = editor.session_store.mark_running(&editor.workspace_root);
     }

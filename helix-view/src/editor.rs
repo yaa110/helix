@@ -1402,6 +1402,8 @@ pub struct Editor {
     pub workspace_trust: WorkspaceTrust,
     /// Root used for the file tree, search, and session identity.
     pub workspace_root: PathBuf,
+    /// Cached branch/head name for the workspace, used by pathless buffers.
+    pub workspace_branch: Option<String>,
     /// Shared sidebar state (mode, focus, width, expansion, search inputs).
     pub sidebar: SidebarState,
     /// Global runtime visibility for the buffer tabs. Combined with the
@@ -1553,6 +1555,7 @@ impl Editor {
             dir_stack: VecDeque::with_capacity(DIR_STACK_CAP),
             workspace_trust,
             workspace_root: PathBuf::new(),
+            workspace_branch: None,
             sidebar: SidebarState::default(),
             bufferline_visible: true,
             session_dirty: false,
@@ -2322,6 +2325,37 @@ impl Editor {
 
     pub fn document_id_by_path(&self, path: &Path) -> Option<DocumentId> {
         self.document_by_path(path).map(|doc| doc.id)
+    }
+
+    /// Refresh the cached workspace branch used when the focused buffer has no
+    /// path (for example, an empty workspace launch).
+    pub fn refresh_workspace_branch(&mut self) {
+        if self.workspace_root.as_os_str().is_empty() {
+            self.workspace_branch = None;
+            return;
+        }
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&self.workspace_root)
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output();
+        self.workspace_branch = output
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .filter(|branch| !branch.is_empty() && branch != "HEAD");
+        if self.workspace_branch.is_none() {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&self.workspace_root)
+                .args(["rev-parse", "--short", "HEAD"])
+                .output();
+            self.workspace_branch = output
+                .ok()
+                .filter(|output| output.status.success())
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+                .filter(|head| !head.is_empty());
+        }
     }
 
     // ??? possible use for integration tests
