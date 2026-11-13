@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::sidebar::SidebarMode;
+use crate::sidebar::{SidebarConfig, SidebarMode};
 
 /// Global (not per-workspace) UI preferences that should survive restarts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -10,6 +10,8 @@ use crate::sidebar::SidebarMode;
 pub struct UiState {
     pub sidebar_mode: SidebarMode,
     pub bufferline_visible: bool,
+    #[serde(default = "default_sidebar_width")]
+    pub sidebar_width: u16,
     #[serde(default)]
     pub recent_workspaces: Vec<PathBuf>,
 }
@@ -19,6 +21,7 @@ impl Default for UiState {
         Self {
             sidebar_mode: SidebarMode::Files,
             bufferline_visible: true,
+            sidebar_width: SidebarConfig::default().width,
             recent_workspaces: Vec::new(),
         }
     }
@@ -26,6 +29,10 @@ impl Default for UiState {
 
 fn path() -> PathBuf {
     helix_loader::data_dir().join("ui-state.json")
+}
+
+fn default_sidebar_width() -> u16 {
+    SidebarConfig::default().width
 }
 
 /// Temporary/test workspaces should never appear in the recent-workspace

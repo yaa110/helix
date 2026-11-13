@@ -1729,6 +1729,7 @@ impl Editor {
         }
         let mut state = crate::ui_state::UiState::load();
         state.sidebar_mode = self.sidebar.mode;
+        state.sidebar_width = self.sidebar.width;
         state.bufferline_visible = self.bufferline_visible;
         if let Err(err) = state.save() {
             log::warn!("failed to save global UI state: {err}");

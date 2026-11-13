@@ -3866,11 +3866,13 @@ fn switch_workspace(editor: &mut Editor, workspace: &Path) {
         let _ = editor.close_document(doc_id, true);
     }
 
+    let sidebar_width = editor.sidebar.width;
     editor.workspace_root = workspace.to_path_buf();
     if editor.session_active {
         let _ = editor.session_store.mark_running(&editor.workspace_root);
     }
     editor.sidebar = helix_view::sidebar::SidebarState::default();
+    editor.sidebar.width = sidebar_width;
     editor.sidebar.mode = SidebarMode::Files;
     editor.bufferline_visible = true;
     editor.new_file(Action::Replace);

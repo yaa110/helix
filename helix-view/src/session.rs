@@ -449,7 +449,7 @@ pub struct RestoreOutcome {
 
 fn restore_sidebar(editor: &mut Editor, session: &Session) {
     editor.sidebar.mode = session.sidebar.mode;
-    editor.sidebar.width = session.sidebar.width;
+    // Width is a global UI preference, not per-workspace session state.
     editor.sidebar.expanded = session
         .sidebar
         .expanded

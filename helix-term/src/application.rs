@@ -370,6 +370,7 @@ impl Application {
         } else {
             let mut ui_state = helix_view::ui_state::UiState::load();
             editor.sidebar.mode = ui_state.sidebar_mode;
+            editor.sidebar.width = ui_state.sidebar_width;
             editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             editor.bufferline_visible = ui_state.bufferline_visible;
             ui_state.record_workspace(editor.workspace_root.clone());

@@ -1810,10 +1810,12 @@ impl FileTree {
                     .width
                     .saturating_sub(2)
                     .max(config.min_width);
+                cx.editor.save_ui_state();
             }
             KeyCode::Char(']') => {
                 let config = cx.editor.config().sidebar;
                 cx.editor.sidebar.width = (cx.editor.sidebar.width + 2).min(config.max_width);
+                cx.editor.save_ui_state();
             }
             KeyCode::Char('<') => {
                 self.horizontal_scroll = self.horizontal_scroll.saturating_sub(4);
