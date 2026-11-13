@@ -2,7 +2,7 @@ use crate::{
     align_view,
     annotations::diagnostics::InlineDiagnostics,
     document::{DocumentColorSwatches, DocumentInlayHints},
-    editor::{GutterConfig, GutterType},
+    editor::{GutterConfig, GutterType, LineNumber},
     graphics::Rect,
     handlers::diagnostics::DiagnosticsHandler,
     Align, Document, DocumentId, Theme, ViewId,
@@ -155,6 +155,8 @@ pub struct View {
     pub object_selections: Vec<Selection>,
     /// all gutter-related configuration settings, used primarily for gutter rendering
     pub gutters: GutterConfig,
+    /// Line-number mode captured from the editor config for gutter layout.
+    pub line_number: LineNumber,
     // HACKS: there should really only be a global diagnostics handler (the
     // non-focused views should just not have different handling for the cursor
     // line). For that we would need accces to editor everywhere (we want to use
@@ -190,6 +192,7 @@ impl View {
             last_modified_docs: [None, None],
             object_selections: Vec::new(),
             gutters,
+            line_number: LineNumber::Absolute,
             diagnostics_handler: DiagnosticsHandler::new(),
         }
     }

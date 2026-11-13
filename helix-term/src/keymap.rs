@@ -288,11 +288,6 @@ impl Keymaps {
         &self.state
     }
 
-    /// Clear pending keys after a sidebar-specific sequence consumes them.
-    pub fn take_pending(&mut self) -> Vec<KeyEvent> {
-        std::mem::take(&mut self.state)
-    }
-
     pub fn sticky(&self) -> Option<&KeyTrieNode> {
         self.sticky.as_ref()
     }
@@ -633,6 +628,14 @@ is_sticky = false
         assert_eq!(
             leaf(&[key!(' '), key!('x')]),
             KeyTrie::MappableCommand(MappableCommand::close_buffer)
+        );
+        let ctrl_up = KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::CONTROL,
+        };
+        assert_eq!(
+            leaf(&[ctrl_up]),
+            KeyTrie::MappableCommand(MappableCommand::scroll_up_smooth)
         );
     }
 }

@@ -3,7 +3,8 @@ use std::fmt::Write;
 use helix_core::syntax::config::LanguageServerFeature;
 
 use crate::{
-    editor::GutterType,
+    document::Mode,
+    editor::{GutterType, LineNumber},
     graphics::{Style, UnderlineStyle},
     Document, Editor, Theme, View,
 };
@@ -173,32 +174,43 @@ pub fn line_numbers<'doc>(
                 write!(out, "{:>1$}", '~', width).unwrap();
                 Some(linenr)
             } else {
-                use crate::{document::Mode, editor::LineNumber};
-
-                let relative = line_number == LineNumber::Relative
-                    && mode != Mode::Insert
-                    && is_focused
-                    && current_line != line;
-
-                let display_num = if relative {
-                    current_line.abs_diff(line)
-                } else {
-                    line + 1
-                };
-
                 let style = if selected && is_focused {
                     linenr_select
                 } else {
                     linenr
                 };
 
-                if first_visual_line {
-                    write!(out, "{:>1$}", display_num, width).unwrap();
-                } else {
+                if !first_visual_line {
                     write!(out, "{:>1$}", " ", width).unwrap();
+                    return Some(style);
                 }
 
-                first_visual_line.then_some(style)
+                match line_number {
+                    LineNumber::Absolute => {
+                        write!(out, "{:>1$}", line + 1, width).unwrap();
+                    }
+                    LineNumber::Relative => {
+                        let relative = mode != Mode::Insert && is_focused && current_line != line;
+                        let display_num = if relative {
+                            current_line.abs_diff(line)
+                        } else {
+                            line + 1
+                        };
+                        write!(out, "{:>1$}", display_num, width).unwrap();
+                    }
+                    LineNumber::Both => {
+                        // Keep both columns equally aligned. The divider is
+                        // rendered with the same muted line-number style.
+                        let part_width = width.saturating_sub(3) / 2;
+                        let relative = current_line.abs_diff(line);
+                        let relative = format!("{:>part_width$}", relative);
+                        let absolute = format!("{:>part_width$}", line + 1);
+                        let combined = format!("{relative} │ {absolute}");
+                        write!(out, "{:>1$}", combined, width).unwrap();
+                    }
+                }
+
+                Some(style)
             }
         },
     )
@@ -216,7 +228,10 @@ fn line_numbers_width(view: &View, doc: &Document) -> usize {
     let last_drawn = if draw_last { last_line + 1 } else { last_line };
     let digits = count_digits(last_drawn);
     let n_min = view.gutters.line_numbers.min_width;
-    digits.max(n_min)
+    match view.line_number {
+        LineNumber::Both => (digits * 2 + 3).max(n_min),
+        LineNumber::Absolute | LineNumber::Relative => digits.max(n_min),
+    }
 }
 
 pub fn padding<'doc>(

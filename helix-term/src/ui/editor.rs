@@ -244,16 +244,6 @@ impl EditorView {
         {
             Self::render_diagnostics(doc, view, inner, surface, theme);
         }
-
-        let statusline_area = view
-            .area
-            .clip_top(view.area.height.saturating_sub(1))
-            .clip_bottom(1); // -1 from bottom to remove commandline
-
-        let mut context =
-            statusline::RenderContext::new(editor, doc, view, is_focused, &self.spinners);
-
-        statusline::render(&mut context, statusline_area, surface);
     }
 
     pub fn render_rulers(
@@ -669,55 +659,92 @@ impl EditorView {
         Some(OverlayHighlights::Homogeneous { highlight, ranges })
     }
 
-    /// Render bufferline at the top
+    /// Render a VSCode-like bufferline at the top.
     pub fn render_bufferline(editor: &Editor, viewport: Rect, surface: &mut Surface) {
-        let scratch = PathBuf::from(SCRATCH_BUFFER_NAME); // default filename to use for scratch buffer
+        let scratch = PathBuf::from(SCRATCH_BUFFER_NAME);
+        let theme = &editor.theme;
         surface.clear_with(
             viewport,
-            editor
-                .theme
+            theme
                 .try_get("ui.bufferline.background")
-                .unwrap_or_else(|| editor.theme.get("ui.statusline")),
+                .unwrap_or_else(|| theme.get("ui.statusline")),
         );
 
-        let bufferline_active = editor
-            .theme
+        let active = theme
             .try_get("ui.bufferline.active")
-            .unwrap_or_else(|| editor.theme.get("ui.statusline.active"));
-
-        let bufferline_inactive = editor
-            .theme
+            .unwrap_or_else(|| theme.get("ui.statusline.active"))
+            .add_modifier(Modifier::BOLD);
+        let inactive = theme
             .try_get("ui.bufferline")
-            .unwrap_or_else(|| editor.theme.get("ui.statusline.inactive"));
+            .unwrap_or_else(|| theme.get("ui.statusline.inactive"));
+        let modified_style = theme
+            .try_get("ui.bufferline.modified")
+            .unwrap_or_else(|| theme.get("diff.delta"));
+        let separator_style = theme
+            .try_get("ui.bufferline.separator")
+            .unwrap_or_else(|| theme.get("ui.linenr"));
 
-        let mut x = viewport.x;
+        let icons = editor.config().sidebar.icons;
         let current_doc = view!(editor).doc;
+        let right = viewport.right();
+        let mut x = viewport.x;
 
         for doc in editor.documents() {
-            let fname = doc
-                .path()
-                .unwrap_or(&scratch)
+            if x >= right {
+                break;
+            }
+
+            if x > viewport.x {
+                x = surface
+                    .set_stringn(
+                        x,
+                        viewport.y,
+                        "│",
+                        right.saturating_sub(x) as usize,
+                        separator_style,
+                    )
+                    .0;
+                if x >= right {
+                    break;
+                }
+            }
+
+            let path = doc.path().unwrap_or(&scratch);
+            let fname = path
                 .file_name()
                 .unwrap_or_default()
                 .to_str()
                 .unwrap_or_default();
-
-            let style = if current_doc == doc.id() {
-                bufferline_active
+            let icon = if icons {
+                format!("{} ", crate::ui::sidebar::icons::file_icon(path))
             } else {
-                bufferline_inactive
+                String::new()
             };
-
-            let text = format!(" {}{} ", fname, if doc.is_modified() { "[+]" } else { "" });
-            let used_width = viewport.x.saturating_sub(x);
-            let rem_width = surface.area.width.saturating_sub(used_width);
-
+            let label = format!(" {icon}{fname} ");
+            let style = if current_doc == doc.id() {
+                active
+            } else {
+                inactive
+            };
             x = surface
-                .set_stringn(x, viewport.y, &text, rem_width as usize, style)
+                .set_stringn(
+                    x,
+                    viewport.y,
+                    &label,
+                    right.saturating_sub(x) as usize,
+                    style,
+                )
                 .0;
-
-            if x >= surface.area.right() {
-                break;
+            if doc.is_modified() && x < right {
+                x = surface
+                    .set_stringn(
+                        x,
+                        viewport.y,
+                        " ● ",
+                        right.saturating_sub(x) as usize,
+                        modified_style,
+                    )
+                    .0;
             }
         }
     }
@@ -1517,30 +1544,6 @@ impl Component for EditorView {
                 // clear status
                 cx.editor.status_msg = None;
 
-                // Tree-specific Space sequences take precedence over the global
-                // Space menu, but only while the tree actually owns focus.
-                let tree_space_op = cx.editor.sidebar.focus
-                    == helix_view::sidebar::SidebarFocus::Sidebar
-                    && cx.editor.sidebar.mode == helix_view::sidebar::SidebarMode::Files
-                    && self.keymaps.pending() == [key!(' ')]
-                    && matches!(key.code, KeyCode::Char('c' | 'm' | 'p' | 'd'))
-                    && !key
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
-                if tree_space_op {
-                    self.keymaps.take_pending();
-                    self.sidebar.handle_space_op(key, &mut cx);
-                    let callbacks = take(&mut cx.callback);
-                    if callbacks.is_empty() {
-                        return EventResult::Consumed(None);
-                    }
-                    return EventResult::Consumed(Some(Box::new(move |compositor, cx| {
-                        for callback in callbacks {
-                            callback(compositor, cx);
-                        }
-                    })));
-                }
-
                 if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
                     && cx.editor.sidebar.mode != helix_view::sidebar::SidebarMode::Hidden
                     && self.keymaps.pending().is_empty()
@@ -1701,6 +1704,14 @@ impl Component for EditorView {
     fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
         // clear with background color
         surface.set_style(area, cx.editor.theme.get("ui.background"));
+
+        // Gutter width is computed during layout, before rendering, so keep
+        // each view's cached line-number mode in sync with the editor config.
+        let line_number = cx.editor.config().line_number;
+        for (view, _) in cx.editor.tree.views_mut() {
+            view.line_number = line_number;
+        }
+
         let config = cx.editor.config();
 
         // check if bufferline should be rendered
@@ -1711,8 +1722,11 @@ impl Component for EditorView {
             _ => false,
         };
 
-        // -1 for commandline
-        let full_editor_area = area.clip_bottom(1);
+        // Layout: commandline at the very bottom, one full-width statusline
+        // above it (spanning the tree and editor panes), then the content.
+        let page_area = area.clip_bottom(1);
+        let statusline_area = page_area.clip_top(page_area.height.saturating_sub(1));
+        let full_editor_area = page_area.clip_bottom(1);
         let sidebar_width = cx.editor.sidebar.visible_width(area.width, &config.sidebar);
         let editor_full = if sidebar_width > 0 {
             let sidebar_area = full_editor_area.with_width(sidebar_width);
@@ -1742,6 +1756,16 @@ impl Component for EditorView {
         for (view, is_focused) in cx.editor.tree.views() {
             let doc = cx.editor.document(view.doc).unwrap();
             self.render_view(cx.editor, doc, view, editor_area, surface, is_focused);
+        }
+
+        // The powerline spans the full width, including the sidebar. It shows
+        // the focused view's state and belongs to the page, not an individual
+        // split.
+        if let Some(view) = cx.editor.tree.try_get(cx.editor.tree.focus) {
+            let doc = cx.editor.document(view.doc).unwrap();
+            let mut context =
+                statusline::RenderContext::new(cx.editor, doc, view, true, &self.spinners);
+            statusline::render(&mut context, statusline_area, surface);
         }
 
         if config.auto_info {

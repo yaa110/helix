@@ -265,6 +265,8 @@
 | `align_view_bottom` | Align view bottom | normal: `` Zb ``, `` zb ``, select: `` Zb ``, `` zb `` |
 | `scroll_up` | Scroll view up | normal: `` Zk ``, `` zk ``, `` Z<up> ``, `` z<up> ``, select: `` Zk ``, `` zk ``, `` Z<up> ``, `` z<up> `` |
 | `scroll_down` | Scroll view down | normal: `` Zj ``, `` zj ``, `` Z<down> ``, `` z<down> ``, select: `` Zj ``, `` zj ``, `` Z<down> ``, `` z<down> `` |
+| `scroll_up_smooth` | Scroll view up smoothly | normal: `` <C-up> ``, `` Z<C-up> ``, `` z<C-up> ``, select: `` <C-up> ``, `` Z<C-up> ``, `` z<C-up> `` |
+| `scroll_down_smooth` | Scroll view down smoothly | normal: `` <C-down> ``, `` Z<C-down> ``, `` z<C-down> ``, select: `` <C-down> ``, `` Z<C-down> ``, `` z<C-down> `` |
 | `match_brackets` | Goto matching bracket | normal: `` mm ``, select: `` mm `` |
 | `surround_add` | Surround add | normal: `` ms ``, select: `` ms `` |
 | `surround_replace` | Surround replace | normal: `` mr ``, select: `` mr `` |

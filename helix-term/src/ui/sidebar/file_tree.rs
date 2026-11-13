@@ -1,10 +1,13 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
+use helix_core::fuzzy::fuzzy_match;
 use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
 use helix_view::editor::Action;
 use helix_view::graphics::{Modifier, Rect};
+use helix_view::info::Info;
 use helix_view::input::KeyEvent;
 use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::sidebar::{SidebarFocus, SidebarState};
@@ -28,6 +31,15 @@ pub struct Row {
     pub expanded: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GitFileStatus {
+    Untracked,
+    Modified,
+    Conflict,
+    Renamed,
+    Deleted,
+}
+
 #[derive(Debug, Clone)]
 struct FileClipboard {
     paths: Vec<PathBuf>,
@@ -40,12 +52,15 @@ pub struct FileTree {
     pub cursor: usize,
     pub scroll: usize,
     pub filter: String,
+    pub command_mode: bool,
     pub overflow_hint: Option<String>,
+    pub dirty_only: bool,
+    git_status: HashMap<PathBuf, GitFileStatus>,
+    git_status_root: Option<PathBuf>,
+    git_status_epoch: Option<u64>,
     clipboard: Option<FileClipboard>,
     labels: Option<Vec<(String, usize)>>,
     label_prefix: Option<char>,
-    pending_g: bool,
-    pending_z: bool,
     horizontal_scroll: usize,
 }
 
@@ -57,12 +72,15 @@ impl FileTree {
             cursor: 0,
             scroll: 0,
             filter: String::new(),
+            command_mode: false,
             overflow_hint: None,
+            dirty_only: false,
+            git_status: HashMap::new(),
+            git_status_root: None,
+            git_status_epoch: None,
             clipboard: None,
             labels: None,
             label_prefix: None,
-            pending_g: false,
-            pending_z: false,
             horizontal_scroll: 0,
         }
     }
@@ -113,11 +131,22 @@ impl FileTree {
         // While filtering, walk the whole tree so matches inside collapsed
         // directories are still discoverable.
         push_dir(&mut rows, root, 0, expanded, &list, !self.filter.is_empty());
+        if self.dirty_only {
+            rows.retain(|row| self.git_status.contains_key(&row.path));
+        }
         if !self.filter.is_empty() {
-            let needle = self.filter.to_lowercase();
+            let names: Vec<String> = rows
+                .iter()
+                .map(|row| row.path.to_string_lossy().into_owned())
+                .collect();
+            let matched: HashSet<&str> =
+                fuzzy_match(&self.filter, names.iter().map(String::as_str), true)
+                    .into_iter()
+                    .map(|(name, _)| name)
+                    .collect();
             let matches: HashSet<PathBuf> = rows
                 .iter()
-                .filter(|row| row.path.to_string_lossy().to_lowercase().contains(&needle))
+                .filter(|row| matched.contains(row.path.to_string_lossy().as_ref()))
                 .map(|row| row.path.clone())
                 .collect();
             rows.retain(|row| {
@@ -130,8 +159,85 @@ impl FileTree {
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         self.labels = None;
         self.label_prefix = None;
-        self.pending_g = false;
         self.clamp_scroll();
+    }
+
+    pub fn git_status_needs_refresh(&self, editor: &Editor) -> bool {
+        self.git_status_root.as_ref() != Some(&self.root)
+            || self.git_status_epoch != Some(editor.sidebar.refresh_epoch)
+    }
+
+    pub fn refresh_git_status(&mut self, editor: &Editor) {
+        let root = self.root.clone();
+        self.git_status_root = Some(root.clone());
+        self.git_status_epoch = Some(editor.sidebar.refresh_epoch);
+
+        if !editor.config().sidebar.git_status {
+            self.git_status.clear();
+            return;
+        }
+
+        let workspace = helix_loader::find_workspace_in(&root).0;
+        let trusted = editor
+            .workspace_trust
+            .query(&workspace, helix_loader::workspace_trust::TrustQuery::Git)
+            .is_trusted();
+        if !trusted {
+            self.git_status.clear();
+            return;
+        }
+
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["status", "--porcelain=v1", "--untracked-files=all"])
+            .output();
+        let Ok(output) = output else {
+            self.git_status.clear();
+            return;
+        };
+        if !output.status.success() {
+            self.git_status.clear();
+            return;
+        }
+
+        let mut statuses = HashMap::new();
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            if line.len() < 4 {
+                continue;
+            }
+            let code = &line[..2];
+            let rest = &line[3..];
+            let path = if code.starts_with('R') || code.starts_with('C') {
+                rest.rsplit(" -> ").next().unwrap_or(rest)
+            } else {
+                rest
+            };
+            let path = path.trim_matches('"');
+            let path = root.join(path);
+            let status = if code.contains('U') || matches!(code, "AA" | "DD") {
+                GitFileStatus::Conflict
+            } else if code == "??" || code.starts_with('A') {
+                GitFileStatus::Untracked
+            } else if code.starts_with('R') {
+                GitFileStatus::Renamed
+            } else if code.contains('D') {
+                GitFileStatus::Deleted
+            } else {
+                GitFileStatus::Modified
+            };
+            statuses.insert(path.clone(), status);
+
+            let mut parent = path.parent();
+            while let Some(dir) = parent {
+                if dir == root || !dir.starts_with(&root) {
+                    break;
+                }
+                statuses.entry(dir.to_path_buf()).or_insert(status);
+                parent = dir.parent();
+            }
+        }
+        self.git_status = statuses;
     }
 
     pub fn refresh(&mut self, editor: &Editor, state: &SidebarState) {
@@ -154,6 +260,7 @@ impl FileTree {
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
         let theme = &editor.theme;
+        let icons_enabled = editor.config().sidebar.icons;
         let title = if focused {
             theme
                 .try_get_exact("ui.sidebar.title.focused")
@@ -191,6 +298,15 @@ impl FileTree {
             } else {
                 "ui.tree.selected.indicator.unfocused"
             })
+            .or_else(|| {
+                if focused {
+                    // Match the high-contrast focused border when the theme
+                    // has no dedicated indicator scope.
+                    theme.try_get_exact("ui.menu.selected")
+                } else {
+                    None
+                }
+            })
             .unwrap_or(menu);
 
         if area.height == 0 {
@@ -202,8 +318,12 @@ impl FileTree {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| self.root.display().to_string());
-        if !self.filter.is_empty() {
-            header.push_str(&format!(" [{}]", self.filter));
+        if self.command_mode {
+            header.push_str("  [commands]");
+        } else if self.filter.is_empty() {
+            header.push_str("  /type to filter");
+        } else {
+            header.push_str(&format!("  /{}", self.filter));
         }
         surface.set_stringn(area.x, area.y, &header, area.width as usize, title);
 
@@ -220,11 +340,19 @@ impl FileTree {
         self.overflow_hint = None;
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
-            let marker = match row.kind {
-                EntryKind::Dir if row.expanded => "▾",
-                EntryKind::Dir => "▸",
-                EntryKind::File => " ",
+            let marker = if icons_enabled {
+                match row.kind {
+                    EntryKind::Dir => super::icons::folder_icon(row.expanded),
+                    EntryKind::File => super::icons::file_icon(&row.path),
+                }
+            } else {
+                match row.kind {
+                    EntryKind::Dir if row.expanded => "▾",
+                    EntryKind::Dir => "▸",
+                    EntryKind::File => " ",
+                }
             };
+            let indent = "│ ".repeat(row.depth);
             let name = row
                 .path
                 .file_name()
@@ -246,18 +374,28 @@ impl FileTree {
                     })
             });
             let text = match label {
-                Some(label) => format!("{label} {}{} {}", "  ".repeat(row.depth), marker, name),
-                None => format!("{}{} {}", "  ".repeat(row.depth), marker, name),
+                Some(label) => format!("{label} {indent}{marker} {name}"),
+                None => format!("{indent}{marker} {name}"),
             };
             // Keep the selected row visible even when the editor owns focus,
             // so it is clear which file is currently open.
-            let style = if index == self.cursor {
+            let mut style = if index == self.cursor {
                 menu
             } else if row.kind == EntryKind::Dir {
                 directory
             } else {
                 title
             };
+            if let Some(status) = self.git_status.get(&row.path) {
+                let dirty = match status {
+                    GitFileStatus::Untracked => theme.get("diff.plus"),
+                    GitFileStatus::Modified => theme.get("diff.delta"),
+                    GitFileStatus::Conflict => theme.get("diff.delta.conflict"),
+                    GitFileStatus::Renamed => theme.get("diff.delta.moved"),
+                    GitFileStatus::Deleted => theme.get("diff.minus"),
+                };
+                style = style.patch(dirty);
+            }
 
             let selected_row = index == self.cursor;
             let indicator_width = u16::from(selected_row);
@@ -295,23 +433,6 @@ impl FileTree {
         self.filter = filter.clone();
         editor.sidebar.tree_filter = filter;
         self.rebuild_from_editor(editor);
-    }
-
-    fn prompt_filter(&mut self, cx: &mut commands::Context) {
-        let current = self.filter.clone();
-        ui::prompt_with_input(
-            cx,
-            "Filter files:".into(),
-            current,
-            None,
-            |_editor, _input| Vec::new(),
-            move |cx, input, event| {
-                if event == crate::ui::PromptEvent::Validate {
-                    cx.editor.sidebar.tree_filter = input.trim().to_string();
-                    cx.editor.needs_redraw = true;
-                }
-            },
-        );
     }
 
     fn remember_for_paste(&mut self, cx: &mut commands::Context, cut: bool) {
@@ -373,18 +494,6 @@ impl FileTree {
             cx.editor.sidebar.selected = Some(last.clone());
         }
         self.rebuild_from_editor(cx.editor);
-    }
-
-    pub fn handle_space_op(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
-        match key.code {
-            KeyCode::Char('c') => self.remember_for_paste(cx, false),
-            KeyCode::Char('m') => self.remember_for_paste(cx, true),
-            KeyCode::Char('p') => self.paste_clipboard(cx),
-            KeyCode::Char('d') => self.delete(cx),
-            _ => return false,
-        }
-        cx.editor.needs_redraw = true;
-        true
     }
 
     /// Expand all ancestors of `path` below `root`, rebuild, and select it.
@@ -754,55 +863,193 @@ impl FileTree {
     pub fn handle_key(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
         if self.labels.is_some() {
             let handled = self.handle_label_key(key);
-            cx.editor.sidebar.selected = self.selected_row().map(|row| row.path.clone());
-            cx.editor.needs_redraw = true;
+            self.sync_selection(cx);
             return handled;
         }
-        if self.pending_g {
-            self.pending_g = false;
-            match key.code {
-                KeyCode::Char('w') => {
-                    self.start_jump_labels(cx);
-                    cx.editor.needs_redraw = true;
-                    return true;
-                }
-                KeyCode::Char('g') => {
-                    self.cursor = 0;
-                    cx.editor.needs_redraw = true;
-                    return true;
-                }
-                _ => {}
-            }
+
+        if self.command_mode {
+            return self.handle_command_key(key, cx);
         }
 
-        if self.pending_z {
-            self.pending_z = false;
-            match key.code {
-                KeyCode::Char('h') | KeyCode::Left => {
-                    self.horizontal_scroll = self.horizontal_scroll.saturating_sub(4);
-                    cx.editor.needs_redraw = true;
-                    return true;
-                }
-                KeyCode::Char('l') | KeyCode::Right => {
-                    self.horizontal_scroll = self.horizontal_scroll.saturating_add(4);
-                    cx.editor.needs_redraw = true;
-                    return true;
-                }
-                _ => {}
-            }
-        }
-
-        if key.code == KeyCode::Esc && !self.filter.is_empty() {
-            self.filter.clear();
-            cx.editor.sidebar.tree_filter.clear();
-            self.rebuild_from_editor(cx.editor);
-            cx.editor.needs_redraw = true;
+        // Everything that is not a navigation key is a live fuzzy query. The
+        // tree actions live behind `<space>` so ordinary typing is free.
+        if key.code == KeyCode::Char(' ')
+            && !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            self.enter_command_mode(cx);
             return true;
         }
 
         match key.code {
-            KeyCode::Char('/') => self.prompt_filter(cx),
-            KeyCode::Char('z') => self.pending_z = true,
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.set_query(String::new(), cx);
+            }
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let mut query = self.filter.clone();
+                while query.ends_with(char::is_whitespace) {
+                    query.pop();
+                }
+                while query.chars().last().is_some_and(|c| !c.is_whitespace()) {
+                    query.pop();
+                }
+                self.set_query(query, cx);
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                let mut query = self.filter.clone();
+                query.push(c);
+                self.set_query(query, cx);
+            }
+            KeyCode::Backspace => {
+                let mut query = self.filter.clone();
+                query.pop();
+                self.set_query(query, cx);
+            }
+            KeyCode::Esc => {
+                if !self.filter.is_empty() {
+                    self.set_query(String::new(), cx);
+                } else {
+                    cx.editor.sidebar.focus = SidebarFocus::Editor;
+                    cx.editor.needs_redraw = true;
+                }
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+                if !self.rows.is_empty() {
+                    self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
+                }
+                self.sync_selection(cx);
+            }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+                self.cursor = self.cursor.saturating_sub(lines);
+                self.sync_selection(cx);
+            }
+            KeyCode::Down => {
+                if !self.rows.is_empty() {
+                    self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
+                }
+                self.sync_selection(cx);
+            }
+            KeyCode::Up => {
+                self.cursor = self.cursor.saturating_sub(1);
+                self.sync_selection(cx);
+            }
+            KeyCode::Right => {
+                if let Some(row) = self.selected_row().cloned() {
+                    if row.kind == EntryKind::Dir && !row.expanded {
+                        self.toggle_expand(cx);
+                    } else {
+                        self.open_selected(cx, Action::Replace);
+                    }
+                }
+                self.sync_selection(cx);
+            }
+            KeyCode::Left => {
+                self.collapse_or_parent(cx);
+                self.sync_selection(cx);
+            }
+            KeyCode::Enter => {
+                self.open_selected(cx, Action::Replace);
+                self.sync_selection(cx);
+            }
+            KeyCode::Tab => {
+                if self
+                    .selected_row()
+                    .is_some_and(|row| row.kind == EntryKind::File)
+                {
+                    self.open_selected(cx, Action::Replace);
+                } else {
+                    cx.editor.sidebar.focus = SidebarFocus::Editor;
+                }
+                self.sync_selection(cx);
+            }
+            _ => {
+                // Let global Ctrl/Alt chords through.
+                if key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    fn set_query(&mut self, query: String, cx: &mut commands::Context) {
+        self.filter = query;
+        cx.editor.sidebar.tree_filter = self.filter.clone();
+        self.cursor = 0;
+        self.rebuild_from_editor(cx.editor);
+        self.sync_selection(cx);
+    }
+
+    fn sync_selection(&mut self, cx: &mut commands::Context) {
+        cx.editor.sidebar.selected = self.selected_row().map(|row| row.path.clone());
+        cx.editor.needs_redraw = true;
+    }
+
+    fn enter_command_mode(&mut self, cx: &mut commands::Context) {
+        self.command_mode = true;
+        let body = [
+            ("j, Down", "Move down"),
+            ("k, Up", "Move up"),
+            ("h, Left", "Collapse or go to parent"),
+            ("l, Right", "Expand or open"),
+            ("Enter, o", "Open"),
+            ("s / v", "Open in horizontal / vertical split"),
+            ("a / A", "Create file / directory"),
+            ("r", "Rename"),
+            ("d", "Delete"),
+            ("c / m / p", "Copy / cut / paste"),
+            ("y / Y", "Copy absolute / relative path"),
+            ("w", "Jump labels"),
+            ("g / G", "First / last row"),
+            ("J / K", "Move ten rows"),
+            ("H / R", "Collapse all / refresh"),
+            ("D", "Show dirty files only"),
+            (".", "Reveal current buffer"),
+            ("[ / ]", "Shrink / grow sidebar"),
+            ("< / >", "Scroll tree left / right"),
+            ("x", "Close current buffer"),
+            ("q / Esc", "Return to editor / close commands"),
+        ];
+        cx.editor.autoinfo = Some(Info::new("Tree commands (Space)", &body));
+        cx.editor.needs_redraw = true;
+    }
+
+    fn leave_command_mode(&mut self, cx: &mut commands::Context) {
+        self.command_mode = false;
+        cx.editor.autoinfo = None;
+        cx.editor.needs_redraw = true;
+    }
+
+    fn handle_command_key(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            self.leave_command_mode(cx);
+            return false;
+        }
+
+        match key.code {
+            KeyCode::Esc => {
+                self.leave_command_mode(cx);
+                return true;
+            }
+            KeyCode::Char('q') => {
+                self.leave_command_mode(cx);
+                cx.editor.sidebar.focus = SidebarFocus::Editor;
+                return true;
+            }
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.rows.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
@@ -827,19 +1074,42 @@ impl FileTree {
             KeyCode::Char('a') => self.create(cx, false),
             KeyCode::Char('A') => self.create(cx, true),
             KeyCode::Char('r') => self.rename(cx),
-            KeyCode::Char('d') if !key.modifiers.contains(KeyModifiers::CONTROL) => self.delete(cx),
+            KeyCode::Char('d') => self.delete(cx),
+            KeyCode::Char('c') => self.remember_for_paste(cx, false),
+            KeyCode::Char('m') => self.remember_for_paste(cx, true),
+            KeyCode::Char('p') => self.paste_clipboard(cx),
             KeyCode::Char('y') => self.copy_path(cx, false),
             KeyCode::Char('Y') => self.copy_path(cx, true),
-            KeyCode::Char('g') => {
-                self.pending_g = true;
+            KeyCode::Char('D') => {
+                self.dirty_only = !self.dirty_only;
+                if self.dirty_only {
+                    self.refresh_git_status(cx.editor);
+                }
+                self.rebuild_from_editor(cx.editor);
+                cx.editor.set_status(if self.dirty_only {
+                    "Showing dirty files only"
+                } else {
+                    "Showing all files"
+                });
             }
+            KeyCode::Char('x') => {
+                self.leave_command_mode(cx);
+                crate::commands::close_buffer(cx);
+                return true;
+            }
+            KeyCode::Char('w') => {
+                self.start_jump_labels(cx);
+                self.leave_command_mode(cx);
+                return true;
+            }
+            KeyCode::Char('g') => self.cursor = 0,
             KeyCode::Char('G') => {
                 self.cursor = self.rows.len().saturating_sub(1);
             }
-            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('J') => {
                 self.cursor = (self.cursor + 10).min(self.rows.len().saturating_sub(1));
             }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('K') => {
                 self.cursor = self.cursor.saturating_sub(10);
             }
             KeyCode::Char('H') => {
@@ -884,24 +1154,17 @@ impl FileTree {
                 let config = cx.editor.config().sidebar;
                 cx.editor.sidebar.width = (cx.editor.sidebar.width + 2).min(config.max_width);
             }
-            KeyCode::Tab => {
-                if self
-                    .selected_row()
-                    .is_some_and(|row| row.kind == EntryKind::File)
-                {
-                    self.open_selected(cx, Action::Replace);
-                } else {
-                    cx.editor.sidebar.focus = SidebarFocus::Editor;
-                }
+            KeyCode::Char('<') => {
+                self.horizontal_scroll = self.horizontal_scroll.saturating_sub(4);
             }
-            KeyCode::Char('q') | KeyCode::Esc => {
-                cx.editor.sidebar.focus = SidebarFocus::Editor;
+            KeyCode::Char('>') => {
+                self.horizontal_scroll = self.horizontal_scroll.saturating_add(4);
             }
-            _ => return false,
+            _ => {}
         }
 
-        cx.editor.sidebar.selected = self.selected_row().map(|row| row.path.clone());
-        cx.editor.needs_redraw = true;
+        self.leave_command_mode(cx);
+        self.sync_selection(cx);
         true
     }
 

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use helix_view::graphics::Rect;
+use helix_view::info::Info;
 use helix_view::input::{KeyCode, KeyModifiers};
 use helix_view::sidebar::SearchInputs;
 use helix_view::Editor;
@@ -42,6 +43,7 @@ pub struct SearchPane {
     scroll: usize,
     receiver: Option<Receiver<SearchEvent>>,
     pending: bool,
+    options_mode: bool,
     capped: bool,
     error: Option<String>,
 }
@@ -58,6 +60,7 @@ impl SearchPane {
             scroll: 0,
             receiver: None,
             pending: false,
+            options_mode: false,
             capped: false,
             error: None,
         }
@@ -72,8 +75,9 @@ impl SearchPane {
         }
     }
 
-    pub fn focus_query(&mut self) {
+    pub fn focus_query(&mut self, editor: &mut Editor) {
         self.focus = SearchFocus::Query;
+        self.close_options(editor);
     }
 
     pub fn result_count(&self) -> usize {
@@ -138,63 +142,104 @@ impl SearchPane {
             editor.sidebar.search_files = self.results.keys().cloned().collect();
         }
 
+        if area.width <= 2 || area.height == 0 {
+            return;
+        }
+
         let theme = &editor.theme;
         let text = theme.get("ui.text");
         let selected = theme.get("ui.menu.selected");
         let dim = theme.get("ui.linenr");
+        let label = theme.get("ui.sidebar.title");
         let width = area.width.saturating_sub(2);
+        let max_x = area.x + area.width - 1;
         let mut y = area.y;
 
-        let query_area = Rect::new(area.x + 1, y, width, 1);
-        self.query
-            .render(query_area, surface, theme, self.focus == SearchFocus::Query);
+        // Query input. Labels make it obvious that this is an editable field,
+        // and TextInput clips/scolls long queries internally.
+        let query_label = "Find: ";
+        let query_label_width = query_label.len() as u16;
+        surface.set_stringn(area.x + 1, y, query_label, width as usize, label);
+        let query_width = width.saturating_sub(query_label_width);
+        if query_width > 0 {
+            self.query.render(
+                Rect::new(area.x + 1 + query_label_width, y, query_width, 1),
+                surface,
+                theme,
+                self.focus == SearchFocus::Query,
+            );
+        }
         y += 1;
 
-        if y < area.y + area.height {
-            let mut toggles = String::new();
-            toggles.push_str(if editor.sidebar.search.match_case {
-                "[Aa] "
-            } else {
-                " Aa  "
-            });
-            toggles.push_str(if editor.sidebar.search.whole_word {
-                "[ab] "
-            } else {
-                " ab  "
-            });
-            toggles.push_str(if editor.sidebar.search.regex {
-                "[.*]"
-            } else {
-                " .* "
-            });
-            toggles.push_str(if editor.sidebar.search.preserve_case {
-                " [AB]"
-            } else {
-                "  AB "
-            });
-            surface.set_string(area.x + 1, y, &toggles, dim);
-            y += 1;
+        // Search options, wrapped across as many rows as the pane needs.
+        let options = [
+            ("[Aa] case", editor.sidebar.search.match_case),
+            ("[ab] word", editor.sidebar.search.whole_word),
+            ("[.*] regex", editor.sidebar.search.regex),
+            ("[AB] keep", editor.sidebar.search.preserve_case),
+        ];
+        let mut x = area.x + 1;
+        let mut option_y = y;
+        for (option, enabled) in options {
+            let option_width = option.len() as u16;
+            if x.saturating_add(option_width) > max_x {
+                x = area.x + 1;
+                option_y += 1;
+            }
+            if option_y >= area.y + area.height {
+                break;
+            }
+            surface.set_stringn(
+                x,
+                option_y,
+                option,
+                option_width as usize,
+                if enabled { selected } else { dim },
+            );
+            x = x.saturating_add(option_width + 1);
+        }
+        if option_y < area.y + area.height {
+            y = option_y + 1;
+        } else {
+            y = area.y + area.height;
         }
 
         if y < area.y + area.height {
-            let replace_area = Rect::new(area.x + 1, y, width, 1);
-            self.replacement.render(
-                replace_area,
-                surface,
-                theme,
-                self.focus == SearchFocus::Replace,
+            surface.set_stringn(
+                area.x + 1,
+                y,
+                "Alt-c/w/r/p · Space options",
+                width as usize,
+                dim,
             );
             y += 1;
         }
 
+        // Replacement input.
+        let replace_label = "Replace: ";
+        let replace_label_width = replace_label.len() as u16;
         if y < area.y + area.height {
-            surface.set_string(area.x, y, &"─".repeat(width as usize), dim);
+            surface.set_stringn(area.x + 1, y, replace_label, width as usize, label);
+            let replace_width = width.saturating_sub(replace_label_width);
+            if replace_width > 0 {
+                self.replacement.render(
+                    Rect::new(area.x + 1 + replace_label_width, y, replace_width, 1),
+                    surface,
+                    theme,
+                    self.focus == SearchFocus::Replace,
+                );
+            }
+            y += 1;
+        }
+
+        if y < area.y + area.height {
+            surface.set_stringn(area.x, y, &"─".repeat(width as usize), width as usize, dim);
             y += 1;
         }
 
         if let Some(error) = &self.error {
             if y < area.y + area.height {
-                surface.set_string(area.x + 1, y, error, theme.get("error"));
+                surface.set_stringn(area.x + 1, y, error, width as usize, theme.get("error"));
             }
             return;
         }
@@ -203,6 +248,20 @@ impl SearchPane {
         if height == 0 {
             return;
         }
+
+        if editor.sidebar.search.query.is_empty() {
+            surface.set_stringn(area.x + 1, y, "Type to search", width as usize, dim);
+            return;
+        }
+        if self.pending || self.receiver.is_some() {
+            surface.set_stringn(area.x + 1, y, "Searching…", width as usize, dim);
+            return;
+        }
+        if self.results.is_empty() {
+            surface.set_stringn(area.x + 1, y, "No results found", width as usize, dim);
+            return;
+        }
+
         if self.cursor < self.scroll {
             self.scroll = self.cursor;
         } else if self.cursor >= self.scroll + height {
@@ -219,8 +278,13 @@ impl SearchPane {
                         .get(path)
                         .map(|file| file.matches.len())
                         .unwrap_or(0);
+                    let icon = if editor.config().sidebar.icons {
+                        format!("{} ", super::icons::file_icon(path))
+                    } else {
+                        String::new()
+                    };
                     format!(
-                        "▾ {} ({count})",
+                        "▾ {icon}{} ({count})",
                         path.file_name()
                             .map(|name| name.to_string_lossy().into_owned())
                             .unwrap_or_else(|| path.display().to_string())
@@ -236,14 +300,15 @@ impl SearchPane {
                     }
                 }
             };
-            surface.set_string(area.x, y + offset as u16, &line, style);
+            surface.set_stringn(area.x, y + offset as u16, &line, area.width as usize, style);
         }
 
         if self.capped && area.height > 0 {
-            surface.set_string(
+            surface.set_stringn(
                 area.x,
                 area.y + area.height - 1,
                 "showing first 10000 matches",
+                area.width as usize,
                 dim,
             );
         }
@@ -318,6 +383,14 @@ impl SearchPane {
             ResultRow::File(path) => Some(path.clone()),
             ResultRow::Match(path, _) => Some(path.clone()),
         }
+    }
+
+    fn move_cursor_by(&mut self, delta: isize) {
+        if self.rows.is_empty() {
+            return;
+        }
+        let max = self.rows.len().saturating_sub(1) as isize;
+        self.cursor = (self.cursor as isize + delta).clamp(0, max) as usize;
     }
 
     pub fn open_match(
@@ -512,11 +585,91 @@ impl SearchPane {
         Ok(())
     }
 
+    fn open_options(&mut self, cx: &mut commands::Context) {
+        self.options_mode = true;
+        let body = [
+            ("c", "Match case"),
+            ("w", "Whole word"),
+            ("r", "Regex"),
+            ("p", "Preserve case"),
+            ("Space, Esc", "Close options"),
+        ];
+        cx.editor.autoinfo = Some(Info::new("Search options (Space)", &body));
+    }
+
+    fn close_options(&mut self, editor: &mut Editor) {
+        if self.options_mode {
+            self.options_mode = false;
+            editor.autoinfo = None;
+        }
+    }
+
+    fn toggle_option(&mut self, key: char, cx: &mut commands::Context) {
+        let inputs = &mut cx.editor.sidebar.search;
+        match key {
+            'c' => inputs.match_case = !inputs.match_case,
+            'w' => inputs.whole_word = !inputs.whole_word,
+            'r' => inputs.regex = !inputs.regex,
+            'p' => inputs.preserve_case = !inputs.preserve_case,
+            _ => return,
+        }
+        if key != 'p' {
+            self.pending = true;
+        }
+        cx.editor.needs_redraw = true;
+    }
+
     pub fn handle_event(&mut self, event: &Event, cx: &mut commands::Context) -> EventResult {
         let Event::Key(key) = event else {
             return EventResult::Consumed(None);
         };
+
+        if self.options_mode {
+            match key.code {
+                KeyCode::Char('c' | 'w' | 'r' | 'p') => {
+                    if let KeyCode::Char(option) = key.code {
+                        self.toggle_option(option, cx);
+                    }
+                }
+                KeyCode::Char(' ') | KeyCode::Esc | KeyCode::Tab => {
+                    self.close_options(cx.editor);
+                    cx.editor.needs_redraw = true;
+                }
+                _ => {}
+            }
+            return EventResult::Consumed(None);
+        }
+
+        if key.code == KeyCode::Char(' ')
+            && self.focus == SearchFocus::Results
+            && !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            self.open_options(cx);
+            cx.editor.needs_redraw = true;
+            return EventResult::Consumed(None);
+        }
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Up | KeyCode::Down)
+        {
+            let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1) as isize;
+            let delta = if key.code == KeyCode::Up {
+                -lines
+            } else {
+                lines
+            };
+            self.move_cursor_by(delta);
+            cx.editor.needs_redraw = true;
+            return EventResult::Consumed(None);
+        }
+
         if key.modifiers.contains(KeyModifiers::ALT) {
+            if key.code == KeyCode::Char(' ') {
+                self.open_options(cx);
+                cx.editor.needs_redraw = true;
+                return EventResult::Consumed(None);
+            }
             if key.code == KeyCode::Enter {
                 let result = if key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.replace_all(cx)
@@ -530,21 +683,8 @@ impl SearchPane {
                 return EventResult::Consumed(None);
             }
             match key.code {
-                KeyCode::Char('c') => {
-                    cx.editor.sidebar.search.match_case = !cx.editor.sidebar.search.match_case;
-                    self.pending = true;
-                }
-                KeyCode::Char('w') => {
-                    cx.editor.sidebar.search.whole_word = !cx.editor.sidebar.search.whole_word;
-                    self.pending = true;
-                }
-                KeyCode::Char('r') => {
-                    cx.editor.sidebar.search.regex = !cx.editor.sidebar.search.regex;
-                    self.pending = true;
-                }
-                KeyCode::Char('p') => {
-                    cx.editor.sidebar.search.preserve_case =
-                        !cx.editor.sidebar.search.preserve_case;
+                KeyCode::Char(option @ ('c' | 'w' | 'r' | 'p')) => {
+                    self.toggle_option(option, cx);
                 }
                 _ => return EventResult::Consumed(None),
             }

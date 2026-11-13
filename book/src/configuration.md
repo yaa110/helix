@@ -37,6 +37,8 @@ The sidebar width is configured with:
 width = 30
 min-width = 20
 max-width = 50
+icons = true
+git-status = true
 ```
 
 The sidebar is auto-hidden when the terminal cannot leave at least 40 columns

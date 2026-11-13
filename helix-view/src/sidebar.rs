@@ -31,6 +31,10 @@ pub struct SidebarConfig {
     pub min_width: u16,
     /// Maximum width when resolving/clamping. Defaults to 50.
     pub max_width: u16,
+    /// Whether to render Nerd Font file icons. Defaults to true.
+    pub icons: bool,
+    /// Whether to color tree entries by git status. Defaults to true.
+    pub git_status: bool,
 }
 
 impl Default for SidebarConfig {
@@ -39,6 +43,8 @@ impl Default for SidebarConfig {
             width: 30,
             min_width: 20,
             max_width: 50,
+            icons: true,
+            git_status: true,
         }
     }
 }

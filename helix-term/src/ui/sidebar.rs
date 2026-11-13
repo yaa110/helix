@@ -10,6 +10,7 @@ use crate::commands;
 use crate::compositor::{Context, Event, EventResult};
 
 pub mod file_tree;
+pub(crate) mod icons;
 pub mod search;
 
 use file_tree::FileTree;
@@ -47,17 +48,6 @@ impl Sidebar {
             self.search.handle_idle_timeout(cx.editor);
             cx.editor.needs_redraw = true;
         }
-    }
-
-    pub fn handle_space_op(
-        &mut self,
-        key: helix_view::input::KeyEvent,
-        cx: &mut commands::Context,
-    ) -> bool {
-        if cx.editor.sidebar.mode != SidebarMode::Files {
-            return false;
-        }
-        self.tree.handle_space_op(key, cx)
     }
 
     pub fn ensure_init(&mut self, editor: &mut Editor) {
@@ -101,14 +91,14 @@ impl Sidebar {
 
         if editor.sidebar.search_focus_query {
             self.search.sync_from_inputs(&editor.sidebar.search);
-            self.search.focus_query();
+            self.search.focus_query(editor);
             editor.sidebar.search_focus_query = false;
         }
 
         if self.last_mode != editor.sidebar.mode {
             if editor.sidebar.mode == SidebarMode::Search {
                 self.search.sync_from_inputs(&editor.sidebar.search);
-                self.search.focus_query();
+                self.search.focus_query(editor);
             }
             self.last_mode = editor.sidebar.mode;
         }
@@ -125,6 +115,9 @@ impl Sidebar {
         let border = if focused {
             theme
                 .try_get_exact("ui.sidebar.border.focused")
+                // High-contrast fallback for themes that do not define a
+                // focused sidebar scope (Monokai's menu selection is yellow).
+                .or_else(|| theme.try_get_exact("ui.menu.selected"))
                 .or_else(|| theme.try_get_exact("ui.sidebar.border"))
                 .or_else(|| theme.try_get_exact("ui.linenr"))
                 .unwrap_or_default()
@@ -154,8 +147,9 @@ impl Sidebar {
         }
 
         if area.width > 0 {
+            let border_char = if focused { "┃" } else { "│" };
             for y in area.y..area.y.saturating_add(area.height) {
-                surface.set_string(area.x + area.width - 1, y, "│", border);
+                surface.set_string(area.x + area.width - 1, y, border_char, border);
             }
         }
     }
@@ -172,16 +166,6 @@ impl Sidebar {
             return self.search.handle_event(event, cx);
         }
 
-        // In the results list, let the normal `Space` menu (and other global
-        // shortcuts) run. `EditorView` will keep routing the sequence to the
-        // keymap while it has pending keys.
-        if cx.editor.sidebar.mode == SidebarMode::Search
-            && self.search.focus == SearchFocus::Results
-            && key.code == KeyCode::Char(' ')
-        {
-            return EventResult::Ignored(None);
-        }
-
         if cx.editor.sidebar.mode == SidebarMode::Search {
             return self.search.handle_event(event, cx);
         }
@@ -191,9 +175,6 @@ impl Sidebar {
         }
 
         match key.code {
-            // Let the global `<space>` menu run while the tree is focused. The
-            // tree-specific Space sequences are intercepted by EditorView.
-            KeyCode::Char(' ') => EventResult::Ignored(None),
             KeyCode::Esc | KeyCode::Char('q') => {
                 cx.editor.sidebar.focus = SidebarFocus::Editor;
                 cx.editor.needs_redraw = true;

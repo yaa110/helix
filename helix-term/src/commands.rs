@@ -569,6 +569,8 @@ impl MappableCommand {
         align_view_bottom, "Align view bottom",
         scroll_up, "Scroll view up",
         scroll_down, "Scroll view down",
+        scroll_up_smooth, "Scroll view up smoothly",
+        scroll_down_smooth, "Scroll view down smoothly",
         match_brackets, "Goto matching bracket",
         surround_add, "Surround add",
         surround_replace, "Surround replace",
@@ -3593,7 +3595,7 @@ mod transform_tests {
     }
 }
 
-fn close_buffer(cx: &mut Context) {
+pub(crate) fn close_buffer(cx: &mut Context) {
     use helix_view::editor::CloseError;
 
     if let Err(err) = cx.block_try_flush_writes() {
@@ -6494,6 +6496,16 @@ fn scroll_up(cx: &mut Context) {
 
 fn scroll_down(cx: &mut Context) {
     scroll(cx, cx.count(), Direction::Forward, false);
+}
+
+fn scroll_up_smooth(cx: &mut Context) {
+    let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+    scroll(cx, lines, Direction::Backward, false);
+}
+
+fn scroll_down_smooth(cx: &mut Context) {
+    let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+    scroll(cx, lines, Direction::Forward, false);
 }
 
 fn goto_ts_object_impl(cx: &mut Context, object: &'static str, direction: Direction) {

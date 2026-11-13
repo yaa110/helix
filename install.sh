@@ -60,7 +60,13 @@ curl -fL "$source_url" -o "$tmp/source.tar.gz"
 mkdir -p "$tmp/src"
 tar -xzf "$tmp/source.tar.gz" -C "$tmp/src" --strip-components=1
 
-echo "Building hx from source (this can take several minutes)..."
+if [ "${HELIX_SKIP_GRAMMARS:-0}" = "1" ]; then
+  echo "Building hx from source without tree-sitter grammars..."
+  export HELIX_DISABLE_AUTO_GRAMMAR_BUILD=1
+else
+  echo "Building hx and tree-sitter grammars from source (this can take a while)..."
+fi
+
 CARGO_TARGET_DIR="$tmp/target" \
   cargo install --locked --path "$tmp/src/helix-term" --root "$tmp/install"
 
@@ -77,16 +83,10 @@ EOF
 chmod +x "$prefix/bin/hx"
 
 if [ "${HELIX_SKIP_GRAMMARS:-0}" = "1" ]; then
-  echo "Skipping tree-sitter grammars (HELIX_SKIP_GRAMMARS=1)."
+  echo "Skipped tree-sitter grammars (HELIX_SKIP_GRAMMARS=1)."
   echo "You can build them later with:"
   echo "  HELIX_RUNTIME=\"$prefix/share/helix/runtime\" $prefix/libexec/helix/hx --grammar fetch"
   echo "  HELIX_RUNTIME=\"$prefix/share/helix/runtime\" $prefix/libexec/helix/hx --grammar build"
-else
-  runtime="$prefix/share/helix/runtime"
-  echo "Fetching tree-sitter grammars (this may take a while)..."
-  HELIX_RUNTIME="$runtime" "$prefix/libexec/helix/hx" --grammar fetch
-  echo "Building tree-sitter grammars..."
-  HELIX_RUNTIME="$runtime" "$prefix/libexec/helix/hx" --grammar build
 fi
 
 echo

@@ -1,5 +1,5 @@
 use helix_core::graphemes::{next_grapheme_boundary, prev_grapheme_boundary};
-use helix_core::unicode::width::UnicodeWidthStr;
+use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
 use helix_core::Rope;
 use helix_view::graphics::Rect;
 use helix_view::input::{KeyCode, KeyEvent, KeyModifiers};
@@ -138,16 +138,40 @@ impl TextInput {
 
     pub fn render(&self, area: Rect, surface: &mut Surface, theme: &Theme, focused: bool) {
         let style = theme.get("ui.text");
-        if area.height == 0 {
+        if area.height == 0 || area.width == 0 {
             return;
         }
-        surface.set_string(area.x, area.y, &self.value, style);
+
+        let width = area.width as usize;
+        let cursor_column = self.value[..self.cursor.min(self.value.len())].width();
+        // Keep the cursor visible and clip long queries at the pane edge
+        // instead of letting them spill into the editor.
+        let offset = cursor_column.saturating_sub(width.saturating_sub(1));
+        let visible = skip_columns(&self.value, offset);
+        surface.set_stringn(area.x, area.y, visible, width, style);
+
         if focused {
-            let width = self.value[..self.cursor.min(self.value.len())].width() as u16;
-            let cursor_style = theme.get("ui.cursor");
-            surface.set_style(Rect::new(area.x + width, area.y, 1, 1), cursor_style);
+            let cursor_x = cursor_column.saturating_sub(offset);
+            if cursor_x < width {
+                let cursor_style = theme.get("ui.cursor");
+                surface.set_style(
+                    Rect::new(area.x + cursor_x as u16, area.y, 1, 1),
+                    cursor_style,
+                );
+            }
         }
     }
+}
+
+fn skip_columns(text: &str, columns: usize) -> &str {
+    let mut skipped = 0;
+    for (index, ch) in text.char_indices() {
+        if skipped >= columns {
+            return &text[index..];
+        }
+        skipped += ch.width().unwrap_or(0);
+    }
+    ""
 }
 
 #[cfg(test)]

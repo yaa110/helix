@@ -1,69 +1,24 @@
-# Helix — personal VSCode-parity fork
+# Helix Improved
 
-> ## Unofficial, AI-assisted fork — read this first
->
-> This repository is a **personal fork of
-> [Helix](https://github.com/helix-editor/helix)**. It is not upstream Helix,
-> it is not affiliated with or endorsed by the Helix maintainers, and it is not
-> an official Helix release.
->
-> **Substantial parts of the fork-specific code and documentation were written
-> or modified with the help of AI LLM models.** The changes were made to support
-> this fork author's own workflow and have not been reviewed by the upstream
-> Helix maintainers.
->
-> **Issues cannot be resolved and pull requests are not managed here.** This
-> repository is published for personal use and reference. Do not report problems
-> caused by this fork to the upstream Helix project, and do not expect support,
-> reviews, merges, or timely responses here. Use it at your own risk.
+![Helix Improved screenshot](assets/helix.png)
 
-![Helix fork screenshot](assets/helix.png)
+A personal, AI-assisted fork of [Helix](https://github.com/helix-editor/helix)
+that keeps modal editing while adding the VSCode-style workflow pieces this fork
+author uses every day. Everything is implemented natively in Rust; there is no
+plugin layer.
 
-The goal is to keep Helix's modal editing model while adding the workflow
-pieces a VSCode user misses.
+> **Unofficial fork — read this first.** This is **not** upstream Helix and is
+> not affiliated with or endorsed by the Helix maintainers. Substantial parts of
+> the fork-specific code and documentation were written or modified with AI
+> assistance and have not been reviewed upstream. **Issues cannot be resolved
+> and pull requests are not managed here.** This repository is published for
+> personal use; do not report fork problems to upstream Helix, and do not expect
+> support, reviews, merges, or timely responses. Use it at your own risk.
 
-Everything is implemented natively in Rust. There is no plugin layer.
+## How to Install
 
-> Upstream Helix remains the authority for everything not described here.
-> See the upstream book and `CHANGELOG.md` for the base editor.
-
-## Fork additions at a glance
-
-- **File tree sidebar** on the left, toggled with `<space>b`, with lazy
-  directory loading, create/rename/delete, splits, path copying, and
-  VSCode-like auto-reveal of the current buffer.
-- **Automatic tree tracking**: changing the current buffer expands and selects
-  it in the tree; opening a file through any picker also selects it.
-- **Two-letter tree jumps** with `gw` + label.
-- **Fast focus switching**: `<space>b` from the editor lands on the current
-  buffer; `Enter`/`Tab`/`Esc` returns to the editor.
-- **Global shortcuts from the sidebar**: unhandled `Ctrl`/`Alt` chords and the
-  global `<space>` menu pass through, so bindings such as `Ctrl+E` or
-  `<space>e` still work while the tree is focused.
-- **Session restore** of buffers, selections, cursor/scroll, sidebar state,
-  and search inputs per workspace.
-- **Automatic file reload** with silent reload for clean buffers and a safe
-  Keep/Reload/Overwrite prompt for dirty buffers.
-- **Binary-file guard**: images and other binary files are detected before
-  decoding and reported instead of being rendered as terminal garbage.
-- **Workspace search and replace** in the sidebar, with case/word/regex/
-  preserve-case toggles, grouped streaming results, open-at-match,
-  select-all, replace-one, and replace-all.
-- **LSP code lenses**: `<space>l` shows actions for the current line (for
-  example gopls `run test`), `<space>L` shows all lenses in the file, and the
-  first available lens title appears in the statusline.
-- **Peek definition/references**: `gP` / `gR` open a non-destructive preview
-  picker; `Enter` jumps, `Esc` cancels without moving the cursor.
-- **Searchable text transforms** (`F1` or `<space>t`): base64/hex encode and
-  decode, case conversions, and line sorting on selections or the whole buffer.
-- **Always-visible buffer tabs** (`bufferline = "always"`).
-- **Monokai Community (Filter Spectrum)** as the default theme.
-- **Native implementation** in `helix-view` and `helix-term`; no plugin system.
-
-## Install
-
-This fork is published at
-[github.com/yaa110/helix](https://github.com/yaa110/helix).
+Both installers build from the `main` branch. There are no release tags or
+prebuilt artifacts.
 
 ### Homebrew
 
@@ -72,11 +27,10 @@ brew tap yaa110/helix https://github.com/yaa110/helix
 brew install yaa110/helix/helix
 ```
 
-The formula builds from the `main` branch and installs `hx` plus this fork's
-runtime (themes, queries, grammars) under Homebrew's prefix.
+After new commits on `main`:
 
 ```sh
-# After new commits on main:
+brew update
 brew reinstall yaa110/helix/helix
 ```
 
@@ -86,434 +40,178 @@ brew reinstall yaa110/helix/helix
 curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
 ```
 
-The installer downloads the source and builds `hx` locally with Cargo. It does
-not depend on GitHub Releases or prebuilt artifacts.
+The script downloads `main` and compiles `hx` locally. It requires **Rust 1.90
+or newer**, plus `git` and a C/C++ compiler for tree-sitter grammars.
 
-Requirements:
-
-- Rust 1.90 or newer (`rustup` is recommended)
-- `git` and a C/C++ compiler for tree-sitter grammars
-
-This installs to `~/.local` by default:
+It installs to `~/.local` by default:
 
 - `~/.local/bin/hx` — wrapper that sets `HELIX_RUNTIME`
-- `~/.local/libexec/helix/hx` — the actual binary
+- `~/.local/libexec/helix/hx` — compiled binary
 - `~/.local/share/helix/runtime` — themes, queries, grammars
 
-Make sure `~/.local/bin` is on your `PATH`:
+If `~/.local/bin` is not already on `PATH`:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Override the prefix, branch, or grammar build:
+Useful options:
 
 ```sh
+# Different prefix
 HELIX_INSTALL_DIR="$HOME/.helix" \
   curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
 
-# Skip the slow grammar fetch/build; hx still runs without syntax grammars.
+# Skip the long grammar build; hx still works without syntax grammars
 HELIX_SKIP_GRAMMARS=1 \
   curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
 ```
 
-`HELIX_BRANCH` defaults to `main`. There are no release tags or prebuilt
-artifacts: both Homebrew and the curl installer build from the branch source.
-
-## Build and run
-
-Local builds use your `rustup` default toolchain. The fork is developed against
-Rust 1.90.0.
+Verify the installed build:
 
 ```sh
-# Run once from the repository root. HELIX_RUNTIME makes Helix use this fork's
-# runtime/ (themes, queries, and the prebuilt grammars).
-HELIX_RUNTIME="$PWD/runtime" cargo run --release -- .
-
-# Or build once and run the binary:
-cargo build --release
-export HELIX_RUNTIME="$PWD/runtime"
-./target/release/hx .
+hx --version
 ```
 
-Open a file or a workspace:
+## New Features
 
-```sh
-HELIX_RUNTIME="$PWD/runtime" ./target/release/hx src/main.rs
-HELIX_RUNTIME="$PWD/runtime" ./target/release/hx .
-```
+### File tree and sidebar
 
-To install the binary:
+`<space>b` shows and focuses the tree; press it again from the editor to hide
+it. The tree is search-first: typing filters it live with fuzzy matching.
 
-```sh
-cargo install --path helix-term --locked
-export HELIX_RUNTIME="$PWD/runtime"   # add to ~/.zshrc / ~/.bashrc if desired
-hx .
-```
-
-`runtime/grammars` is already populated in this checkout. If you move the
-binary elsewhere, either set `HELIX_RUNTIME` or symlink `runtime/` into
-`~/.config/helix/runtime`.
-
-## Default theme
-
-The default theme is **Monokai Community (Filter Spectrum)**, matching the VSCode
-theme of the same name (`monokai_pro_filter_spectrum.toml`). It is used
-unconditionally when `theme` is not set in `config.toml`. This fork targets
-modern true-color terminals (Ghostty, kitty, WezTerm, iTerm2); the fallback is
-only used if the theme file itself cannot be loaded.
-
-```toml
-# Optional: pin it explicitly, or choose another theme.
-theme = "monokai_pro_filter_spectrum"
-```
-
-`:theme monokai_pro_filter_spectrum` switches to it at runtime.
-
-## Changing the fork defaults
-
-Everything the fork adds is configurable. A complete example that changes every
-fork-specific default:
-
-```toml
-# Top-level. Omit to use Monokai Pro (Filter Spectrum); set another name to
-# replace the default theme.
-theme = "monokai_pro_filter_spectrum"
-
-[editor]
-# Session restore and automatic saving. Default: true
-restore-session = true
-
-# Reload clean buffers when files change on disk. Default: true
-auto-reload = true
-
-# Filesystem debounce in milliseconds. Default: 300
-auto-reload-debounce = 300
-
-# Always show the buffer tabs/bufferline. Default: "always"
-bufferline = "always"
-
-# Ghostty and other modern terminals support this automatically; set it only
-# if Helix does not detect it.
-true-color = true
-
-# Alphabet used by tree `gw` jump labels. Default: a-z
-# jump-label-alphabet = "abcdefghijklmnopqrstuvwxyz"
-
-[editor.sidebar]
-# Preferred/limits for the left pane, in columns. Defaults: 30/20/50
-width = 30
-min-width = 20
-max-width = 50
-
-[editor.file-explorer]
-# The tree and search use these ignore rules. Defaults shown.
-hidden = false
-follow-symlinks = false
-parents = false
-ignore = false
-git-ignore = false
-git-global = false
-git-exclude = false
-flatten-dirs = true
-
-[keys.normal]
-# Fork bindings. Defaults:
-b = "toggle_file_tree"
-B = "buffer_picker"
-# C-e = "file_picker"   # example popular VSCode-style binding
-```
-
-Notes:
-
-- `theme` is top-level; all other settings are under `[editor]` or a child
-  table.
-- `:config-reload` applies most changes without restarting.
-- The tree/search ignore behavior comes from `[editor.file-explorer]`; changing
-  those values affects both the tree and the search walker.
-- `C-b = "toggle_file_tree"` is recommended if you want the VSCode muscle
-  memory; `C-b` is otherwise `page_up`.
-- Unhandled `Ctrl`/`Alt` chords pass through from the sidebar, so custom global
-  bindings keep working while the tree or search pane is focused.
-
-## What is new in this fork
-
-### 1. Persistent file tree sidebar
-
-A VSCode-like left sidebar with three modes: **Files**, **Search**, and hidden.
-It reserves editor space rather than floating over the code, and it is fully
-keyboard driven.
-
-- `<space>b` — show/focus the Files pane, or hide it when Files is already focused.
-- `<space>/` — show/focus the Search pane.
-- `<space>e` / `<space>E` — open the file explorer at the workspace / current
-  working directory.
-- `<space>x` — close the current buffer (`:buffer-close`).
-- `<space>B` — buffer picker (moved from `<space>b`).
-- The sidebar auto-hides when the terminal cannot leave 40 columns for the editor.
-
-The tree is lazily loaded (one directory level at a time), respects the same
-ignore/hidden/symlink rules as `[editor.file-explorer]`, and refreshes when the
-filesystem changes.
-
-#### Tree keymap
-
-| Key | Action |
+| Direct key | Action |
 | --- | --- |
-| `j` / `k`, `Down` / `Up` | Move the selection |
-| `h` / `Left` | Collapse the directory, or move to its parent |
-| `l` / `Right` | Expand the directory, or open the file |
-| `Enter` / `o` | Open the selected file and focus the editor |
-| `Tab` | Open the selected file and jump to the editor; on a directory, just jump back |
+| printable characters | Live fuzzy filter |
+| `Backspace` | Delete the last query character |
+| `Ctrl-u` / `Ctrl-w` | Clear the query / delete the last query word |
+| `Down` / `Up` | Move the selection |
+| `Ctrl-Down` / `Ctrl-Up` | Smooth-scroll by `scroll-lines` (default 3) |
+| `Right` / `Left` | Expand/open, or collapse/parent |
+| `Enter` | Open the selected file and focus the editor |
+| `Tab` | Open the selected file, or return to the editor on a directory |
+| `Esc` | Clear the filter; when empty, return focus to the editor |
+
+Press `<space>` in the tree to open a which-key-style command hint box:
+
+| Space command | Action |
+| --- | --- |
+| `j` / `k` | Move down / up |
+| `h` / `l` | Collapse / expand |
+| `Enter`, `o` | Open |
 | `s` / `v` | Open in a horizontal / vertical split |
-| `gw` | Show two-letter jump labels; type two letters to jump to a row |
-| `gg` / `G` | First / last row |
-| `Ctrl-d` / `Ctrl-u` | Move ten rows down / up |
 | `a` / `A` | Create a file / directory |
 | `r` | Rename |
 | `d` | Delete (confirmation defaults to No) |
-| `<space>c` | Copy the selected file/directory |
-| `<space>m` | Cut/move the selected file/directory |
-| `<space>p` | Paste into the selected directory |
-| `<space>d` | Delete with confirmation |
-| `/` | Filter the tree; `Esc` clears the filter |
-| `zh` / `zl` | Scroll long tree rows left / right |
+| `c` / `m` / `p` | Copy / cut / paste |
 | `y` / `Y` | Copy the absolute / relative path |
-| `H` | Collapse all |
-| `R` | Refresh |
-| `.` | Reveal the current buffer in the tree |
+| `x` | Close the current buffer |
+| `w` | Show two-letter jump labels |
+| `g` / `G` | First / last row |
+| `J` / `K` | Move ten rows |
+| `H` / `R` | Collapse all / refresh |
+| `D` | Toggle dirty-files-only view |
+| `.` | Reveal the current buffer |
 | `[` / `]` | Shrink / grow the sidebar |
-| `<space>x` | Close the current buffer (same as `:buffer-close`) |
-| `q` / `Esc` | Return focus to the editor |
+| `<` / `>` | Scroll long rows left / right |
+| `q` / `Esc` | Return to the editor / close the command box |
 
-Long names are clipped at the pane boundary instead of spilling into the
-editor. The statusline shows the full path of the selected row whenever it is
-truncated; use `zh`/`zl` to scroll it horizontally.
+Additional tree behavior:
 
-Focus is indicated the way desktop editors do it: the selected row always has a
-`▍` accent bar, and the sidebar border/header become prominent while the tree
-owns focus; the inactive selection stays visible but dimmed. Themes can override
-this with `ui.tree.selected.focused`, `ui.tree.selected.unfocused`,
-`ui.tree.selected.indicator`, `ui.tree.selected.indicator.unfocused`,
-`ui.sidebar.border.focused`, and `ui.sidebar.title.focused`.
+- File-type icons and indentation guides are enabled by default. Set
+  `[editor.sidebar] icons = false` if your terminal font lacks Nerd Font glyphs.
+- Git status colors: modified files use the `diff.delta` color, untracked files
+  use `diff.plus`, conflicts use `diff.delta.conflict`, and directories inherit
+  the color of changed children. `<space>D` shows dirty files only.
+- Long names are clipped at the pane boundary; the statusline shows the full
+  selected path, and `<space><` / `<space>>` scroll long rows.
+- Focus is obvious: the selected row has a `▍` bar, the focused pane gets a
+  high-contrast border/header, and the inactive selection stays dimmed.
+- Opening a file from any picker expands and selects it in the tree.
+- `<space>x` closes the current buffer (same as `:buffer-close`).
+- `<space>e` / `<space>E` open the file explorer at the workspace / current
+  working directory.
 
-**Global shortcuts still work:** while the tree (or search pane) is focused,
-plain keys belong to the sidebar, but unhandled `Ctrl`/`Alt` chords and the
-global `<space>` menu fall through to the normal keymap. So a custom
-`Ctrl+e = "file_picker"` (or any other global binding) works from the tree, and
-`<space>b` / a configured `Ctrl+b` still toggles it. Tree-specific Space
-sequences (`c`, `m`, `p`, `d`) are consumed only while the tree has focus.
+### Search pane
 
-**VSCode-like reveal:** when a new buffer is opened or the selected buffer
-changes (next/previous buffer, picker, `:open`, etc.), the tree expands and
-selects that file. Manual tree browsing is preserved: selecting another row and
-pressing `Esc` does not snap the tree back until the focused buffer actually
-changes. `Tab` or `Enter` jumps back to the editor.
+`<space>/` opens the sidebar search pane.
 
-**Fast jumping:** `<space>b` from the editor lands on the current buffer in
-the tree (because of auto-reveal); `Enter`, `Tab`, or `Esc` goes back to the
-editor. From the tree, `Enter` opens the selected row, and `gw` + two letters
-jumps to a row without opening it.
-
-### 2. Session restore
-
-When Helix starts in a workspace, it restores the previously open buffers,
-selections, cursor positions, viewport, sidebar mode/width/expanded directories/
-selected row, and search inputs.
-
-- Restore is active when launched with no file arguments, or with a directory
-  as the first argument.
-- Explicit file arguments win and do not overwrite the saved session.
-- State is stored under `helix_loader::data_dir()/sessions/<sha256>.json`.
-- Writes are atomic; corrupt files are backed up as `.bak`.
-- Unsaved-buffer hot exit and undo history are not restored.
-
-Commands:
-
-- `:session-save`
-- `:session-clear` (also disables automatic saving for this run so quitting
-  does not recreate the file)
-
-### 3. Automatic file reload
-
-A debounced OS file watcher (`notify`) watches the parent directories of open
-documents, so atomic saves (temp file + rename) are detected.
-
-- Clean buffers reload silently and keep their selection.
-- Dirty buffers never lose text. The next idle/focus shows a menu:
-  **Keep** (default), **Reload**, **Overwrite**.
-- Saves performed by Helix are ignored via content comparison.
-- Deleted files keep their buffer and show a status message.
-- Existing `:reload` / `:reload-all` still work and clear conflict state.
-
-### 4. Workspace search and replace
-
-`<space>/` opens a VSCode-style search pane in the sidebar.
-
-- Query, replacement, and toggles: `Aa` match case, `ab` whole word, `.*` regex,
-  `AB` preserve case.
+- Visible `Find:` and `Replace:` inputs; long queries scroll inside the pane
+  instead of overflowing.
+- Empty query shows `Type to search`; no matches show `No results found`.
+- Options line: `[Aa] case`, `[ab] word`, `[.*] regex`, `[AB] keep`.
 - Results are grouped by file, streamed in, debounced, cancellable, and capped
   at 10,000 matches.
-- Open buffers are searched from memory; unopened files are read from disk.
+- Open buffers are searched from memory; other files are read from disk.
 - Results revalidate against current text before replacing.
-
-Search pane keys:
 
 | Key | Action |
 | --- | --- |
 | `Tab` | Query → Replace → Results |
-| `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve case |
+| `Space` (Results) / `Alt-Space` | Open the search-options hint box |
+| `c` / `w` / `r` / `p` (options box) | Toggle case / word / regex / preserve-case |
+| `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle the same options directly |
 | `j` / `k` | Move through results |
+| `Ctrl-Down` / `Ctrl-Up` | Smooth-scroll results |
 | `h` / `l` | Collapse / expand a file group |
-| `Enter` | Open the selected match and select it |
-| `s` / `v` | Open the selected match in a split |
+| `Enter` | Open and select the match |
+| `s` / `v` | Open the match in a split |
 | `n` / `N`, `F4` / `Shift-F4` | Next / previous match |
 | `Alt-Enter` | Select all matches in the current file |
-| `Ctrl-r` | Replace the selected match (on a file row: all in that file) |
-| `Ctrl-Alt-Enter` | Replace all matches in the result set |
+| `Ctrl-r` | Replace the selected match (or all matches in the selected file) |
+| `Ctrl-Alt-Enter` | Replace all matches |
 | `R` | Re-run the query |
 | `Esc` | Results → editor |
 
-Replace semantics:
+### Peek and code lenses
 
-- Open buffers get one in-memory, undoable transaction; they stay modified
-  until you `:w`.
-- Unopened files are re-read, re-searched, and written atomically, preserving
-  permissions and CRLF line endings. Binary/non-UTF-8 files are skipped.
-- `:search-replace-all` and `:search-replace-current` expose the same
-  operations from command mode.
+- `gP` peeks the definition; `gR` peeks references.
+- Both use a searchable floating preview picker with source preview.
+- `Enter` jumps; `Esc` closes without moving the cursor.
+- Reference peek excludes the declaration by default.
 
-## Text transforms (`F1` / `<space>t`)
+Code lenses use the same peek-style picker:
 
-A searchable VSCode-style action modal for selected text. If there is no
-selection, the transform applies to the whole buffer.
+- `<space>l` — lenses on the cursor line.
+- `<space>L` — all lenses in the file.
+- `Enter` executes the selected LSP command; `Esc` cancels.
+- The first lens on the cursor line also appears in the statusline.
+- Lenses supplied through `codeLens/resolve` are resolved automatically.
+- This fork enables `gopls.config.codelenses.test = true`, because recent gopls
+  versions disable `run test` lenses by default.
 
-Available actions:
+### Editing and workflow
 
-- Base64 encode / decode
-- Hex encode / decode
-- `UPPERCASE`, `lowercase`, `Title Case`
-- `kebab-case`, `snake_case`, `camelCase`, `PascalCase`,
-  `SCREAMING_SNAKE_CASE`, `dot.case`
-- Sort lines ascending / descending
+- **Session restore** of buffers, selections, cursor/scroll, sidebar state, and
+  search inputs per workspace.
+- **Automatic file reload** with silent reload for clean buffers and a
+  Keep/Reload/Overwrite prompt for dirty buffers.
+- **Searchable text transforms** with `F1` or `<space>t`: base64/hex encode and
+  decode, case conversions, and line sorting.
+- **Always-visible VSCode-like buffer tabs** (`bufferline = "always"`) with
+  file icons, inactive separators, bold active tabs, and a colored modified dot.
+- **Full-width powerline**: spans the tree and buffers. Left:
+  `[mode][branch][diagnostics]`; right: `[selections][total lines][indent mode]
+  [Tab/Spaces: N][encoding][line ending][file type]`.
+- **Binary-file guard**: images and other binary files are detected before
+  decoding and reported instead of rendering terminal garbage.
+- **Monokai Community (Filter Spectrum)** as the default theme.
 
-Open with `F1` or `<space>t`; type to filter, `j`/`k` or arrows to move,
-`Enter` to apply, `Esc` to cancel.
+### Defaults
 
-## Peek definition and references
-
-VSCode-like peek without leaving the buffer:
-
-- `gP` — peek definition of the symbol under the cursor
-- `gR` — peek references
-- The results open in a searchable floating picker with a file preview
-- `Enter` jumps to the selected location; `Esc` closes the peek and leaves the
-  cursor exactly where it was
-- This works for multiple results too (the same picker lists every location)
-
-The normal destructive jumps remain `gd` (definition) and `gr` (references).
-
-## LSP code lenses (run tests, runnable actions)
-
-Code lenses are the LSP mechanism VSCode uses for gopls’s `run test` /
-`run benchmark` above Go functions and rust-analyzer’s `▶ Run` lens. This fork
-adds generic code-lens support — no Go-specific or debug-adapter code.
-
-- `<space>l` — open a peek-style picker of code lenses on the cursor line
-- `<space>L` — open a peek-style picker of all code lenses in the current file
-- The first lens on the cursor line is shown in the statusline (`CodeLens`
-  statusline element, enabled by default)
-- Selecting a lens executes the LSP command via
-  `workspace/executeCommand`; server-initiated `workspace/applyEdit` is handled
-  by the existing LSP integration
-
-The picker uses the same layout and preview pane as `gP`/`gR`: `j`/`k` or
-arrows to move, typing to filter, `Enter` to execute, `Esc` to cancel. The
-preview shows the source around the selected lens. Lenses are refreshed on idle
-after edits. Code actions remain on `<space>a`; they are a different protocol.
-
-Lenses whose command is supplied lazily through `codeLens/resolve` are resolved
-automatically before the picker is shown. No inline virtual-text button is
-rendered: the picker + statusline is less intrusive for a modal editor.
-
-> **gopls note:** recent gopls versions disable the `test` code-lens source by
-> default (VS Code renders tests through its own UI). This fork's
-> `languages.toml` enables `gopls.config.codelenses.test = true`. If you
-> override the gopls configuration, keep that flag to see `run test` lenses.
-
-## Configuration
-
-Configuration lives at `~/.config/helix/config.toml` (or the path passed with
-`-c`). New settings:
+- Mouse capture is disabled by default. Enable with `mouse = true`.
+- Cursor shape: underline in Normal/Select, I-beam-style bar in Insert.
+- `cursorline`, `color-modes`, `auto-save`, and `true-color` are enabled.
+- Soft wrap is enabled; counts such as `5x` still select five real lines.
+- Indent guides are enabled with the conventional `│` character.
+- Spaces and tabs are visible by default using `·` and `→`.
+- Smooth scrolling: `Ctrl-Up` / `Ctrl-Down` moves by `scroll-lines` (default 3)
+  in the editor and in focused tree/search panes.
+- Line numbers can show both columns:
 
 ```toml
 [editor]
-# Restore buffers/selections/scroll and save automatically.
-restore-session = true
-
-# Reload clean buffers when files change on disk.
-auto-reload = true
-auto-reload-debounce = 300 # milliseconds
-
-# Always show the buffer tabs/bufferline. Default: "always"
-bufferline = "always"
-
-[editor.sidebar]
-width = 30
-min-width = 20
-max-width = 50
+line-number = "both"   # absolute, relative, or both
 ```
 
-### Binding Ctrl+B instead of <space>b
-
-`Ctrl-b` is normally `page_up`. Override it in your config:
-
-```toml
-[keys.normal]
-C-b = "toggle_file_tree"
-```
-
-`PageUp` remains available for paging. If you use tmux, remap its prefix or
-`Ctrl-b` will not reach Helix. The sidebar/search inputs own the keyboard while
-focused, so `C-b` is a normal-mode binding; `Esc` returns to the editor first.
-
-## Verification
-
-The implementation is covered by unit and integration tests:
-
-```sh
-cargo test -p helix-view
-cargo test -p helix-term --lib
-cargo test -p helix-term --features integration --test integration
-```
-
-Manual verification still matters for theme rendering and OS-specific watcher
-behavior.
-
-## Known limitations / deferred work
-
-These are deliberately out of scope for the current fork state:
-
-- No hot-exit of unsaved buffers, undo history, or split-layout restore.
-- `Compare` is not offered in the reload-conflict menu; use `:reload`/`:w!`.
-- `:w` on an unresolved conflict errors rather than opening the menu.
-- Search currently uses `ignore`'s default filters rather than the full
-  `[editor.file-explorer]` configuration, and reads whole files sequentially.
-- Bracketed paste while the sidebar is focused is not routed into the search
-  inputs.
-- BOM/non-UTF-8 file comparison in the watcher is best-effort.
-- No OS trash integration; tree delete is permanent after confirmation.
-- Binary detection is intentionally conservative: files with a UTF BOM or an
-  explicitly configured encoding are opened as text. Binary files opened from
-  the command line produce a status message and an empty scratch buffer.
-- No mouse interaction, git decorations, or LSP rename propagation from tree
-  renames.
-- Windows session replacement is not fully atomic.
-- Tree empty/unreadable placeholders and symlink-cycle deduplication are not
-  implemented.
-
-## Upstream and license
-
-This is a fork of Helix. Upstream: <https://github.com/helix-editor/helix>.
-Helix is licensed under MPL-2.0; see `LICENSE`. The new fork-specific code in
-this repository is provided under the same license.
+The `both` mode renders `relative │ absolute` side by side.

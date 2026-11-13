@@ -676,21 +676,16 @@ impl Default for StatusLineConfig {
         use StatusLineElement as E;
 
         Self {
-            left: vec![
-                E::Mode,
-                E::Spinner,
-                E::CodeLens,
-                E::FileName,
-                E::ReadOnlyIndicator,
-                E::FileModificationIndicator,
-            ],
+            left: vec![E::Mode, E::VersionControl, E::Diagnostics],
             center: vec![],
             right: vec![
-                E::Diagnostics,
                 E::Selections,
-                E::Register,
-                E::Position,
+                E::TotalLineNumbers,
+                E::IndentMode,
+                E::IndentWidth,
                 E::FileEncoding,
+                E::FileLineEnding,
+                E::FileType,
             ],
             separator: String::from("│"),
             mode: ModeConfig::default(),
@@ -753,6 +748,12 @@ pub enum StatusLineElement {
 
     /// The file indentation style
     FileIndentStyle,
+
+    /// The indentation mode (`tabs` or `spaces`)
+    IndentMode,
+
+    /// The indentation width (`Tab: N` or `Spaces: N`)
+    IndentWidth,
 
     /// The file type (language ID or "text")
     FileType,
@@ -847,7 +848,11 @@ impl std::ops::Deref for CursorShapeConfig {
 
 impl Default for CursorShapeConfig {
     fn default() -> Self {
-        Self([CursorKind::Block; 3])
+        Self([
+            CursorKind::Underline,
+            CursorKind::Underline,
+            CursorKind::Bar,
+        ])
     }
 }
 
@@ -873,6 +878,10 @@ pub enum LineNumber {
     /// If focused and in normal/select mode, show relative line number to the primary cursor.
     /// If unfocused or in insert mode, show absolute line number.
     Relative,
+
+    /// Show relative and absolute line numbers next to each other, separated by
+    /// a gray divider (`relative │ absolute`).
+    Both,
 }
 
 impl std::str::FromStr for LineNumber {
@@ -882,7 +891,8 @@ impl std::str::FromStr for LineNumber {
         match s.to_lowercase().as_str() {
             "absolute" | "abs" => Ok(Self::Absolute),
             "relative" | "rel" => Ok(Self::Relative),
-            _ => anyhow::bail!("Line number can only be `absolute` or `relative`."),
+            "both" => Ok(Self::Both),
+            _ => anyhow::bail!("Line number can only be `absolute`, `relative`, or `both`."),
         }
     }
 }
@@ -929,7 +939,16 @@ pub struct WhitespaceConfig {
 impl Default for WhitespaceConfig {
     fn default() -> Self {
         Self {
-            render: WhitespaceRender::Basic(WhitespaceRenderValue::None),
+            // Show spaces and tabs by default; leave newline markers off to
+            // avoid visual noise. `·` and `→` are the conventional choices.
+            render: WhitespaceRender::Specific {
+                default: None,
+                space: Some(WhitespaceRenderValue::All),
+                nbsp: Some(WhitespaceRenderValue::All),
+                nnbsp: Some(WhitespaceRenderValue::All),
+                tab: Some(WhitespaceRenderValue::All),
+                newline: None,
+            },
             characters: WhitespaceCharacters::default(),
         }
     }
@@ -1001,15 +1020,24 @@ impl WhitespaceRender {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AutoSave {
     /// Auto save after a delay in milliseconds. Defaults to disabled.
     #[serde(default)]
     pub after_delay: AutoSaveAfterDelay,
-    /// Auto save on focus lost. Defaults to false.
+    /// Auto save on focus lost. Defaults to true in this fork.
     #[serde(default)]
     pub focus_lost: bool,
+}
+
+impl Default for AutoSave {
+    fn default() -> Self {
+        Self {
+            after_delay: AutoSaveAfterDelay::default(),
+            focus_lost: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -1168,7 +1196,7 @@ impl Default for Config {
         Self {
             scrolloff: 5,
             scroll_lines: 3,
-            mouse: true,
+            mouse: false,
             mouse_yank_register: '*',
             shell: if cfg!(windows) {
                 vec!["cmd".to_owned(), "/C".to_owned()]
@@ -1176,7 +1204,7 @@ impl Default for Config {
                 vec!["sh".to_owned(), "-c".to_owned()]
             },
             line_number: LineNumber::Absolute,
-            cursorline: false,
+            cursorline: true,
             cursorcolumn: false,
             gutters: GutterConfig::default(),
             middle_click_paste: true,
@@ -1196,7 +1224,7 @@ impl Default for Config {
             file_explorer: FileExplorerConfig::default(),
             statusline: StatusLineConfig::default(),
             cursor_shape: CursorShapeConfig::default(),
-            true_color: false,
+            true_color: true,
             undercurl: false,
             search: SearchConfig::default(),
             lsp: LspConfig::default(),
@@ -1204,10 +1232,13 @@ impl Default for Config {
             rulers: Vec::new(),
             whitespace: WhitespaceConfig::default(),
             bufferline: BufferLine::default(),
-            indent_guides: IndentGuidesConfig::default(),
-            color_modes: false,
+            indent_guides: IndentGuidesConfig {
+                render: true,
+                ..Default::default()
+            },
+            color_modes: true,
             soft_wrap: SoftWrap {
-                enable: Some(false),
+                enable: Some(true),
                 ..SoftWrap::default()
             },
             text_width: 80,

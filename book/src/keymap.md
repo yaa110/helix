@@ -59,6 +59,8 @@ Normal mode is the default mode when you launch helix. You can return to it from
 | `End`                 | Move to the end of the line                        | `goto_line_end`             |
 | `Ctrl-b`, `PageUp`    | Move page up                                       | `page_up`                   |
 | `Ctrl-f`, `PageDown`  | Move page down                                     | `page_down`                 |
+| `Ctrl-up`             | Smooth-scroll view up by `scroll-lines`            | `scroll_up_smooth`          |
+| `Ctrl-down`           | Smooth-scroll view down by `scroll-lines`          | `scroll_down_smooth`        |
 | `Ctrl-u`              | Move cursor and page half page up                  | `page_cursor_half_up`       |
 | `Ctrl-d`              | Move cursor and page half page down                | `page_cursor_half_down`     |
 | `Ctrl-i`              | Jump forward on the jumplist                       | `jump_forward`              |
@@ -339,43 +341,56 @@ tree is focused hides the sidebar. `Esc`/`q` returns focus to the editor while
 keeping the sidebar visible. The old global-search picker is still available as
 the static `global_search` command if you want to bind it yourself.
 
-| Key             | Description                                      |
-| -----           | -----------                                      |
-| `j`, `k`, `Down`, `Up` | Move the selection                        |
-| `h`, `Left`     | Collapse the directory, or move to its parent    |
-| `l`, `Right`    | Expand the directory, or open the file           |
-| `Enter`, `o`    | Open the file                                    |
-| `Tab`           | Open the file and return to the editor           |
-| `s`, `v`        | Open in a horizontal / vertical split            |
-| `gw`            | Show two-letter jump labels, then type a label   |
-| `gg`, `G`       | First / last row                                 |
-| `a`, `A`        | Create a file / directory                        |
-| `r`             | Rename                                           |
-| `d`             | Delete (confirmation defaults to No)             |
-| `Space` `c`     | Copy the selected file/directory                 |
-| `Space` `m`     | Cut/move the selected file/directory             |
-| `Space` `p`     | Paste into the selected directory                |
-| `Space` `d`     | Delete (confirmation defaults to No)             |
-| `/`             | Filter the tree; `Esc` clears the filter         |
-| `zh`, `zl`      | Scroll long tree rows left / right               |
-| `y`, `Y`        | Copy the absolute / relative path                |
-| `Ctrl-d`, `Ctrl-u` | Move half a page                              |
-| `H`             | Collapse all                                     |
-| `R`             | Refresh the tree                                 |
-| `.`             | Reveal the current buffer                        |
-| `[`, `]`        | Shrink / grow the sidebar                        |
+The tree is search-first: plain typing is a live fuzzy filter. Tree actions
+live behind `Space`, which opens a which-key-style hint box.
+
+| Direct key        | Description                                      |
+| -----             | -----------                                      |
+| printable text    | Live fuzzy filter                                |
+| `Backspace`       | Delete the last query character                  |
+| `Ctrl-u`, `Ctrl-w`| Clear the query / delete the last query word     |
+| `Down`, `Up`      | Move the selection                               |
+| `Ctrl-Down`, `Ctrl-Up` | Smooth-scroll by `scroll-lines`             |
+| `Right`, `Left`   | Expand/open, or collapse/parent                  |
+| `Enter`           | Open the file                                    |
+| `Tab`             | Open the file, or return to the editor           |
+| `Esc`             | Clear the filter, then return to the editor      |
+
+`Space` commands:
+
+| Key               | Description                                      |
+| -----             | -----------                                      |
+| `j`, `k`          | Move down / up                                   |
+| `h`, `l`          | Collapse / expand                                |
+| `Enter`, `o`      | Open the file                                    |
+| `s`, `v`          | Open in a horizontal / vertical split            |
+| `a`, `A`          | Create a file / directory                        |
+| `r`               | Rename                                           |
+| `d`               | Delete (confirmation defaults to No)             |
+| `c`, `m`, `p`     | Copy / cut / paste                               |
+| `y`, `Y`          | Copy the absolute / relative path                |
+| `x`               | Close the current buffer                         |
+| `w`               | Show two-letter jump labels                      |
+| `g`, `G`          | First / last row                                 |
+| `J`, `K`          | Move ten rows                                    |
+| `H`, `R`          | Collapse all / refresh                           |
+| `D`               | Toggle dirty-files-only view                     |
+| `.`               | Reveal the current buffer                        |
+| `[`, `]`          | Shrink / grow the sidebar                        |
+| `<`, `>`          | Scroll long tree rows left / right               |
+| `q`, `Esc`        | Return to the editor / close the command box     |
 
 When a new buffer is opened or the focused buffer changes, the tree expands
 ancestors and selects that file. Manually selecting a different row is preserved
 when focus returns to the editor; it only snaps back when the focused buffer
 changes.
 
-Unhandled `Ctrl`/`Alt` chords and the global `Space` menu are passed through to
-the normal keymap while the sidebar is focused, so custom global bindings (for
-example `C-e = "file_picker"`) and `<space>e` work from the tree. Plain keys are
-owned by the sidebar; only the tree-specific `Space` sequences (`c`, `m`, `p`,
-`d`) are intercepted. Tree rows are clipped at the pane edge and the statusline
-shows the full path when the selected row is too long; use `zh`/`zl` to scroll.
+Unhandled `Ctrl`/`Alt` chords are passed through to the normal keymap while the
+sidebar is focused, so custom global bindings (for example
+`C-e = "file_picker"`) work from the tree. `Space` is owned by the tree command
+box; focus the editor first to use the global `Space` menu. Tree rows are
+clipped at the pane edge and the statusline shows the full path when the
+selected row is too long; use `Space` `<` / `Space` `>` to scroll.
 
 The selected row always shows a `▍` accent bar. While the tree is focused the
 sidebar border/header are bold/accented and the row uses the focused selection

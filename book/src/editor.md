@@ -30,14 +30,14 @@
 | Key | Description | Default |
 |--|--|---------|
 | `scrolloff` | Number of lines of padding around the edge of the screen when scrolling | `5` |
-| `mouse` | Enable mouse mode | `true` |
+| `mouse` | Enable mouse mode | `false` |
 | `mouse-yank-register` | Which register to use for mouse yanks. | `*` |
 | `middle-click-paste` | Middle click paste support | `true` |
 | `default-yank-register` | Default register used for yank/paste | `'"'` |
 | `scroll-lines` | Number of lines to scroll per scroll wheel step | `3` |
 | `shell` | Shell to use when running external commands | Unix: `["sh", "-c"]`<br/>Windows: `["cmd", "/C"]` |
-| `line-number` | Line number display: `absolute` simply shows each line's number, while `relative` shows the distance from the current line. When unfocused or in insert mode, `relative` will still show absolute line numbers | `"absolute"` |
-| `cursorline` | Highlight all lines with a cursor | `false` |
+| `line-number` | Line number display: `absolute` shows each line's number, `relative` shows the distance from the current line, and `both` shows `relative │ absolute` side by side. When unfocused or in insert mode, `relative` will still show absolute line numbers | `"absolute"` |
+| `cursorline` | Highlight all lines with a cursor | `true` |
 | `cursorcolumn` | Highlight all columns with a cursor | `false` |
 | `continue-comments` | if helix should automatically add a line comment token if you create a new line inside a comment. | `true` |
 | `gutters` | Gutters to display: Available are `diagnostics` and `diff` and `line-numbers` and `spacer` and `code-action-hint`, note that `diagnostics` also includes other features like breakpoints, 1-width padding will be inserted if gutters is non-empty | `["diagnostics", "spacer", "line-numbers", "spacer", "diff"]` |
@@ -50,11 +50,11 @@
 | `completion-trigger-len` | The min-length of word under cursor to trigger autocompletion | `2` |
 | `completion-replace` | Whether to make completions always replace the entire word and not just the part before the cursor | `false` |
 | `auto-info` | Whether to display info boxes | `true` |
-| `true-color` | Whether to override automatic detection of terminal truecolor support in the event of a false negative | `false` |
+| `true-color` | Whether to override automatic detection of terminal truecolor support in the event of a false negative | `true` |
 | `undercurl` | Whether to override automatic detection of terminal undercurl support in the event of a false negative | `false` |
 | `rulers` | List of column positions at which to display the rulers. Can be overridden by language specific `rulers` in `languages.toml` file | `[]` |
-| `bufferline` | Renders a line at the top of the editor displaying open buffers. Can be `always`, `never` or `multiple` (only shown if more than one buffer is in use) | `"never"` |
-| `color-modes` | Whether to color the mode indicator with different colors depending on the mode itself | `false` |
+| `bufferline` | Renders a line at the top of the editor displaying open buffers. Can be `always`, `never` or `multiple` (only shown if more than one buffer is in use) | `"always"` |
+| `color-modes` | Whether to color the mode indicator with different colors depending on the mode itself | `true` |
 | `text-width` | Maximum line length. Used for the `:reflow` command and soft-wrapping if `soft-wrap.wrap-at-text-width` is set | `80` |
 | `workspace-lsp-roots` | Directories relative to the workspace root that are treated as LSP roots. Should only be set in `.helix/config.toml` | `[]` |
 | `default-line-ending` | The line ending to use for new documents. Can be `native`, `lf`, `crlf`, `ff`, `cr` or `nel`. `native` uses the platform's native line ending (`crlf` on Windows, otherwise `lf`). | `"native"` |
@@ -122,9 +122,9 @@ The `[editor.statusline]` key takes the following sub-keys:
 
 | Key           | Description | Default |
 | ---           | ---         | ---     |
-| `left`        | A list of elements aligned to the left of the statusline | `["mode", "spinner", "file-name", "read-only-indicator", "file-modification-indicator"]` |
+| `left`        | A list of elements aligned to the left of the statusline | `["mode", "version-control", "diagnostics"]` |
 | `center`      | A list of elements aligned to the middle of the statusline | `[]` |
-| `right`       | A list of elements aligned to the right of the statusline | `["diagnostics", "selections", "register", "position", "file-encoding"]` |
+| `right`       | A list of elements aligned to the right of the statusline | `["selections", "total-line-numbers", "indent-mode", "indent-width", "file-encoding", "file-line-ending", "file-type"]` |
 | `separator`   | The character used to separate elements in the statusline | `"│"` |
 | `mode.normal` | The text shown in the `mode` element for normal mode | `"NOR"` |
 | `mode.insert` | The text shown in the `mode` element for insert mode | `"INS"` |
@@ -143,9 +143,11 @@ The following statusline elements can be configured:
 | `file-base-name` | The basename of the opened file |
 | `current-working-directory` | The current working directory  |
 | `file-modification-indicator` | The indicator to show whether the file is modified (a `[+]` appears when there are unsaved changes) |
-| `file-encoding` | The encoding of the opened file if it differs from UTF-8 |
+| `file-encoding` | The encoding of the opened file |
 | `file-line-ending` | The file line endings (CRLF or LF) |
-| `file-indent-style` | The file indentation style |
+| `file-indent-style` | The file indentation style (combined width and mode) |
+| `indent-mode` | Whether the file uses `tabs` or `spaces` |
+| `indent-width` | `Tab: N` or `Spaces: N` for the file indentation |
 | `read-only-indicator` | An indicator that shows `[readonly]` when a file cannot be written |
 | `total-line-numbers` | The total line numbers of the opened file |
 | `file-type` | The type of the opened file |
@@ -191,9 +193,9 @@ Valid values for these options are `block`, `bar`, `underline`, or `hidden`.
 
 | Key      | Description                                | Default   |
 | ---      | -----------                                | -------   |
-| `normal` | Cursor shape in [normal mode][normal mode] | `"block"` |
-| `insert` | Cursor shape in [insert mode][insert mode] | `"block"` |
-| `select` | Cursor shape in [select mode][select mode] | `"block"` |
+| `normal` | Cursor shape in [normal mode][normal mode] | `"underline"` |
+| `insert` | Cursor shape in [insert mode][insert mode] | `"bar"` |
+| `select` | Cursor shape in [select mode][select mode] | `"underline"` |
 
 [normal mode]: ./keymap.md#normal-mode
 [insert mode]: ./keymap.md#insert-mode
@@ -316,7 +318,7 @@ Control auto save behavior.
 
 | Key | Description | Default |
 |--|--|---------|
-| `focus-lost` | Enable automatic saving on the focus moving away from Helix. Requires [focus event support](https://github.com/helix-editor/helix/wiki/Terminal-Support) from your terminal | `false` |
+| `focus-lost` | Enable automatic saving on the focus moving away from Helix. Requires [focus event support](https://github.com/helix-editor/helix/wiki/Terminal-Support) from your terminal | `true` |
 | `after-delay.enable` | Enable automatic saving after `auto-save.after-delay.timeout` milliseconds have passed since last edit. | `false` |
 | `after-delay.timeout` | Time in milliseconds since last edit before auto save timer triggers. | `3000` |
 
@@ -335,7 +337,7 @@ Options for rendering whitespace with visible characters. Use `:set whitespace.r
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `render` | Whether to render whitespace. May either be `all` or `none`, or a table with sub-keys `space`, `nbsp`, `nnbsp`, `tab`, and `newline` | `"none"` |
+| `render` | Whether to render whitespace. May either be `all` or `none`, or a table with sub-keys `space`, `nbsp`, `nnbsp`, `tab`, and `newline` | `space`, `nbsp`, `nnbsp`, and `tab` enabled |
 | `characters` | Literal characters to use when rendering whitespace. Sub-keys may be any of `tab`, `space`, `nbsp`, `nnbsp`, `newline` or `tabpad` | See example below |
 
 Example
@@ -366,7 +368,7 @@ Options for rendering vertical indent guides.
 
 | Key           | Description                                             | Default |
 | ---           | ---                                                     | ---     |
-| `render`      | Whether to render indent guides                         | `false` |
+| `render`      | Whether to render indent guides                         | `true`  |
 | `character`   | Literal character to use for rendering the indent guide | `"│"`   |
 | `skip-levels` | Number of indent levels to skip                         | `0`     |
 
@@ -448,7 +450,7 @@ Options for soft wrapping lines that exceed the view width:
 
 | Key                  | Description                                                  | Default |
 | ---                  | ---                                                          | ---     |
-| `enable`             | Whether soft wrapping is enabled.                            | `false` |
+| `enable`             | Whether soft wrapping is enabled.                            | `true`  |
 | `max-wrap`           | Maximum free space left at the end of the line.              | `20`    |
 | `max-indent-retain`  | Maximum indentation to carry over when soft wrapping a line. | `40`    |
 | `wrap-indicator`     | Text inserted before soft wrapped lines, highlighted with `ui.virtual.wrap` | `"↪ "`    |

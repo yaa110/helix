@@ -1,5 +1,5 @@
 use helix_core::indent::IndentStyle;
-use helix_core::{coords_at_pos, encoding, unicode::width::UnicodeWidthStr, Position};
+use helix_core::{coords_at_pos, unicode::width::UnicodeWidthStr, Position};
 use helix_lsp::lsp::DiagnosticSeverity;
 use helix_view::document::DEFAULT_LANGUAGE_NAME;
 use helix_view::{
@@ -143,6 +143,8 @@ where
         helix_view::editor::StatusLineElement::FileEncoding => render_file_encoding,
         helix_view::editor::StatusLineElement::FileLineEnding => render_file_line_ending,
         helix_view::editor::StatusLineElement::FileIndentStyle => render_file_indent_style,
+        helix_view::editor::StatusLineElement::IndentMode => render_indent_mode,
+        helix_view::editor::StatusLineElement::IndentWidth => render_indent_width,
         helix_view::editor::StatusLineElement::FileType => render_file_type,
         helix_view::editor::StatusLineElement::Diagnostics => render_diagnostics,
         helix_view::editor::StatusLineElement::WorkspaceDiagnostics => render_workspace_diagnostics,
@@ -426,11 +428,10 @@ fn render_file_encoding<'a, F>(context: &mut RenderContext<'a>, write: F)
 where
     F: Fn(&mut RenderContext<'a>, Span<'a>) + Copy,
 {
-    let enc = context.doc.encoding();
-
-    if enc != encoding::UTF_8 {
-        write(context, format!(" {} ", enc.name()).into());
-    }
+    write(
+        context,
+        format!(" {} ", context.doc.encoding().name()).into(),
+    );
 }
 
 fn render_file_line_ending<'a, F>(context: &mut RenderContext<'a>, write: F)
@@ -566,8 +567,9 @@ where
         .version_control_head()
         .unwrap_or_default()
         .to_string();
-
-    write(context, head.into());
+    if !head.is_empty() {
+        write(context, format!(" {head} ").into());
+    }
 }
 
 fn render_register<'a, F>(context: &mut RenderContext<'a>, write: F)
@@ -594,6 +596,28 @@ where
             }
         },
     );
+}
+
+fn render_indent_mode<'a, F>(context: &mut RenderContext<'a>, write: F)
+where
+    F: Fn(&mut RenderContext<'a>, Span<'a>) + Copy,
+{
+    let mode = match context.doc.indent_style {
+        IndentStyle::Tabs => " tabs ",
+        IndentStyle::Spaces(_) => " spaces ",
+    };
+    write(context, mode.into());
+}
+
+fn render_indent_width<'a, F>(context: &mut RenderContext<'a>, write: F)
+where
+    F: Fn(&mut RenderContext<'a>, Span<'a>) + Copy,
+{
+    let width = match context.doc.indent_style {
+        IndentStyle::Tabs => format!(" Tab: {} ", context.doc.tab_width()),
+        IndentStyle::Spaces(indent) => format!(" Spaces: {indent} "),
+    };
+    write(context, width.into());
 }
 
 fn render_cwd<'a, F>(context: &mut RenderContext<'a>, write: F)
