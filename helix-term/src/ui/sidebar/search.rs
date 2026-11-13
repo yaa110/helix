@@ -927,17 +927,24 @@ impl SearchPane {
                         search::replacement_for(None, &matched.text, &inputs.replacement, options)
                     });
                 let relative = path.strip_prefix(&cx.editor.workspace_root).unwrap_or(path);
+                let line = if matched.preview.is_empty() {
+                    matched.text.as_str()
+                } else {
+                    matched.preview.as_str()
+                };
+                let (old_context, new_context) =
+                    replace_context(line, matched.col, matched.text.len(), &replacement);
                 body.push(format!(
                     "- {}:{}  {}",
                     relative.display(),
                     matched.line + 1,
-                    matched.text
+                    old_context
                 ));
                 body.push(format!(
                     "+ {}:{}  {}",
                     relative.display(),
                     matched.line + 1,
-                    replacement
+                    new_context
                 ));
                 matches += 1;
                 included_any = true;
@@ -1365,6 +1372,63 @@ impl SearchPane {
     }
 }
 
+/// Show the match inside its surrounding line. Very long lines are clipped
+/// around the match so the changed text stays visible in the modal.
+fn replace_context(
+    line: &str,
+    column: usize,
+    match_len: usize,
+    replacement: &str,
+) -> (String, String) {
+    if line.is_empty() {
+        return (
+            String::new(),
+            replacement.replace('\r', "").replace('\n', "⏎"),
+        );
+    }
+
+    let mut start = column.min(line.len());
+    while start > 0 && !line.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = (start + match_len).min(line.len());
+    while end < line.len() && !line.is_char_boundary(end) {
+        end += 1;
+    }
+
+    let mut clip_start = start.saturating_sub(50);
+    while clip_start > 0 && !line.is_char_boundary(clip_start) {
+        clip_start -= 1;
+    }
+    let mut clip_end = (end + 50).min(line.len());
+    while clip_end < line.len() && !line.is_char_boundary(clip_end) {
+        clip_end += 1;
+    }
+
+    let mut old = String::new();
+    if clip_start > 0 {
+        old.push('…');
+    }
+    old.push_str(&line[clip_start..clip_end]);
+    if clip_end < line.len() {
+        old.push('…');
+    }
+
+    let replacement = replacement.replace('\r', "").replace('\n', "⏎");
+    let mut new = String::new();
+    if clip_start > 0 {
+        new.push('…');
+    }
+    new.push_str(&line[clip_start..start]);
+    new.push_str(&replacement);
+    new.push_str(&line[end..clip_end]);
+    if clip_end < line.len() {
+        new.push('…');
+    }
+
+    (old, new)
+}
+
 fn open_match_with_action(
     editor: &mut Editor,
     matched: &Match,
@@ -1384,4 +1448,27 @@ fn open_match_with_action(
     editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
     editor.sidebar.search_modal = false;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replace_context;
+
+    #[test]
+    fn replace_preview_keeps_surrounding_text() {
+        let (old, new) = replace_context("before test after", 7, 4, "aaa");
+        assert_eq!(old, "before test after");
+        assert_eq!(new, "before aaa after");
+    }
+
+    #[test]
+    fn replace_preview_clips_long_lines() {
+        let line = format!("{}test{}", "a".repeat(80), "b".repeat(80));
+        let (old, new) = replace_context(&line, 80, 4, "x");
+        assert!(old.starts_with('…'));
+        assert!(old.ends_with('…'));
+        assert!(new.starts_with('…'));
+        assert!(new.ends_with('…'));
+        assert!(new.contains("x"));
+    }
 }
