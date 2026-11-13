@@ -72,19 +72,27 @@ brew tap yaa110/helix https://github.com/yaa110/helix
 brew install yaa110/helix/helix
 ```
 
-The formula builds from the `master` branch and installs `hx` plus this fork's
+The formula builds from the `main` branch and installs `hx` plus this fork's
 runtime (themes, queries, grammars) under Homebrew's prefix.
 
 ```sh
-# After new commits on master:
+# After new commits on main:
 brew reinstall yaa110/helix/helix
 ```
 
 ### curl installer
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yaa110/helix/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
 ```
+
+The installer downloads the source and builds `hx` locally with Cargo. It does
+not depend on GitHub Releases or prebuilt artifacts.
+
+Requirements:
+
+- Rust 1.90 or newer (`rustup` is recommended)
+- `git` and a C/C++ compiler for tree-sitter grammars
 
 This installs to `~/.local` by default:
 
@@ -98,26 +106,24 @@ Make sure `~/.local/bin` is on your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Override the prefix or version:
+Override the prefix, branch, or grammar build:
 
 ```sh
 HELIX_INSTALL_DIR="$HOME/.helix" \
-HELIX_VERSION=v0.1.0 \
-  curl -fsSL https://raw.githubusercontent.com/yaa110/helix/master/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
+
+# Skip the slow grammar fetch/build; hx still runs without syntax grammars.
+HELIX_SKIP_GRAMMARS=1 \
+  curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
 ```
 
-Prebuilt releases are provided for:
-
-- `x86_64-unknown-linux-gnu`
-- `aarch64-unknown-linux-gnu`
-- `x86_64-apple-darwin`
-- `aarch64-apple-darwin`
-
-The release workflow only runs when a `v*` tag is pushed.
+`HELIX_BRANCH` defaults to `main`. There are no release tags or prebuilt
+artifacts: both Homebrew and the curl installer build from the branch source.
 
 ## Build and run
 
-Local builds use your `rustup` default toolchain. CI builds with Rust 1.90.0.
+Local builds use your `rustup` default toolchain. The fork is developed against
+Rust 1.90.0.
 
 ```sh
 # Run once from the repository root. HELIX_RUNTIME makes Helix use this fork's

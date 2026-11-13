@@ -1,72 +1,74 @@
 #!/bin/sh
-# Install the prebuilt hx binary from the yaa110/helix GitHub releases.
+# Build and install hx from the yaa110/helix source tree.
 #
-#   curl -fsSL https://raw.githubusercontent.com/yaa110/helix/master/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/yaa110/helix/main/install.sh | sh
+#
+# This intentionally does not depend on GitHub Releases: the source is
+# downloaded, compiled locally with Cargo, and the runtime is installed next to
+# the binary.
 #
 # Optional environment variables:
-#   HELIX_INSTALL_DIR  install prefix (default: $HOME/.local)
-#   HELIX_VERSION      release tag, e.g. v0.1.0 (default: latest)
-#   HELIX_REPO         GitHub repo (default: yaa110/helix)
+#   HELIX_INSTALL_DIR   install prefix (default: $HOME/.local)
+#   HELIX_BRANCH        source branch to build (default: main)
+#   HELIX_REPO          GitHub repo (default: yaa110/helix)
+#   HELIX_SKIP_GRAMMARS set to 1 to skip fetching/building tree-sitter grammars
 
 set -eu
 
 repo="${HELIX_REPO:-yaa110/helix}"
-version="${HELIX_VERSION:-latest}"
+branch="${HELIX_BRANCH:-main}"
 prefix="${HELIX_INSTALL_DIR:-$HOME/.local}"
 
-os="$(uname -s)"
-arch="$(uname -m)"
+if ! command -v cargo >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+cargo was not found.
 
-case "$os-$arch" in
-  Darwin-arm64|Darwin-aarch64)
-    target="aarch64-apple-darwin"
-    ;;
-  Darwin-x86_64)
-    target="x86_64-apple-darwin"
-    ;;
-  Linux-x86_64|Linux-amd64)
-    target="x86_64-unknown-linux-gnu"
-    ;;
-  Linux-aarch64|Linux-arm64)
-    target="aarch64-unknown-linux-gnu"
-    ;;
-  *)
-    echo "unsupported platform: $os $arch" >&2
-    exit 1
-    ;;
-esac
+Install Rust (1.90 or newer) first:
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-asset="hx-$target.tar.gz"
-if [ "$version" = "latest" ]; then
-  base="https://github.com/$repo/releases/latest/download"
-else
-  base="https://github.com/$repo/releases/download/$version"
+Then restart your shell (or source ~/.cargo/env) and run this installer again.
+EOF
+  exit 1
 fi
+
+if [ "${HELIX_SKIP_GRAMMARS:-0}" != "1" ]; then
+  missing=""
+  for tool in git cc c++; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      missing="$missing $tool"
+    fi
+  done
+  if [ -n "$missing" ]; then
+    cat >&2 <<EOF
+Missing build tools:$missing
+
+Tree-sitter grammars need git and a C/C++ compiler. Install them, or rerun
+with HELIX_SKIP_GRAMMARS=1 to install hx without grammars.
+EOF
+    exit 1
+  fi
+fi
+
+source_url="https://github.com/$repo/archive/refs/heads/$branch.tar.gz"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-echo "Downloading $asset from $repo ($version)..."
-curl -fL "$base/$asset" -o "$tmp/$asset"
+echo "Downloading $repo ($branch) source..."
+curl -fL "$source_url" -o "$tmp/source.tar.gz"
 
-if curl -fsL "$base/$asset.sha256" -o "$tmp/$asset.sha256"; then
-  (
-    cd "$tmp"
-    if command -v sha256sum >/dev/null 2>&1; then
-      sha256sum -c "$asset.sha256"
-    else
-      shasum -a 256 -c "$asset.sha256"
-    fi
-  )
-fi
+mkdir -p "$tmp/src"
+tar -xzf "$tmp/source.tar.gz" -C "$tmp/src" --strip-components=1
 
-tar -xzf "$tmp/$asset" -C "$tmp"
+echo "Building hx from source (this can take several minutes)..."
+CARGO_TARGET_DIR="$tmp/target" \
+  cargo install --locked --path "$tmp/src/helix-term" --root "$tmp/install"
 
 mkdir -p "$prefix/bin" "$prefix/libexec/helix" "$prefix/share/helix"
+install -m 755 "$tmp/install/bin/hx" "$prefix/libexec/helix/hx"
 
-install -m 755 "$tmp/hx" "$prefix/libexec/helix/hx"
 rm -rf "$prefix/share/helix/runtime"
-mv "$tmp/runtime" "$prefix/share/helix/runtime"
+cp -R "$tmp/src/runtime" "$prefix/share/helix/runtime"
 
 cat > "$prefix/bin/hx" <<EOF
 #!/bin/sh
@@ -74,9 +76,23 @@ HELIX_RUNTIME="\${HELIX_RUNTIME:-$prefix/share/helix/runtime}" exec "$prefix/lib
 EOF
 chmod +x "$prefix/bin/hx"
 
+if [ "${HELIX_SKIP_GRAMMARS:-0}" = "1" ]; then
+  echo "Skipping tree-sitter grammars (HELIX_SKIP_GRAMMARS=1)."
+  echo "You can build them later with:"
+  echo "  HELIX_RUNTIME=\"$prefix/share/helix/runtime\" $prefix/libexec/helix/hx --grammar fetch"
+  echo "  HELIX_RUNTIME=\"$prefix/share/helix/runtime\" $prefix/libexec/helix/hx --grammar build"
+else
+  runtime="$prefix/share/helix/runtime"
+  echo "Fetching tree-sitter grammars (this may take a while)..."
+  HELIX_RUNTIME="$runtime" "$prefix/libexec/helix/hx" --grammar fetch
+  echo "Building tree-sitter grammars..."
+  HELIX_RUNTIME="$runtime" "$prefix/libexec/helix/hx" --grammar build
+fi
+
 echo
 echo "Installed hx to $prefix/bin/hx"
 echo "Runtime: $prefix/share/helix/runtime"
+"$prefix/bin/hx" --version
 case ":$PATH:" in
   *":$prefix/bin:"*) ;;
   *)
