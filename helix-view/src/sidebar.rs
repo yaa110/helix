@@ -25,7 +25,7 @@ pub enum SidebarFocus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct SidebarConfig {
-    /// Preferred sidebar width in columns. Defaults to 36.
+    /// Preferred sidebar width in columns. Defaults to 34.
     pub width: u16,
     /// Minimum width when resolving/clamping. Defaults to 20.
     pub min_width: u16,
@@ -38,7 +38,7 @@ pub struct SidebarConfig {
 impl Default for SidebarConfig {
     fn default() -> Self {
         Self {
-            width: 36,
+            width: 34,
             min_width: 20,
             max_width: 50,
             git_status: true,
@@ -140,8 +140,8 @@ mod tests {
         assert_eq!(state.visible_width(120, &cfg), 0);
 
         state.mode = SidebarMode::Files;
-        assert_eq!(state.visible_width(75, &cfg), 0); // 36 + 40 editor minimum
-        assert_eq!(state.visible_width(76, &cfg), 36);
+        assert_eq!(state.visible_width(73, &cfg), 0); // 34 + 40 editor minimum
+        assert_eq!(state.visible_width(74, &cfg), 34);
     }
 
     #[test]
