@@ -694,7 +694,7 @@ impl EditorView {
             .unwrap_or(0);
 
         // Keep the active tab visible by scrolling the tab strip when needed.
-        let label_for = |doc: &Document, index: usize| {
+        let label_for = |doc: &Document| {
             let path = doc.path().unwrap_or(&scratch);
             let fname = path
                 .file_name()
@@ -702,12 +702,11 @@ impl EditorView {
                 .to_str()
                 .unwrap_or_default();
             let icon = crate::ui::icons::file_icon(path);
-            format!(" {} {icon} {fname} ", index + 1)
+            format!(" {icon} {fname} ")
         };
         let widths: Vec<usize> = docs
             .iter()
-            .enumerate()
-            .map(|(index, doc)| label_for(doc, index).width() + usize::from(doc.is_modified()) * 3)
+            .map(|doc| label_for(doc).width() + usize::from(doc.is_modified()) * 3)
             .collect();
         let mut start = 0;
         while start < current_index {
