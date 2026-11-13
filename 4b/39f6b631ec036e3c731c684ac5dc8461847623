@@ -1,0 +1,18 @@
+README.md
+  h_20fc4d483d1064 344-347
+helix-term/src/config.rs
+  h_20fc4d483d1064 213-223
+helix-view/src/editor.rs
+  h_20fc4d483d1064 1290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b39f6b631ec036e3c731c684ac5dc8461847623",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
