@@ -224,8 +224,10 @@ Code lenses use the same peek-style picker:
 - **Startup panes**: opening a file, stdin, or a git commit message starts with
   the tree and tabs hidden; opening a folder restores the last global pane
   layout. `<space>T` toggles the tab bar, and pane visibility is saved globally
-  (not per workspace). Directory startup no longer opens the slow file picker,
-  and git status is collected in a background worker.
+  (not per workspace) for folder sessions. File launches never persist their
+  temporary hidden panes, so a later `hx .` is not mistaken for a single-file
+  launch. Directory startup no longer opens the slow file picker, and git
+  status is collected in a background worker.
 - **Binary-file guard**: images and other binary files are detected before
   decoding and reported instead of rendering terminal garbage.
 - **Monokai Community (Filter Spectrum)** as the default theme, with token

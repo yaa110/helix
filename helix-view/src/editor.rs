@@ -1395,6 +1395,10 @@ pub struct Editor {
     pub session_dirty: bool,
     /// Whether session restore/save is active for this launch.
     pub session_active: bool,
+    /// Whether pane visibility changes may update the global UI state. File
+    /// launches force the tree/tabs hidden, so those transient values must not
+    /// leak into the next workspace launch.
+    pub ui_state_persist: bool,
     /// Per-workspace session storage.
     pub session_store: SessionStore,
     /// Documents that changed on disk while modified.
@@ -1536,6 +1540,7 @@ impl Editor {
             bufferline_visible: true,
             session_dirty: false,
             session_active: false,
+            ui_state_persist: true,
             session_store: SessionStore::default(),
             reload_conflicts: BTreeMap::new(),
         }
@@ -1702,6 +1707,9 @@ impl Editor {
     }
 
     pub fn save_ui_state(&self) {
+        if !self.ui_state_persist {
+            return;
+        }
         let mut state = crate::ui_state::UiState::load();
         state.sidebar_mode = self.sidebar.mode;
         state.bufferline_visible = self.bufferline_visible;

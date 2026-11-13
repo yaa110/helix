@@ -3849,6 +3849,7 @@ fn toggle_file_tree(cx: &mut Context) {
 
 fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     let _ = editor.save_session_if_active();
+    editor.ui_state_persist = !cfg!(feature = "integration");
     let docs: Vec<_> = editor.documents().map(|doc| doc.id()).collect();
     for doc_id in docs {
         let _ = editor.close_document(doc_id, true);

@@ -180,6 +180,10 @@ impl Application {
         editor.workspace_root = workspace_root;
         editor.session_store = session_store;
         editor.session_active = session_active;
+        // Only folder launches represent a reusable pane layout. File launches
+        // temporarily hide the tree and tabs; saving that would hide them for
+        // the next `hx .` launch too.
+        editor.ui_state_persist = !cfg!(feature = "integration") && session_active;
 
         // Initialize the job queue before restoring the session. Focus events
         // dispatched during restore can enqueue blocking jobs; starting the
@@ -343,8 +347,10 @@ impl Application {
             editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             editor.bufferline_visible = ui_state.bufferline_visible;
             ui_state.record_workspace(editor.workspace_root.clone());
-            if let Err(err) = ui_state.save() {
-                log::warn!("failed to record recent workspace: {err}");
+            if editor.ui_state_persist {
+                if let Err(err) = ui_state.save() {
+                    log::warn!("failed to record recent workspace: {err}");
+                }
             }
         }
 
