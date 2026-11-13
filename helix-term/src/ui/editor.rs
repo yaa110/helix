@@ -741,7 +741,7 @@ impl EditorView {
                 }
             }
 
-            let label = label_for(doc, index);
+            let label = label_for(doc);
             let active_tab = current_doc == doc.id();
             let style = if active_tab { active } else { inactive };
             if active_tab {
