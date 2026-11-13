@@ -199,8 +199,9 @@ Code lenses use the same peek-style picker:
   search inputs per workspace.
 - **Automatic file reload** with silent reload for clean buffers and a
   Keep/Reload/Overwrite prompt for dirty buffers.
-- **Searchable text transforms** with `F1` or `<space>t`: base64/hex encode and
-  decode, case conversions, and line sorting.
+- **F1 action picker** (`F1` or `<space>t`): base64/hex encode/decode, case
+  conversions, line sorting, minify/beautify, format document, and create
+  file/folder from a relative path (parent folders are created automatically).
 - **Always-visible Zellij-style buffer tabs** (`bufferline = "always"`):
   numbered compact tabs, muted separators, an accent-colored active pill
   (no bold/underline), and a modified dot. The active tab stays visible when
@@ -237,7 +238,9 @@ Code lenses use the same peek-style picker:
     encoding, line ending, indentation style, file type
   - diagnostics severity: warning, error, hint
 - Soft wrap is enabled; wrapped rows count as one logical line for `j`/`k`,
-  arrow keys, selections, and counts such as `5x`.
+  arrow keys, selections, and counts such as `5x`. The wrap marker is shown in
+  the gutter with the same muted color as whitespace markers, so code and
+  underlines are not shifted.
 - Indent guides are enabled with `▏`, skipping the first level.
 - Spaces and tabs are visible by default using `·` and `→`; NBSP, narrow
   NBSP, and newline markers are off.

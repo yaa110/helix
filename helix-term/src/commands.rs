@@ -3361,6 +3361,162 @@ impl TransformAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum F1Action {
+    Transform(TransformAction),
+    Minify,
+    Beautify,
+    Format,
+    NewFile,
+    NewFolder,
+}
+
+impl F1Action {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Transform(action) => action.label(),
+            Self::Minify => "Minify document",
+            Self::Beautify => "Beautify document",
+            Self::Format => "Format document",
+            Self::NewFile => "Create new file…",
+            Self::NewFolder => "Create new folder…",
+        }
+    }
+}
+
+fn apply_document_text(
+    editor: &mut Editor,
+    transform: impl FnOnce(&str) -> anyhow::Result<String>,
+) -> anyhow::Result<()> {
+    let (view, doc) = current!(editor);
+    let text = doc.text().clone();
+    let replacement = transform(&text.to_string())?;
+    let transaction = Transaction::change(
+        &text,
+        std::iter::once((0, text.len_chars(), Some(replacement.into()))),
+    );
+    doc.apply(&transaction, view.id);
+    doc.append_changes_to_history(view);
+    if editor.mode == Mode::Select {
+        editor.mode = Mode::Normal;
+    }
+    Ok(())
+}
+
+fn minify_text(text: &str) -> anyhow::Result<String> {
+    let trimmed = text.trim();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        let value: serde_json::Value =
+            serde_json::from_str(trimmed).map_err(|err| anyhow!("invalid JSON: {err}"))?;
+        return Ok(serde_json::to_string(&value)?);
+    }
+    let mut lines = Vec::new();
+    for line in text.lines() {
+        let line = line.trim_end();
+        if !line.trim().is_empty() {
+            lines.push(line.trim_start());
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
+fn beautify_text(text: &str) -> anyhow::Result<String> {
+    let trimmed = text.trim();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        let value: serde_json::Value =
+            serde_json::from_str(trimmed).map_err(|err| anyhow!("invalid JSON: {err}"))?;
+        return Ok(serde_json::to_string_pretty(&value)?);
+    }
+    let mut lines: Vec<&str> = text.lines().map(str::trim_end).collect();
+    while lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+    Ok(format!("{}\n", lines.join("\n")))
+}
+
+fn format_document(cx: &mut compositor::Context) {
+    let (view, doc) = current_ref!(cx.editor);
+    let Some(format) = doc.format(cx.editor) else {
+        cx.editor
+            .set_error("A formatter isn't available for this document");
+        return;
+    };
+    let callback = make_format_callback(doc.id(), doc.version(), view.id, format, None);
+    cx.jobs.callback(callback);
+}
+
+fn create_relative_path(cx: &mut compositor::Context, directory: bool) {
+    let root = cx.editor.workspace_root.clone();
+    crate::job::dispatch_blocking(move |_editor, compositor| {
+        let label = if directory {
+            "New folder (relative):"
+        } else {
+            "New file (relative):"
+        };
+        let prompt = ui::Prompt::new(
+            label.into(),
+            None,
+            |_editor, _input| Vec::new(),
+            move |cx, input, event| {
+                if event != ui::PromptEvent::Validate {
+                    return;
+                }
+                let relative = input.trim();
+                if relative.is_empty() {
+                    cx.editor.set_error("path cannot be empty");
+                    return;
+                }
+                let relative_path = Path::new(relative);
+                if relative_path.is_absolute()
+                    || relative_path
+                        .components()
+                        .any(|component| matches!(component, std::path::Component::ParentDir))
+                {
+                    cx.editor
+                        .set_error("use a relative path inside the workspace");
+                    return;
+                }
+                let path = root.join(relative_path);
+                let result = if directory {
+                    std::fs::create_dir_all(&path)
+                } else {
+                    path.parent()
+                        .map(std::fs::create_dir_all)
+                        .transpose()
+                        .and_then(|_| {
+                            std::fs::OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(&path)
+                                .map(|_| ())
+                        })
+                };
+                match result {
+                    Ok(()) => {
+                        cx.editor.sidebar.refresh_epoch =
+                            cx.editor.sidebar.refresh_epoch.wrapping_add(1);
+                        cx.editor.session_dirty = true;
+                        cx.editor.needs_redraw = true;
+                        if directory {
+                            cx.editor.sidebar.selected = Some(path);
+                            cx.editor.set_status("folder created");
+                        } else {
+                            cx.editor.sidebar.reveal_current = true;
+                            if let Err(err) = cx.editor.open(&path, Action::Replace) {
+                                cx.editor.set_error(err.to_string());
+                            } else {
+                                cx.editor.set_status("file created");
+                            }
+                        }
+                    }
+                    Err(err) => cx.editor.set_error(format!("failed to create path: {err}")),
+                }
+            },
+        );
+        compositor.push(Box::new(prompt));
+    });
+}
+
 fn transform_words(text: &str) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = String::new();
@@ -3523,28 +3679,49 @@ fn apply_transform(editor: &mut Editor, action: TransformAction) -> anyhow::Resu
 fn transform_picker(cx: &mut Context) {
     use TransformAction::*;
     let actions = [
-        Base64Encode,
-        Base64Decode,
-        HexEncode,
-        HexDecode,
-        Upper,
-        Lower,
-        Title,
-        Kebab,
-        Snake,
-        Camel,
-        Pascal,
-        ScreamingSnake,
-        Dot,
-        SortAsc,
-        SortDesc,
+        F1Action::Transform(Base64Encode),
+        F1Action::Transform(Base64Decode),
+        F1Action::Transform(HexEncode),
+        F1Action::Transform(HexDecode),
+        F1Action::Transform(Upper),
+        F1Action::Transform(Lower),
+        F1Action::Transform(Title),
+        F1Action::Transform(Kebab),
+        F1Action::Transform(Snake),
+        F1Action::Transform(Camel),
+        F1Action::Transform(Pascal),
+        F1Action::Transform(ScreamingSnake),
+        F1Action::Transform(Dot),
+        F1Action::Transform(SortAsc),
+        F1Action::Transform(SortDesc),
+        F1Action::Minify,
+        F1Action::Beautify,
+        F1Action::Format,
+        F1Action::NewFile,
+        F1Action::NewFolder,
     ];
-    let columns = [PickerColumn::new(
-        "transform",
-        |action: &TransformAction, _: &()| action.label().into(),
-    )];
+    let columns = [PickerColumn::new("action", |action: &F1Action, _: &()| {
+        action.label().into()
+    })];
     let picker = Picker::new(columns, 0, actions, (), |cx, action, _| {
-        if let Err(err) = apply_transform(cx.editor, *action) {
+        let result = match action {
+            F1Action::Transform(action) => apply_transform(cx.editor, *action),
+            F1Action::Minify => apply_document_text(cx.editor, minify_text),
+            F1Action::Beautify => apply_document_text(cx.editor, beautify_text),
+            F1Action::Format => {
+                format_document(cx);
+                Ok(())
+            }
+            F1Action::NewFile => {
+                create_relative_path(cx, false);
+                Ok(())
+            }
+            F1Action::NewFolder => {
+                create_relative_path(cx, true);
+                Ok(())
+            }
+        };
+        if let Err(err) = result {
             cx.editor.set_error(err.to_string());
         }
     });

@@ -160,6 +160,7 @@ pub fn line_numbers<'doc>(
 
     let linenr = theme.get("ui.linenr");
     let linenr_select = theme.get("ui.linenr.selected");
+    let wrap_style = theme.get("ui.virtual.whitespace");
 
     let current_line = doc
         .text()
@@ -181,8 +182,13 @@ pub fn line_numbers<'doc>(
                 };
 
                 if !first_visual_line {
-                    write!(out, "{:>1$}", " ", width).unwrap();
-                    return Some(style);
+                    if line_number == LineNumber::Both {
+                        let part_width = width.saturating_sub(3) / 2;
+                        write!(out, "{:>part_width$} │ {:>part_width$}", "↪", "").unwrap();
+                    } else {
+                        write!(out, "{:>1$}", "↪", width).unwrap();
+                    }
+                    return Some(wrap_style);
                 }
 
                 match line_number {

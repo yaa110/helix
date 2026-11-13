@@ -27,7 +27,7 @@ use crate::{
     handlers,
     job::Jobs,
     keymap::Keymaps,
-    ui::{self, overlay::overlaid},
+    ui,
 };
 
 use log::{debug, error, info, warn};
@@ -235,13 +235,11 @@ impl Application {
         } else if !args.files.is_empty() {
             let mut files_it = args.files.into_iter().peekable();
 
-            // If the first file is a directory, skip it and open a picker.
-            // When a session restored buffers, keep the restored workspace instead.
-            if let Some((first, _)) = files_it.next_if(|(p, _)| p.is_dir()) {
-                if restored_buffers == 0 {
-                    let picker = ui::file_picker(&editor, first);
-                    compositor.push(Box::new(overlaid(picker)));
-                }
+            // If the first argument is a directory, use it as the workspace
+            // root and show the sidebar. Do not open the full file picker:
+            // walking a large repository there made `hx .` take seconds.
+            if files_it.next_if(|(p, _)| p.is_dir()).is_some() {
+                // The workspace root is already set from the directory arg.
             }
 
             // If there are any more files specified, open them

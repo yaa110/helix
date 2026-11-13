@@ -47,6 +47,12 @@ impl Sidebar {
             self.search.handle_idle_timeout(cx.editor);
             cx.editor.needs_redraw = true;
         }
+        if cx.editor.sidebar.mode == SidebarMode::Files {
+            self.tree.poll_git_status(cx.editor);
+            if self.tree.git_status_needs_refresh(cx.editor) {
+                self.tree.request_git_status(cx.editor);
+            }
+        }
     }
 
     pub fn handle_search_modal(
@@ -75,6 +81,13 @@ impl Sidebar {
         if self.tree.filter != editor.sidebar.tree_filter {
             self.tree
                 .set_filter(editor.sidebar.tree_filter.clone(), editor);
+        }
+
+        if editor.sidebar.mode == SidebarMode::Files {
+            self.tree.poll_git_status(editor);
+            if self.tree.git_status_needs_refresh(editor) {
+                self.tree.request_git_status(editor);
+            }
         }
 
         if let Some(selected) = editor.sidebar.selected.clone() {

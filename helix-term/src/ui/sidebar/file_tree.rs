@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use helix_core::fuzzy::fuzzy_match;
 use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -58,6 +59,7 @@ pub struct FileTree {
     git_status: HashMap<PathBuf, GitFileStatus>,
     git_status_root: Option<PathBuf>,
     git_status_epoch: Option<u64>,
+    git_status_rx: Option<Receiver<HashMap<PathBuf, GitFileStatus>>>,
     clipboard: Option<FileClipboard>,
     labels: Option<Vec<(String, usize)>>,
     label_prefix: Option<char>,
@@ -78,6 +80,7 @@ impl FileTree {
             git_status: HashMap::new(),
             git_status_root: None,
             git_status_epoch: None,
+            git_status_rx: None,
             clipboard: None,
             labels: None,
             label_prefix: None,
@@ -174,13 +177,12 @@ impl FileTree {
             || self.git_status_epoch != Some(editor.sidebar.refresh_epoch)
     }
 
-    pub fn refresh_git_status(&mut self, editor: &Editor) {
+    pub fn request_git_status(&mut self, editor: &Editor) {
         let root = self.root.clone();
         self.git_status_root = Some(root.clone());
         self.git_status_epoch = Some(editor.sidebar.refresh_epoch);
 
-        if !editor.config().sidebar.git_status {
-            self.git_status.clear();
+        if !editor.config().sidebar.git_status || self.git_status_rx.is_some() {
             return;
         }
 
@@ -194,57 +196,33 @@ impl FileTree {
             return;
         }
 
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(&root)
-            .args(["status", "--porcelain=v1", "--untracked-files=all"])
-            .output();
-        let Ok(output) = output else {
-            self.git_status.clear();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let statuses = load_git_status(&root);
+            let _ = tx.send(statuses);
+            helix_event::request_redraw();
+        });
+        self.git_status_rx = Some(rx);
+    }
+
+    pub fn poll_git_status(&mut self, editor: &mut Editor) {
+        let Some(receiver) = &self.git_status_rx else {
             return;
         };
-        if !output.status.success() {
-            self.git_status.clear();
-            return;
-        }
-
-        let mut statuses = HashMap::new();
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            if line.len() < 4 {
-                continue;
-            }
-            let code = &line[..2];
-            let rest = &line[3..];
-            let path = if code.starts_with('R') || code.starts_with('C') {
-                rest.rsplit(" -> ").next().unwrap_or(rest)
-            } else {
-                rest
-            };
-            let path = path.trim_matches('"');
-            let path = root.join(path);
-            let status = if code.contains('U') || matches!(code, "AA" | "DD") {
-                GitFileStatus::Conflict
-            } else if code == "??" || code.starts_with('A') {
-                GitFileStatus::Untracked
-            } else if code.starts_with('R') {
-                GitFileStatus::Renamed
-            } else if code.contains('D') {
-                GitFileStatus::Deleted
-            } else {
-                GitFileStatus::Modified
-            };
-            statuses.insert(path.clone(), status);
-
-            let mut parent = path.parent();
-            while let Some(dir) = parent {
-                if dir == root || !dir.starts_with(&root) {
-                    break;
+        match receiver.try_recv() {
+            Ok(statuses) => {
+                self.git_status = statuses;
+                self.git_status_rx = None;
+                if self.dirty_only {
+                    self.rebuild_from_editor(editor);
                 }
-                statuses.entry(dir.to_path_buf()).or_insert(status);
-                parent = dir.parent();
+                editor.needs_redraw = true;
+            }
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {
+                self.git_status_rx = None;
             }
         }
-        self.git_status = statuses;
     }
 
     pub fn refresh(&mut self, editor: &Editor, state: &SidebarState) {
@@ -1201,7 +1179,7 @@ impl FileTree {
             KeyCode::Char('D') => {
                 self.dirty_only = !self.dirty_only;
                 if self.dirty_only {
-                    self.refresh_git_status(cx.editor);
+                    self.request_git_status(cx.editor);
                 }
                 self.rebuild_from_editor(cx.editor);
                 cx.editor.set_status(if self.dirty_only {
@@ -1308,6 +1286,58 @@ impl FileTree {
             self.scroll = self.scroll.min(self.cursor);
         }
     }
+}
+
+fn load_git_status(root: &Path) -> HashMap<PathBuf, GitFileStatus> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["status", "--porcelain=v1", "--untracked-files=all"])
+        .output();
+    let Ok(output) = output else {
+        return HashMap::new();
+    };
+    if !output.status.success() {
+        return HashMap::new();
+    }
+
+    let mut statuses = HashMap::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        if line.len() < 4 {
+            continue;
+        }
+        let code = &line[..2];
+        let rest = &line[3..];
+        let path = if code.starts_with('R') || code.starts_with('C') {
+            rest.rsplit(" -> ").next().unwrap_or(rest)
+        } else {
+            rest
+        };
+        let path = path.trim_matches('"');
+        let path = root.join(path);
+        let status = if code.contains('U') || matches!(code, "AA" | "DD") {
+            GitFileStatus::Conflict
+        } else if code == "??" || code.starts_with('A') {
+            GitFileStatus::Untracked
+        } else if code.starts_with('R') {
+            GitFileStatus::Renamed
+        } else if code.contains('D') {
+            GitFileStatus::Deleted
+        } else {
+            GitFileStatus::Modified
+        };
+        statuses.insert(path.clone(), status);
+
+        let mut parent = path.parent();
+        while let Some(dir) = parent {
+            if dir == root || !dir.starts_with(root) {
+                break;
+            }
+            statuses.entry(dir.to_path_buf()).or_insert(status);
+            parent = dir.parent();
+        }
+    }
+    statuses
 }
 
 /// Skip a number of terminal columns from the start of `text`, preserving

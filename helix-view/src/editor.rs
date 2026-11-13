@@ -1250,6 +1250,9 @@ impl Default for Config {
             color_modes: true,
             soft_wrap: SoftWrap {
                 enable: Some(true),
+                // The wrap marker is rendered in the gutter instead of the
+                // code area, so it cannot shift underlines or text.
+                wrap_indicator: Some(String::new()),
                 ..SoftWrap::default()
             },
             text_width: 80,
