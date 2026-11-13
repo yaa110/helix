@@ -1725,10 +1725,12 @@ impl Component for EditorView {
         // Layout:
         //   [panes][buffer tabs]
         //   [panes][code]
-        //   [panes][command line]
+        //   [command / error line spanning the full width]
         //   [powerline spanning the full width]
         let powerline_area = area.clip_top(area.height.saturating_sub(1));
-        let page_area = area.clip_bottom(1);
+        let commandline_area = area.clip_top(area.height.saturating_sub(2)).with_height(1);
+        let page_area = area.clip_bottom(2);
+        let commandline_y = commandline_area.y;
         let sidebar_width = cx.editor.sidebar.visible_width(area.width, &config.sidebar);
         let editor_full = if sidebar_width > 0 {
             let sidebar_area = page_area.with_width(sidebar_width);
@@ -1742,14 +1744,11 @@ impl Component for EditorView {
             page_area
         };
 
-        // Reserve the top row for buffer tabs, then the bottom row for the
-        // editor command line (`:`, search prompts, etc.).
-        let mut editor_area = editor_full;
+        // Reserve the top row for buffer tabs.
+        let mut code_area = editor_full;
         if use_bufferline {
-            editor_area = editor_area.clip_top(1);
+            code_area = code_area.clip_top(1);
         }
-        let code_area = editor_area.clip_bottom(1);
-        let commandline_y = editor_full.y + editor_full.height.saturating_sub(1);
 
         // if the terminal size suddenly changed, we need to trigger a resize
         cx.editor.resize(code_area);
@@ -1793,10 +1792,16 @@ impl Component for EditorView {
                 cx.editor.theme.get("ui.text")
             };
 
-            surface.set_string(editor_full.x, commandline_y, status_msg, style);
+            surface.set_stringn(
+                commandline_area.x,
+                commandline_y,
+                status_msg,
+                commandline_area.width as usize,
+                style,
+            );
         }
 
-        if editor_full.width.saturating_sub(status_msg_width as u16) > key_width {
+        if area.width.saturating_sub(status_msg_width as u16) > key_width {
             let mut disp = String::new();
             if let Some(count) = cx.editor.count {
                 disp.push_str(&count.to_string())
@@ -1816,8 +1821,8 @@ impl Component for EditorView {
             let restricted = workspace_trust_indicator_visible(cx.editor);
             let trust_width = if restricted { 3 } else { 0 };
             surface.set_string(
-                editor_full.x
-                    + editor_full
+                area.x
+                    + area
                         .width
                         .saturating_sub(key_width + macro_width + trust_width),
                 commandline_y,
@@ -1830,9 +1835,8 @@ impl Component for EditorView {
                     .fg(helix_view::graphics::Color::Yellow)
                     .add_modifier(Modifier::BOLD);
                 surface.set_string(
-                    editor_full
-                        .x
-                        .saturating_add(editor_full.width.saturating_sub(3 + macro_width)),
+                    area.x
+                        .saturating_add(area.width.saturating_sub(3 + macro_width)),
                     commandline_y,
                     "[⚠]",
                     style,
@@ -1844,7 +1848,7 @@ impl Component for EditorView {
                     .fg(helix_view::graphics::Color::Yellow)
                     .add_modifier(Modifier::BOLD);
                 surface.set_string(
-                    editor_full.x + editor_full.width.saturating_sub(3),
+                    area.x + area.width.saturating_sub(3),
                     commandline_y,
                     &disp,
                     style,

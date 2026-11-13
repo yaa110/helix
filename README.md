@@ -191,22 +191,36 @@ Code lenses use the same peek-style picker:
 - **Always-visible VSCode-like buffer tabs** (`bufferline = "always"`) with
   file icons, inactive separators, bold active tabs, and a colored modified dot.
 - **Full-width powerline**: spans the tree and buffers. Left:
-  `[mode][branch][diagnostics]`; right: `[selections][total lines][indent mode]
-  [Tab/Spaces: N][encoding][line ending][file type]`.
-- **Layout**: `[panes][tabs]` on the first row, then `[panes][code]`, then
-  `[panes][command line]`, with the full-width powerline at the very bottom.
+  `[mode][spinner][branch][file name][read-only][modified]`; right:
+  `[diagnostics][selections][selection length] │ [position][total lines] │
+  [encoding][line ending][indent style][file type]`.
+- **Layout**: `[panes][tabs]` on the first row, then `[panes][code]`, then a
+  full-width command/error line, with the full-width powerline at the very
+  bottom.
 - **Binary-file guard**: images and other binary files are detected before
   decoding and reported instead of rendering terminal garbage.
 - **Monokai Community (Filter Spectrum)** as the default theme.
 
 ### Defaults
 
-- Mouse capture is disabled by default. Enable with `mouse = true`.
+- Mouse capture and middle-click paste are disabled; enable with `mouse = true`
+  / `middle-click-paste = true`.
 - Cursor shape: underline in Normal/Select, I-beam-style bar in Insert.
 - `cursorline`, `color-modes`, `auto-save`, and `true-color` are enabled.
+- Auto-save runs on focus loss and after 1 second of inactivity.
+- `scrolloff = 0`, `insert-final-newline = false`, and `popup-border = "all"`.
+- File picker/tree show hidden files (`hidden = false`); symlink
+  deduplication is off (`deduplicate-links = false`).
+- Smart tab is disabled.
+- The statusline defaults to:
+  - left: mode, spinner, branch, file name, read-only, modified
+  - right: diagnostics, selections, selection length, position, total lines,
+    encoding, line ending, indentation style, file type
+  - diagnostics severity: warning, error, hint
 - Soft wrap is enabled; counts such as `5x` still select five real lines.
-- Indent guides are enabled with the conventional `│` character.
-- Spaces and tabs are visible by default using `·` and `→`.
+- Indent guides are enabled with `▏`, skipping the first level.
+- Spaces and tabs are visible by default using `·` and `→`; NBSP, narrow
+  NBSP, and newline markers are off.
 - Smooth scrolling: `Ctrl-Up` / `Ctrl-Down` moves by `scroll-lines` (default 3)
   in the editor and in focused tree/search panes.
 - Line numbers can show both columns:

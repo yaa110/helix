@@ -428,7 +428,7 @@ impl Prompt {
 
         let completion_area = Rect::new(
             area.x,
-            (area.height - height).saturating_sub(1),
+            (area.height - height).saturating_sub(2),
             area.width,
             height,
         );
@@ -510,8 +510,10 @@ impl Prompt {
             text.render(inner, surface, cx);
         }
 
-        let line = area.height - 1;
-        surface.clear_with(area.clip_top(line), background);
+        // The bottom row is reserved for the powerline; render the prompt on
+        // the dedicated command/error row above it.
+        let line = area.height.saturating_sub(2);
+        surface.clear_with(area.clip_top(line).with_height(1), background);
         // render buffer text
         surface.set_string(area.x, area.y + line, &self.prompt, prompt_color);
 

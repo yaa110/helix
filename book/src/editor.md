@@ -29,10 +29,10 @@
 
 | Key | Description | Default |
 |--|--|---------|
-| `scrolloff` | Number of lines of padding around the edge of the screen when scrolling | `5` |
+| `scrolloff` | Number of lines of padding around the edge of the screen when scrolling | `0` |
 | `mouse` | Enable mouse mode | `false` |
 | `mouse-yank-register` | Which register to use for mouse yanks. | `*` |
-| `middle-click-paste` | Middle click paste support | `true` |
+| `middle-click-paste` | Middle click paste support | `false` |
 | `default-yank-register` | Default register used for yank/paste | `'"'` |
 | `scroll-lines` | Number of lines to scroll per scroll wheel step | `3` |
 | `shell` | Shell to use when running external commands | Unix: `["sh", "-c"]`<br/>Windows: `["cmd", "/C"]` |
@@ -58,11 +58,11 @@
 | `text-width` | Maximum line length. Used for the `:reflow` command and soft-wrapping if `soft-wrap.wrap-at-text-width` is set | `80` |
 | `workspace-lsp-roots` | Directories relative to the workspace root that are treated as LSP roots. Should only be set in `.helix/config.toml` | `[]` |
 | `default-line-ending` | The line ending to use for new documents. Can be `native`, `lf`, `crlf`, `ff`, `cr` or `nel`. `native` uses the platform's native line ending (`crlf` on Windows, otherwise `lf`). | `"native"` |
-| `insert-final-newline` | Whether to automatically insert a trailing line-ending on write if missing | `true` |
+| `insert-final-newline` | Whether to automatically insert a trailing line-ending on write if missing | `false` |
 | `atomic-save` | Whether to use atomic operations to write documents to disk. This prevents data loss if the editor is interrupted while writing the file, but may confuse some file watching/hot reloading programs. | `true` |
 | `trim-final-newlines` | Whether to automatically remove line-endings after the final one on write | `false` |
 | `trim-trailing-whitespace` | Whether to automatically remove whitespace preceding line endings on write | `false` |
-| `popup-border` | Draw border around `popup`, `menu`, `all`, or `none` | `"none"` |
+| `popup-border` | Draw border around `popup`, `menu`, `all`, or `none` | `"all"` |
 | `indent-heuristic` | How the indentation for a newly inserted line is computed: `simple` just copies the indentation level from the previous line, `tree-sitter` computes the indentation based on the syntax tree and `hybrid` combines both approaches. If the chosen heuristic is not available, a different one will be used as a fallback (the fallback order being `hybrid` -> `tree-sitter` -> `simple`). | `"hybrid"` |
 | `jump-label-alphabet` | The characters that are used to generate two character jump labels. Characters at the start of the alphabet are used first. | `"abcdefghijklmnopqrstuvwxyz"` |
 | `end-of-line-diagnostics` | Minimum severity of diagnostics to render at the end of the line. Set to `disable` to disable entirely. Refer to the setting about `inline-diagnostics` for more details | `"hint"` |
@@ -108,28 +108,28 @@ Statusline elements can be defined as follows:
 
 ```toml
 [editor.statusline]
-left = ["mode", "spinner"]
-center = ["file-name"]
-right = ["diagnostics", "selections", "position", "file-encoding", "file-line-ending", "file-type"]
+left = ["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]
+center = []
+right = ["diagnostics", "selections", "primary-selection-length", "separator", "position", "total-line-numbers", "separator", "file-encoding", "file-line-ending", "file-indent-style", "file-type"]
 separator = "│"
 mode.normal = "NORMAL"
 mode.insert = "INSERT"
 mode.select = "SELECT"
-diagnostics = ["warning", "error"]
+diagnostics = ["warning", "error", "hint"]
 workspace-diagnostics = ["warning", "error"]
 ```
 The `[editor.statusline]` key takes the following sub-keys:
 
 | Key           | Description | Default |
 | ---           | ---         | ---     |
-| `left`        | A list of elements aligned to the left of the statusline | `["mode", "version-control", "diagnostics"]` |
+| `left`        | A list of elements aligned to the left of the statusline | `["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]` |
 | `center`      | A list of elements aligned to the middle of the statusline | `[]` |
-| `right`       | A list of elements aligned to the right of the statusline | `["selections", "total-line-numbers", "indent-mode", "indent-width", "file-encoding", "file-line-ending", "file-type"]` |
+| `right`       | A list of elements aligned to the right of the statusline | `["diagnostics", "selections", "primary-selection-length", "separator", "position", "total-line-numbers", "separator", "file-encoding", "file-line-ending", "file-indent-style", "file-type"]` |
 | `separator`   | The character used to separate elements in the statusline | `"│"` |
 | `mode.normal` | The text shown in the `mode` element for normal mode | `"NOR"` |
 | `mode.insert` | The text shown in the `mode` element for insert mode | `"INS"` |
 | `mode.select` | The text shown in the `mode` element for select mode | `"SEL"` |
-| `diagnostics` | A list of severities which are displayed for the current buffer | `["warning", "error"]` |
+| `diagnostics` | A list of severities which are displayed for the current buffer | `["warning", "error", "hint"]` |
 | `workspace-diagnostics` | A list of severities which are displayed for the workspace | `["warning", "error"]` |
 
 The following statusline elements can be configured:
@@ -210,9 +210,9 @@ All git related options are only enabled in a git repository.
 
 | Key | Description | Default |
 |--|--|---------|
-|`hidden` | Enables ignoring hidden files | `true`
+|`hidden` | Enables ignoring hidden files | `false`
 |`follow-symlinks` | Follow symlinks instead of ignoring them | `true`
-|`deduplicate-links` | Ignore symlinks that point at files already shown in the picker | `true`
+|`deduplicate-links` | Ignore symlinks that point at files already shown in the picker | `false`
 |`parents` | Enables reading ignore files from parent directories | `true`
 |`ignore` | Enables reading `.ignore` files | `true`
 |`git-ignore` | Enables reading `.gitignore` files | `true`
@@ -319,8 +319,8 @@ Control auto save behavior.
 | Key | Description | Default |
 |--|--|---------|
 | `focus-lost` | Enable automatic saving on the focus moving away from Helix. Requires [focus event support](https://github.com/helix-editor/helix/wiki/Terminal-Support) from your terminal | `true` |
-| `after-delay.enable` | Enable automatic saving after `auto-save.after-delay.timeout` milliseconds have passed since last edit. | `false` |
-| `after-delay.timeout` | Time in milliseconds since last edit before auto save timer triggers. | `3000` |
+| `after-delay.enable` | Enable automatic saving after `auto-save.after-delay.timeout` milliseconds have passed since last edit. | `true` |
+| `after-delay.timeout` | Time in milliseconds since last edit before auto save timer triggers. | `1000` |
 
 ### `[editor.search]` Section
 
@@ -337,7 +337,7 @@ Options for rendering whitespace with visible characters. Use `:set whitespace.r
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `render` | Whether to render whitespace. May either be `all` or `none`, or a table with sub-keys `space`, `nbsp`, `nnbsp`, `tab`, and `newline` | `space`, `nbsp`, `nnbsp`, and `tab` enabled |
+| `render` | Whether to render whitespace. May either be `all` or `none`, or a table with sub-keys `space`, `nbsp`, `nnbsp`, `tab`, and `newline` | `space` and `tab` enabled |
 | `characters` | Literal characters to use when rendering whitespace. Sub-keys may be any of `tab`, `space`, `nbsp`, `nnbsp`, `newline` or `tabpad` | See example below |
 
 Example
@@ -369,8 +369,8 @@ Options for rendering vertical indent guides.
 | Key           | Description                                             | Default |
 | ---           | ---                                                     | ---     |
 | `render`      | Whether to render indent guides                         | `true`  |
-| `character`   | Literal character to use for rendering the indent guide | `"│"`   |
-| `skip-levels` | Number of indent levels to skip                         | `0`     |
+| `character`   | Literal character to use for rendering the indent guide | `"▏"`   |
+| `skip-levels` | Number of indent levels to skip                         | `1`     |
 
 Example:
 
@@ -472,7 +472,7 @@ Options for navigating and editing using tab key.
 
 | Key        | Description | Default |
 |------------|-------------|---------|
-| `enable` | If set to true, then when the cursor is in a position with non-whitespace to its left, instead of inserting a tab, it will run `move_parent_node_end`. If there is only whitespace to the left, then it inserts a tab as normal. With the default bindings, to explicitly insert a tab character, press Shift-tab. | `true` |
+| `enable` | If set to true, then when the cursor is in a position with non-whitespace to its left, instead of inserting a tab, it will run `move_parent_node_end`. If there is only whitespace to the left, then it inserts a tab as normal. With the default bindings, to explicitly insert a tab character, press Shift-tab. | `false` |
 | `supersede-menu` | Normally, when a menu is on screen, such as when auto complete is triggered, the tab key is bound to cycling through the items. This means when menus are on screen, one cannot use the tab key to trigger the `smart-tab` command. If this option is set to true, the `smart-tab` command always takes precedence, which means one cannot use the tab key to cycle through menu items. One of the other bindings must be used instead, such as arrow keys or `C-n`/`C-p`. | `false` |
 
 

@@ -213,9 +213,9 @@ pub struct FilePickerConfig {
 impl Default for FilePickerConfig {
     fn default() -> Self {
         Self {
-            hidden: true,
+            hidden: false,
             follow_symlinks: true,
-            deduplicate_links: true,
+            deduplicate_links: false,
             parents: true,
             ignore: true,
             git_ignore: true,
@@ -545,7 +545,7 @@ pub struct SmartTabConfig {
 impl Default for SmartTabConfig {
     fn default() -> Self {
         SmartTabConfig {
-            enable: true,
+            enable: false,
             supersede_menu: false,
         }
     }
@@ -676,20 +676,31 @@ impl Default for StatusLineConfig {
         use StatusLineElement as E;
 
         Self {
-            left: vec![E::Mode, E::VersionControl, E::Diagnostics],
+            left: vec![
+                E::Mode,
+                E::Spinner,
+                E::VersionControl,
+                E::FileName,
+                E::ReadOnlyIndicator,
+                E::FileModificationIndicator,
+            ],
             center: vec![],
             right: vec![
+                E::Diagnostics,
                 E::Selections,
+                E::PrimarySelectionLength,
+                E::Separator,
+                E::Position,
                 E::TotalLineNumbers,
-                E::IndentMode,
-                E::IndentWidth,
+                E::Separator,
                 E::FileEncoding,
                 E::FileLineEnding,
+                E::FileIndentStyle,
                 E::FileType,
             ],
             separator: String::from("│"),
             mode: ModeConfig::default(),
-            diagnostics: vec![Severity::Warning, Severity::Error],
+            diagnostics: vec![Severity::Warning, Severity::Error, Severity::Hint],
             workspace_diagnostics: vec![Severity::Warning, Severity::Error],
         }
     }
@@ -944,9 +955,9 @@ impl Default for WhitespaceConfig {
             render: WhitespaceRender::Specific {
                 default: None,
                 space: Some(WhitespaceRenderValue::All),
-                nbsp: Some(WhitespaceRenderValue::All),
-                nnbsp: Some(WhitespaceRenderValue::All),
                 tab: Some(WhitespaceRenderValue::All),
+                nbsp: None,
+                nnbsp: None,
                 newline: None,
             },
             characters: WhitespaceCharacters::default(),
@@ -1054,8 +1065,8 @@ pub struct AutoSaveAfterDelay {
 impl Default for AutoSaveAfterDelay {
     fn default() -> Self {
         Self {
-            enable: false,
-            timeout: DEFAULT_AUTO_SAVE_DELAY,
+            enable: true,
+            timeout: 1000,
         }
     }
 }
@@ -1119,9 +1130,9 @@ pub struct IndentGuidesConfig {
 impl Default for IndentGuidesConfig {
     fn default() -> Self {
         Self {
-            skip_levels: 0,
-            render: false,
-            character: '│',
+            skip_levels: 1,
+            render: true,
+            character: '▏',
         }
     }
 }
@@ -1194,7 +1205,7 @@ impl Default for WordCompletion {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            scrolloff: 5,
+            scrolloff: 0,
             scroll_lines: 3,
             mouse: false,
             mouse_yank_register: '*',
@@ -1207,7 +1218,7 @@ impl Default for Config {
             cursorline: true,
             cursorcolumn: false,
             gutters: GutterConfig::default(),
-            middle_click_paste: true,
+            middle_click_paste: false,
             auto_pairs: AutoPairConfig::default(),
             auto_completion: true,
             path_completion: true,
@@ -1246,12 +1257,12 @@ impl Default for Config {
             continue_comments: true,
             workspace_lsp_roots: Vec::new(),
             default_line_ending: LineEndingConfig::default(),
-            insert_final_newline: true,
+            insert_final_newline: false,
             atomic_save: true,
             trim_final_newlines: false,
             trim_trailing_whitespace: false,
             smart_tab: Some(SmartTabConfig::default()),
-            popup_border: PopupBorderConfig::None,
+            popup_border: PopupBorderConfig::All,
             indent_heuristic: IndentationHeuristic::default(),
             jump_label_alphabet: ('a'..='z').collect(),
             inline_diagnostics: InlineDiagnosticsConfig::default(),
