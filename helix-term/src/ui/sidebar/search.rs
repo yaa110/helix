@@ -1113,21 +1113,17 @@ impl SearchPane {
     fn open_options(&mut self, cx: &mut commands::Context) {
         self.options_mode = true;
         let body = [
-            ("", "── Options ──"),
             ("c", "Match case"),
             ("w", "Whole word"),
             ("r", "Regex"),
             ("p", "Preserve case"),
-            ("", "── Search ──"),
             ("/", "Edit Find (without clearing)"),
             ("Enter (editing)", "Run search"),
             ("Tab (editing)", "Switch Find ⇄ Replace"),
-            ("", "── Results ──"),
             ("Enter", "Open selected item"),
             ("r", "Replace selected item"),
             ("R", "Replace all"),
             ("Alt-Enter", "Select all matches in file"),
-            ("", "── Pane ──"),
             ("b", "Open file tree"),
             ("Space, Esc", "Close options"),
         ];

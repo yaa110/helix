@@ -111,7 +111,7 @@ field uses the command-line I-beam cursor and editing keys: arrows,
 `Home`/`End`, `Ctrl/Alt+Left`/`Right` for word movement, and word deletion.
 The command-line hint shows whether `Esc` will cancel search or leave the tree.
 
-Press `<space>` in the tree to open a categorized which-key-style hint box:
+Press `<space>` in the tree to open a which-key-style hint box:
 
 | Space command | Action |
 | --- | --- |
@@ -196,7 +196,7 @@ from search returns to the tree.
   `Home`/`End`, `Ctrl/Alt+Left`/`Right` for word movement, and word deletion.
 - Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
 - `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
-- `<space>` opens a categorized options/replace hint box; `c`/`w`/`r`/`p`
+- `<space>` opens an options/replace hint box; `c`/`w`/`r`/`p`
   toggle the same settings, `/` starts editing, `b` opens the tree.
 - `Esc` leaves edit mode, then closes the hint box, then closes the search
   window without moving the cursor.
