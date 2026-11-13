@@ -43,6 +43,7 @@ pub struct FolderPicker {
     mode: Mode,
     error: Option<String>,
     scroll: usize,
+    scroll_accel: super::scroll::ScrollAccelerator,
     preview_scroll: usize,
     left_area: Rect,
     right_area: Rect,
@@ -78,6 +79,7 @@ impl FolderPicker {
             mode: Mode::Browse,
             error: None,
             scroll: 0,
+            scroll_accel: Default::default(),
             preview_scroll: 0,
             left_area: Rect::new(0, 0, 0, 0),
             right_area: Rect::new(0, 0, 0, 0),
@@ -634,15 +636,18 @@ impl Component for FolderPicker {
                     Mode::Browse => {}
                 },
                 Event::Mouse(mouse) => {
-                    if let Some(delta) = super::scroll::wheel_delta(
-                        mouse.kind,
-                        cx.editor.config().scroll_lines.unsigned_abs(),
-                    ) {
+                    let max_lines = cx.editor.config().scroll_lines.unsigned_abs();
+                    if let Some(delta) = super::scroll::wheel_delta(mouse.kind, max_lines) {
+                        let step = self.scroll_accel.step(
+                            delta.signum(),
+                            max_lines,
+                            std::time::Instant::now(),
+                        );
                         if super::scroll::contains(self.left_area, mouse.column, mouse.row) {
                             let previous = self.selected;
                             self.scroll = super::scroll::scroll_offset(
                                 self.scroll,
-                                delta,
+                                step,
                                 self.filtered.len(),
                                 self.left_height,
                             );
@@ -660,7 +665,7 @@ impl Component for FolderPicker {
                         {
                             self.preview_scroll = super::scroll::scroll_offset(
                                 self.preview_scroll,
-                                delta,
+                                step,
                                 self.preview.len(),
                                 self.right_height,
                             );

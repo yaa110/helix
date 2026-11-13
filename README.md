@@ -215,10 +215,12 @@ the code area, file tree, search results and previews, pickers, menus, folder
 picker panes, and scrollable popups. Clicks, drags, releases, middle-click
 paste, and clickable popup actions are ignored.
 
-Each wheel event scrolls by `scroll-lines` (default 3). Scrolling moves the
-viewport without moving the selection; if the selection would leave the
-visible area, it is clamped to the nearest edge, matching the code editor's
-mouse scrolling. Changes apply immediately, without restarting `hx`.
+Wheel acceleration starts at one line for the first tick, then ramps up toward
+`scroll-lines` (default 3) while ticks continue in the same direction. It resets
+after a 120 ms pause or a direction change. Scrolling moves the viewport
+without moving the selection; if the selection would leave the visible area, it
+is clamped to the nearest edge, matching the code editor's mouse scrolling.
+Changes apply immediately, without restarting `hx`.
 
 Because terminals have no scroll-only mouse protocol, enabling this option
 captures mouse reporting. Terminal-native text selection is therefore blocked

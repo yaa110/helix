@@ -13,7 +13,7 @@ use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::graphics::{CursorKind, Modifier, Rect};
 use helix_view::info::Info;
-use helix_view::input::KeyEvent;
+use helix_view::input::{KeyEvent, MouseEventKind};
 use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::sidebar::{SidebarFocus, SidebarState};
 use helix_view::Editor;
@@ -81,6 +81,7 @@ pub struct FileTree {
     pub cursor: usize,
     pub scroll: usize,
     viewport_height: usize,
+    scroll_accel: ui::scroll::ScrollAccelerator,
     pub filter: String,
     filter_cursor: usize,
     cursor_pos: Option<Position>,
@@ -113,6 +114,7 @@ impl FileTree {
             cursor: 0,
             scroll: 0,
             viewport_height: 0,
+            scroll_accel: Default::default(),
             filter: String::new(),
             filter_cursor: 0,
             cursor_pos: None,
@@ -2019,6 +2021,20 @@ impl FileTree {
 
         self.leave_command_mode(cx);
         self.sync_selection(cx);
+        true
+    }
+
+    pub fn wheel_scroll(&mut self, kind: MouseEventKind, max_lines: usize) -> bool {
+        let Some(delta) = ui::scroll::wheel_delta(kind, max_lines) else {
+            return false;
+        };
+        let step = self
+            .scroll_accel
+            .step(delta.signum(), max_lines, Instant::now());
+        if step == 0 {
+            return false;
+        }
+        self.scroll_view(step);
         true
     }
 

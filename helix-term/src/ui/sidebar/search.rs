@@ -58,6 +58,7 @@ pub struct SearchPane {
     rows: Vec<ResultRow>,
     cursor: usize,
     scroll: usize,
+    scroll_accel: super::super::scroll::ScrollAccelerator,
     results_area: Rect,
     preview_area: Rect,
     results_height: usize,
@@ -82,6 +83,7 @@ impl SearchPane {
             rows: Vec::new(),
             cursor: 0,
             scroll: 0,
+            scroll_accel: Default::default(),
             results_area: Rect::new(0, 0, 0, 0),
             preview_area: Rect::new(0, 0, 0, 0),
             results_height: 0,
@@ -136,19 +138,23 @@ impl SearchPane {
     }
 
     pub fn handle_mouse_scroll(&mut self, event: &MouseEvent, editor: &mut Editor) -> bool {
-        let Some(delta) = super::super::scroll::wheel_delta(
-            event.kind,
-            editor.config().scroll_lines.unsigned_abs(),
-        ) else {
+        let max_lines = editor.config().scroll_lines.unsigned_abs();
+        let Some(delta) = super::super::scroll::wheel_delta(event.kind, max_lines) else {
             return false;
         };
+        let step = self
+            .scroll_accel
+            .step(delta.signum(), max_lines, std::time::Instant::now());
+        if step == 0 {
+            return true;
+        }
 
         if self.replace_preview.is_some() {
             if super::super::scroll::contains(self.preview_area, event.column, event.row) {
                 if let Some(preview) = self.replace_preview.as_mut() {
                     preview.scroll = super::super::scroll::scroll_offset(
                         preview.scroll,
-                        delta,
+                        step,
                         preview.lines.len(),
                         self.preview_height,
                     );
@@ -161,7 +167,7 @@ impl SearchPane {
         if super::super::scroll::contains(self.results_area, event.column, event.row) {
             self.scroll = super::super::scroll::scroll_offset(
                 self.scroll,
-                delta,
+                step,
                 self.rows.len(),
                 self.results_height,
             );

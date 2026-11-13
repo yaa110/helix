@@ -250,6 +250,7 @@ pub struct Picker<T: 'static + Send + Sync, D: 'static> {
 
     cursor: u32,
     scroll: u32,
+    scroll_accel: super::scroll::ScrollAccelerator,
     preview_scroll: usize,
     last_preview_cursor: u32,
     last_area: Rect,
@@ -387,6 +388,7 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
             version,
             cursor: 0,
             scroll: 0,
+            scroll_accel: Default::default(),
             preview_scroll: 0,
             last_preview_cursor: 0,
             last_area: Rect::new(0, 0, 0, 0),
@@ -1107,17 +1109,18 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
             // Picker is a modal and should consume mouse events so clicks don't fall
             // through to the editor underneath. Wheel events scroll the list viewport.
             Event::Mouse(mouse) => {
-                let Some(delta) = super::scroll::wheel_delta(
-                    mouse.kind,
-                    ctx.editor.config().scroll_lines.unsigned_abs(),
-                ) else {
+                let max_lines = ctx.editor.config().scroll_lines.unsigned_abs();
+                let Some(delta) = super::scroll::wheel_delta(mouse.kind, max_lines) else {
                     return EventResult::Consumed(None);
                 };
+                let step =
+                    self.scroll_accel
+                        .step(delta.signum(), max_lines, std::time::Instant::now());
                 if super::scroll::contains(self.last_area, mouse.column, mouse.row) {
                     let len = self.matcher.snapshot().matched_item_count() as usize;
                     let height = self.completion_height as usize;
                     self.scroll =
-                        super::scroll::scroll_offset(self.scroll as usize, delta, len, height)
+                        super::scroll::scroll_offset(self.scroll as usize, step, len, height)
                             as u32;
                     self.cursor = super::scroll::clamp_selection(
                         self.cursor as usize,
@@ -1126,10 +1129,10 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
                         height,
                     ) as u32;
                 } else if super::scroll::contains(self.preview_area, mouse.column, mouse.row) {
-                    self.preview_scroll = if delta < 0 {
-                        self.preview_scroll.saturating_sub(delta.unsigned_abs())
+                    self.preview_scroll = if step < 0 {
+                        self.preview_scroll.saturating_sub(step.unsigned_abs())
                     } else {
-                        self.preview_scroll.saturating_add(delta as usize)
+                        self.preview_scroll.saturating_add(step as usize)
                     };
                 }
                 return EventResult::Consumed(None);

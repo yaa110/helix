@@ -43,6 +43,7 @@ pub struct EditorView {
     pub(crate) completion: Option<Completion>,
     spinners: ProgressSpinners,
     pub(crate) sidebar: Sidebar,
+    scroll_accel: super::scroll::ScrollAccelerator,
     /// Tracks if the terminal window is focused by reaction to terminal focus events
     terminal_focused: bool,
 }
@@ -68,6 +69,7 @@ impl EditorView {
             completion: None,
             spinners: ProgressSpinners::default(),
             sidebar: Sidebar::new(),
+            scroll_accel: Default::default(),
             terminal_focused: true,
         }
     }
@@ -1521,8 +1523,16 @@ impl EditorView {
                     None => return EventResult::Ignored(None),
                 }
 
-                let offset = config.scroll_lines.unsigned_abs();
-                commands::scroll(cxt, offset, direction, false);
+                let max_lines = config.scroll_lines.unsigned_abs();
+                let Some(delta) = super::scroll::wheel_delta(event.kind, max_lines) else {
+                    return EventResult::Ignored(None);
+                };
+                let step =
+                    self.scroll_accel
+                        .step(delta.signum(), max_lines, std::time::Instant::now());
+                if step != 0 {
+                    commands::scroll(cxt, step.unsigned_abs(), direction, false);
+                }
 
                 cxt.editor.tree.focus = current_view;
                 cxt.editor.ensure_cursor_in_view(current_view);

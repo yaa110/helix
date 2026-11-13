@@ -1,5 +1,38 @@
+use std::time::{Duration, Instant};
+
 use helix_view::graphics::Rect;
 use helix_view::input::MouseEventKind;
+
+pub(crate) const WHEEL_ACCELERATION_WINDOW: Duration = Duration::from_millis(120);
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ScrollAccelerator {
+    direction: isize,
+    lines: usize,
+    last: Option<Instant>,
+}
+
+impl ScrollAccelerator {
+    pub fn step(&mut self, direction: isize, max_lines: usize, now: Instant) -> isize {
+        let direction = direction.signum();
+        if direction == 0 || max_lines == 0 {
+            return 0;
+        }
+
+        let continuing = self.direction == direction
+            && self
+                .last
+                .is_some_and(|last| now.duration_since(last) <= WHEEL_ACCELERATION_WINDOW);
+        self.lines = if continuing {
+            (self.lines + 1).min(max_lines)
+        } else {
+            1
+        };
+        self.direction = direction;
+        self.last = Some(now);
+        direction * self.lines as isize
+    }
+}
 
 pub(crate) fn contains(area: Rect, column: u16, row: u16) -> bool {
     column >= area.x && column < area.right() && row >= area.y && row < area.bottom()
@@ -42,6 +75,36 @@ pub(crate) fn clamp_selection(selected: usize, offset: usize, len: usize, height
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wheel_acceleration_starts_at_one_line_and_ramps_to_the_limit() {
+        let start = Instant::now();
+        let mut accel = ScrollAccelerator::default();
+
+        assert_eq!(accel.step(1, 3, start), 1);
+        assert_eq!(accel.step(1, 3, start + Duration::from_millis(10)), 2);
+        assert_eq!(accel.step(1, 3, start + Duration::from_millis(20)), 3);
+        assert_eq!(accel.step(1, 3, start + Duration::from_millis(30)), 3);
+    }
+
+    #[test]
+    fn wheel_acceleration_resets_after_a_pause_or_direction_change() {
+        let start = Instant::now();
+        let mut accel = ScrollAccelerator::default();
+
+        assert_eq!(accel.step(1, 3, start), 1);
+        assert_eq!(accel.step(1, 3, start + Duration::from_millis(10)), 2);
+        assert_eq!(
+            accel.step(
+                1,
+                3,
+                start + Duration::from_millis(10) + WHEEL_ACCELERATION_WINDOW * 2
+            ),
+            1
+        );
+        assert_eq!(accel.step(-1, 3, start + Duration::from_millis(500)), -1);
+        assert_eq!(accel.step(-1, 3, start + Duration::from_millis(510)), -2);
+    }
 
     #[test]
     fn wheel_events_map_to_line_deltas() {

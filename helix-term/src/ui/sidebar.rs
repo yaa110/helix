@@ -77,14 +77,10 @@ impl Sidebar {
             return false;
         }
 
-        let Some(delta) =
-            super::scroll::wheel_delta(event.kind, editor.config().scroll_lines.unsigned_abs())
-        else {
-            return false;
-        };
-
-        if event.row >= self.last_area.y.saturating_add(2) {
-            self.tree.scroll_view(delta);
+        let max_lines = editor.config().scroll_lines.unsigned_abs();
+        if event.row >= self.last_area.y.saturating_add(2)
+            && self.tree.wheel_scroll(event.kind, max_lines)
+        {
             editor.sidebar.selected = self.tree.selected_path().map(std::path::Path::to_path_buf);
             editor.needs_redraw = true;
         }
