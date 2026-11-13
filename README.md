@@ -134,7 +134,9 @@ Additional tree behavior:
   shows dirty files only; status is refreshed in the background (every 2s in
   dirty-only mode, otherwise 10s).
 - `.git`/VCS directories are never listed, expanded, or searched. Fuzzy tree
-  search filters loaded/expanded rows and excludes gitignored entries.
+  search walks the full workspace (up to 50k entries) while skipping `.git`,
+  gitignored files, and build/cache trees, so collapsed folders are searchable
+  without hanging.
 - Long names are clipped at the pane boundary; the statusline shows the full
   selected path, and `<space><` / `<space>>` scroll long rows.
 - Selection is shown with the row background only; tree names stay regular

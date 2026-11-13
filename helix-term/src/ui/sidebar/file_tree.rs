@@ -15,6 +15,7 @@ use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::sidebar::{SidebarFocus, SidebarState};
 use helix_view::Editor;
 use ignore::gitignore::GitignoreBuilder;
+use ignore::WalkBuilder;
 use tui::buffer::Buffer as Surface;
 
 use crate::commands;
@@ -95,10 +96,100 @@ impl FileTree {
     }
 
     pub fn rebuild(&mut self, editor: &Editor, state: &SidebarState) {
+        if !self.filter.is_empty() {
+            self.rebuild_search();
+            return;
+        }
         let root = self.root.clone();
         self.rebuild_with(&root, &state.expanded, |path| {
             ui::directory_entries(path, editor)
         });
+    }
+
+    fn rebuild_search(&mut self) {
+        let root = self.root.clone();
+        let mut candidates = Vec::new();
+        for entry in WalkBuilder::new(&root)
+            .hidden(false)
+            .parents(true)
+            .ignore(true)
+            .git_ignore(true)
+            .git_global(true)
+            .git_exclude(true)
+            .follow_links(false)
+            .filter_entry(|entry| {
+                !matches!(
+                    entry.file_name().to_str(),
+                    Some(".git" | ".pijul" | ".jj" | ".hg" | ".svn")
+                )
+            })
+            .build()
+            .filter_map(Result::ok)
+            .take(50_000)
+        {
+            let path = entry.path();
+            if path != root {
+                candidates.push(path.to_path_buf());
+            }
+        }
+
+        let by_name: HashMap<String, PathBuf> = candidates
+            .iter()
+            .map(|path| {
+                let name = path
+                    .strip_prefix(&root)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .into_owned();
+                (name, path.clone())
+            })
+            .collect();
+        let names: Vec<&str> = by_name.keys().map(String::as_str).collect();
+        let matched: Vec<PathBuf> = fuzzy_match(&self.filter, names, true)
+            .into_iter()
+            .filter_map(|(name, _)| by_name.get(name).cloned())
+            .collect();
+
+        let mut keep = HashSet::new();
+        for path in matched {
+            let mut current = path.as_path();
+            keep.insert(current.to_path_buf());
+            while let Some(parent) = current.parent() {
+                if parent == root || !parent.starts_with(&root) {
+                    break;
+                }
+                keep.insert(parent.to_path_buf());
+                current = parent;
+            }
+        }
+
+        self.ignored_paths.clear();
+        let mut rows: Vec<Row> = keep
+            .into_iter()
+            .map(|path| {
+                let relative = path.strip_prefix(&root).unwrap_or(&path);
+                let kind = if path.is_dir() {
+                    EntryKind::Dir
+                } else {
+                    EntryKind::File
+                };
+                Row {
+                    depth: relative.components().count().saturating_sub(1),
+                    path,
+                    kind,
+                    expanded: kind == EntryKind::Dir,
+                }
+            })
+            .collect();
+        rows.sort_by(|a, b| a.path.cmp(&b.path));
+        if self.dirty_only {
+            rows.retain(|row| self.git_status.contains_key(&row.path));
+        }
+        self.rows = rows;
+        self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
+        self.labels = None;
+        self.label_prefix = None;
+        self.clamp_scroll();
     }
 
     pub fn rebuild_with(
