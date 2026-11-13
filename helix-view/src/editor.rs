@@ -1375,6 +1375,8 @@ pub struct Editor {
     pub idle_timer: Pin<Box<Sleep>>,
     redraw_timer: Pin<Box<Sleep>>,
     last_motion: Option<Motion>,
+    /// Generation counter used to cancel superseded smooth-scroll animations.
+    pub smooth_scroll_generation: u64,
     pub last_completion: Option<CompleteAction>,
     pub last_cwd: Option<PathBuf>,
     pub dir_stack: VecDeque<PathBuf>,
@@ -1540,6 +1542,7 @@ impl Editor {
             idle_timer: Box::pin(sleep(conf.idle_timeout)),
             redraw_timer: Box::pin(sleep(Duration::MAX)),
             last_motion: None,
+            smooth_scroll_generation: 0,
             last_completion: None,
             last_cwd: None,
             config,
