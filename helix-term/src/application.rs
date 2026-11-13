@@ -138,6 +138,7 @@ impl Application {
         use helix_view::editor::Action;
 
         let workspace_root = workspace_root_from_args(&args);
+        let has_explicit_files = !args.files.is_empty();
         let starts_with_folder =
             args.files.is_empty() || args.files.keys().next().is_some_and(|path| path.is_dir());
         let starts_with_file = !starts_with_folder
@@ -341,6 +342,16 @@ impl Application {
             editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
             editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             editor.bufferline_visible = false;
+
+            // File launches do not persist pane visibility, but they should
+            // still add their workspace root to the explicit recent list.
+            if has_explicit_files && !cfg!(feature = "integration") {
+                let mut ui_state = helix_view::ui_state::UiState::load();
+                ui_state.record_workspace(editor.workspace_root.clone());
+                if let Err(err) = ui_state.save() {
+                    log::warn!("failed to record recent workspace: {err}");
+                }
+            }
         } else {
             let mut ui_state = helix_view::ui_state::UiState::load();
             editor.sidebar.mode = ui_state.sidebar_mode;
