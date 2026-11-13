@@ -341,6 +341,10 @@ Code lenses use the same peek-style picker:
   `middle-click-paste = false`), but native wheel scrolling is enabled by
   default (`mouse-native-scroll = true`). Set it to `false` for fully mouse-free
   behavior, or enable `mouse = true` for full mouse support.
+- End-of-line diagnostic text is disabled by default
+  (`[editor] end-of-line-diagnostics = "disable"`). Cursor-line inline
+  diagnostics remain enabled (`[editor.inline-diagnostics] cursor-line =
+  "warning"`).
 - Cursor shape: underline in Normal/Select, I-beam-style bar in Insert.
 - `cursorline`, `color-modes`, `auto-save`, and `true-color` are enabled.
 - Auto-save runs on focus loss and after 1 second of inactivity.

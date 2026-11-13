@@ -211,6 +211,17 @@ mod tests {
     }
 
     #[test]
+    fn end_of_line_diagnostics_are_disabled_by_default() {
+        use helix_view::annotations::diagnostics::DiagnosticFilter;
+
+        let config = Config::load_test("");
+        assert_eq!(
+            config.editor.end_of_line_diagnostics,
+            DiagnosticFilter::Disable
+        );
+    }
+
+    #[test]
     fn mouse_native_scroll_defaults_true_and_parses() {
         let config = Config::load_test("");
         assert!(!config.editor.mouse);
