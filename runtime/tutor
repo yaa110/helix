@@ -1557,7 +1557,9 @@ letters! that is not good grammar. you can fix this.
 
  File tree:
    space b        open/focus the tree
-   /              edit the tree search (Enter not required)
+   /              edit tree search; Enter finishes editing
+   / again        resume editing without clearing the query
+   Cmd/Alt-Del    clear the query while still editing
    Space          open tree actions
    t / V          mark an item / clear all marks
    c / m / p      copy / cut / paste marks

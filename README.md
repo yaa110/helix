@@ -85,9 +85,11 @@ Search results stay visible when you move to the code area with
 
 | Direct key | Action |
 | --- | --- |
-| `/` | Start fuzzy search |
+| `/` | Start fuzzy search / edit the existing query |
 | printable characters | Edit the query while search is active |
+| `Enter` | Finish editing, keep filtered rows |
 | `Backspace` / `Ctrl-u` | Delete a query character / clear the query |
+| `Cmd/Alt-Backspace`, `Cmd/Alt-Delete` | Clear the query and keep editing |
 | `j` / `k`, `Down` / `Up` | Move the selection |
 | `J` / `K` | Move ten rows |
 | `g` / `G`, `gg` | First / last / first row |
@@ -102,8 +104,10 @@ Search results stay visible when you move to the code area with
 | `Esc` | Cancel search; press again to return focus to the editor |
 
 A dedicated `/` search box sits below the project name and filters files with
-the same fuzzy matcher as `<space>f`. The command-line hint shows whether
-`Esc` will cancel search or leave the tree.
+the same fuzzy matcher as `<space>f`. Press `Enter` to stop editing while
+keeping the filtered rows; `gw`, `<space>` actions, and navigation keep working
+on those rows. Press `/` again to resume editing the same query. The
+command-line hint shows whether `Esc` will cancel search or leave the tree.
 
 Press `<space>` in the tree to open a categorized which-key-style hint box:
 

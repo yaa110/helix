@@ -306,6 +306,45 @@ async fn slash_starts_tree_search_and_escape_unwinds() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn tree_enter_finishes_search_and_slash_resumes_it() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a\n")?;
+    std::fs::write(dir.path().join("ab.txt"), "ab\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>b/a").await?;
+    assert!(app.editor.sidebar.tree_search_active);
+    assert_eq!(app.sidebar_row_paths().len(), 2);
+
+    // Enter leaves the input but keeps the filtered rows.
+    helpers::send_keys(&mut app, "<ret>").await?;
+    assert!(!app.editor.sidebar.tree_search_active);
+    assert_eq!(app.editor.sidebar.tree_filter, "a");
+    assert_eq!(app.sidebar_row_paths().len(), 2);
+
+    // Plain typing is ignored, while Space actions still work.
+    helpers::send_keys(&mut app, "z").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "a");
+    helpers::send_keys(&mut app, "<space>").await?;
+    assert!(app.editor.autoinfo.is_some());
+    helpers::send_keys(&mut app, "<esc>").await?;
+
+    // `/` resumes editing the existing query.
+    helpers::send_keys(&mut app, "/b").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "ab");
+    assert!(app.editor.sidebar.tree_search_active);
+
+    // Cmd/Alt+Delete clears while staying in edit mode.
+    helpers::send_keys(&mut app, "<A-backspace>").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "");
+    assert!(app.editor.sidebar.tree_search_active);
+    helpers::send_keys(&mut app, "a").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "a");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn ctrl_w_moves_between_tree_and_editor_and_keeps_results() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::write(dir.path().join("a.txt"), "a\n")?;

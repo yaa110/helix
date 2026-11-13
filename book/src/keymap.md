@@ -349,10 +349,12 @@ which-key-style hint box.
 
 | Direct key        | Description                                      |
 | -----             | -----------                                      |
-| `/`               | Start fuzzy search                               |
+| `/`               | Start / resume editing the fuzzy query           |
 | printable text    | Edit the query while search is active            |
+| `Enter`           | Finish editing; keep filtered rows               |
 | `Backspace`       | Delete the last query character                  |
 | `Ctrl-u`          | Clear the query                                 |
+| `Cmd/Alt-Backspace`, `Cmd/Alt-Delete` | Clear while continuing to edit |
 | `j`, `k`, `Down`, `Up` | Move the selection                         |
 | `J`, `K`          | Move ten rows                                    |
 | `g`, `G`, `gg`    | First / last / first row                         |

@@ -617,7 +617,7 @@ impl FileTree {
                         surface.set_stringn(
                             area.x + hint_x as u16,
                             search_area.y,
-                            "  Esc clear",
+                            "  / edit · Esc clear",
                             area.width as usize - hint_x,
                             muted,
                         );
@@ -1369,10 +1369,25 @@ impl FileTree {
         // Let global Ctrl/Alt chords through. In particular `<C-w>` must reach
         // the window keymap so users can move between the tree and code while
         // keeping the current search results.
+        if key.modifiers.contains(KeyModifiers::SUPER)
+            && self.search_mode
+            && matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+        {
+            self.set_query(String::new(), cx);
+            return true;
+        }
+
         if key
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
+            if key.modifiers.contains(KeyModifiers::ALT)
+                && self.search_mode
+                && matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+            {
+                self.set_query(String::new(), cx);
+                return true;
+            }
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
                 match key.code {
@@ -1551,6 +1566,7 @@ impl FileTree {
                 query.push(c);
                 self.set_query(query, cx);
             }
+            KeyCode::Enter => self.finish_search(cx),
             KeyCode::Esc => self.cancel_search(cx),
             _ => {}
         }
@@ -1567,6 +1583,13 @@ impl FileTree {
     fn enter_search(&mut self, cx: &mut commands::Context) {
         self.search_mode = true;
         cx.editor.sidebar.tree_search_active = true;
+        cx.editor.needs_redraw = true;
+    }
+
+    fn finish_search(&mut self, cx: &mut commands::Context) {
+        self.search_mode = false;
+        self.g_pending = false;
+        cx.editor.sidebar.tree_search_active = false;
         cx.editor.needs_redraw = true;
     }
 
