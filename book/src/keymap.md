@@ -466,21 +466,24 @@ These mappings are in the style of [vim-unimpaired](https://github.com/tpope/vim
 
 #### Global search window
 
-`Space + /` opens global search in the same peek picker used by `Space + f`
-(the file picker). Type the query; results include the matching path, line, and
-a source preview. `Enter` opens the selected location and `Esc` closes the
-window.
+`Space + /` opens a floating search-and-replace window with a source preview.
+It keeps the previous query, replacement, options, results, and selection when
+reopened. `Space + /` from the tree opens it too, and `Space + b` from the
+window returns to the tree.
 
 | Key | Description |
 | --- | --- |
-| printable text | Search workspace contents |
-| `j` / `k`, `Down` / `Up` | Move through results |
+| printable text | Edit the find query |
+| `Tab` | Find → Replace → Results |
+| `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve-case |
+| `Space` | Categorized options hint box |
+| `j` / `k` | Move through results |
 | `Enter` | Open the selected match |
-| `Esc` | Close the search window |
-| `Ctrl-u` | Clear the query |
+| `Ctrl-r` | Replace selected match |
+| `Ctrl-Alt-Enter` | Replace all |
+| `Esc` | Close the window |
 
-`:search-replace-all` and `:search-replace-current` remain available for
-replace workflows.
+`:search-replace-all` and `:search-replace-current` remain available.
 
 ## Insert mode
 

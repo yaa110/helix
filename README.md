@@ -1,4 +1,4 @@
-# Helix Improved
+# Helix Code
 
 ![Helix Improved screenshot](assets/helix.png)
 
@@ -143,10 +143,20 @@ Additional tree behavior:
 
 ### Global search
 
-`<space>/` opens global search in the same peek picker used by `<space>f`.
-Type to search workspace contents; each result shows `path:line` and a preview
-of the matching code. `Enter` opens the selection, `Esc` closes the picker.
-Query history is preserved by the picker's history register.
+`<space>/` opens a floating search-and-replace window with a source preview.
+It keeps the previous query, replacement, options, results, cursor, and
+selection when reopened. `<space>/` from the tree opens it too, and `<space>b`
+from search returns to the tree.
+
+- `Find:` and `Replace:` inputs.
+- Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
+- `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
+- `<space>` opens a categorized options hint box; `c`/`w`/`r`/`p` toggle the
+  same settings, `/` closes the window, `b` opens the tree.
+- `Enter` previews/opens the selected match; `Esc` closes without moving the
+  cursor.
+- Empty search shows a hint; no matches shows `No results found`.
+- Replace current/all with `Ctrl-r` / `Ctrl-Alt-Enter`.
 
 ### Peek and code lenses
 
@@ -182,9 +192,10 @@ Code lenses use the same peek-style picker:
   `[mode][spinner][branch][file name][read-only][modified]`; right:
   `[diagnostics][selections][selection length] │ [position][total lines] │
   [encoding][line ending][indent style][file type]`.
-- **Layout**: `[panes][tabs]` on the first row, then `[panes][code]`, then a
-  full-width command/error line, with the full-width powerline at the very
-  bottom.
+- **Layout**: `[panes][tabs]`, then `[panes][breadcrumbs]`, then
+  `[panes][code]`, then a full-width command/error line, with the full-width
+  powerline at the very bottom. Breadcrumbs show the current file path relative
+  to the project.
 - **Startup panes**: opening a file, stdin, or a git commit message starts with
   the tree and tabs hidden; opening a folder restores the last global pane
   layout. `<space>T` toggles the tab bar, and pane visibility is saved globally

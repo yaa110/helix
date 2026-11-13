@@ -314,9 +314,9 @@ impl FileTree {
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_else(|| root_name.clone());
         let header = if self.command_mode {
-            format!("{root_name} | {folder_name}  [commands]")
+            format!("{folder_name}  [commands]")
         } else {
-            format!("{root_name} | {folder_name}")
+            folder_name.clone()
         };
         surface.clear_with(Rect::new(area.x, area.y, area.width, 1), header_bg);
         surface.set_stringn(
@@ -348,7 +348,10 @@ impl FileTree {
                         search_area.y,
                         "type to filter",
                         query_width,
-                        theme.get("ui.text.inactive"),
+                        theme
+                            .try_get_exact("ui.linenr")
+                            .or_else(|| theme.try_get_exact("ui.text.inactive"))
+                            .unwrap_or_default(),
                     );
                 } else {
                     surface.set_stringn(
@@ -1202,7 +1205,8 @@ impl FileTree {
             }
             KeyCode::Char('/') => {
                 self.leave_command_mode(cx);
-                crate::commands::global_search(cx);
+                cx.editor.sidebar.search_modal = true;
+                cx.editor.sidebar.focus = SidebarFocus::Sidebar;
                 return true;
             }
             KeyCode::Char('b') => {

@@ -706,11 +706,7 @@ impl EditorView {
         let widths: Vec<usize> = docs
             .iter()
             .enumerate()
-            .map(|(index, doc)| {
-                label_for(doc, index).width()
-                    + usize::from(doc.is_modified()) * 3
-                    + usize::from(index == current_index) * 2
-            })
+            .map(|(index, doc)| label_for(doc, index).width() + usize::from(doc.is_modified()) * 3)
             .collect();
         let mut start = 0;
         while start < current_index {
@@ -776,6 +772,81 @@ impl EditorView {
                         modified_style,
                     )
                     .0;
+            }
+        }
+    }
+
+    /// Render the breadcrumb bar below the buffer tabs.
+    pub fn render_breadcrumbs(editor: &Editor, viewport: Rect, surface: &mut Surface) {
+        let theme = &editor.theme;
+        let background = theme
+            .try_get("ui.bufferline.background")
+            .unwrap_or_else(|| theme.get("ui.background"));
+        surface.clear_with(viewport, background);
+
+        let doc_id = view!(editor).doc;
+        let Some(doc) = editor.document(doc_id) else {
+            return;
+        };
+        let Some(path) = doc.path() else {
+            surface.set_stringn(
+                viewport.x,
+                viewport.y,
+                SCRATCH_BUFFER_NAME,
+                viewport.width as usize,
+                theme.get("ui.text.inactive"),
+            );
+            return;
+        };
+
+        let mut parts: Vec<String> = Vec::new();
+        if let Ok(relative) = path.strip_prefix(&editor.workspace_root) {
+            if let Some(root) = editor.workspace_root.file_name() {
+                parts.push(root.to_string_lossy().into_owned());
+            }
+            for component in relative.components() {
+                if let std::path::Component::Normal(part) = component {
+                    parts.push(part.to_string_lossy().into_owned());
+                }
+            }
+        } else {
+            for component in path.components() {
+                if let std::path::Component::Normal(part) = component {
+                    parts.push(part.to_string_lossy().into_owned());
+                }
+            }
+        }
+        if parts.is_empty() {
+            parts.push(SCRATCH_BUFFER_NAME.to_string());
+        }
+
+        let inactive = theme.get("ui.text.inactive");
+        let active = theme.get("ui.text");
+        let separator = theme.get("ui.linenr");
+        let right = viewport.right();
+        let mut x = viewport.x;
+        for (index, part) in parts.iter().enumerate() {
+            if index > 0 {
+                x = surface
+                    .set_stringn(
+                        x,
+                        viewport.y,
+                        " › ",
+                        right.saturating_sub(x) as usize,
+                        separator,
+                    )
+                    .0;
+            }
+            let style = if index + 1 == parts.len() {
+                active
+            } else {
+                inactive
+            };
+            x = surface
+                .set_stringn(x, viewport.y, part, right.saturating_sub(x) as usize, style)
+                .0;
+            if x >= right {
+                break;
             }
         }
     }
@@ -1803,10 +1874,10 @@ impl Component for EditorView {
             page_area
         };
 
-        // Reserve the top row for buffer tabs.
+        // Reserve the top rows for buffer tabs and the breadcrumb bar.
         let mut code_area = editor_full;
         if use_bufferline {
-            code_area = code_area.clip_top(1);
+            code_area = code_area.clip_top(2);
         }
 
         // if the terminal size suddenly changed, we need to trigger a resize
@@ -1814,6 +1885,7 @@ impl Component for EditorView {
 
         if use_bufferline {
             Self::render_bufferline(cx.editor, editor_full.with_height(1), surface);
+            Self::render_breadcrumbs(cx.editor, editor_full.clip_top(1).with_height(1), surface);
         }
 
         for (view, is_focused) in cx.editor.tree.views() {
