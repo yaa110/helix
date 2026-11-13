@@ -701,7 +701,8 @@ impl EditorView {
                 .unwrap_or_default()
                 .to_str()
                 .unwrap_or_default();
-            format!(" {} {fname} ", index + 1)
+            let icon = crate::ui::icons::file_icon(path);
+            format!(" {} {icon} {fname} ", index + 1)
         };
         let widths: Vec<usize> = docs
             .iter()

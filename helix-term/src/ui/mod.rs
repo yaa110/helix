@@ -1,6 +1,7 @@
 mod completion;
 mod document;
 pub(crate) mod editor;
+mod icons;
 mod info;
 pub mod lsp;
 mod markdown;

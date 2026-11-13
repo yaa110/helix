@@ -185,9 +185,9 @@ Code lenses use the same peek-style picker:
   conversions, line sorting, minify/beautify, format document, and create
   file/folder from a relative path (parent folders are created automatically).
 - **Always-visible Zellij-style buffer tabs** (`bufferline = "always"`):
-  numbered compact tabs, muted separators, an accent-colored active pill
-  (no bold/underline), and a modified dot. The active tab stays visible when
-  the strip overflows.
+  numbered compact tabs with file-type icons, muted separators, an
+  accent-colored active tab (no bold/underline), and a modified dot. The active
+  tab stays visible when the strip overflows.
 - **Full-width powerline**: spans the tree and buffers. Left:
   `[mode][spinner][branch][file name][read-only][modified]`; right:
   `[diagnostics][selections][selection length] │ [position][total lines] │
