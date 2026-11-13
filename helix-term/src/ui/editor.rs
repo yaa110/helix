@@ -702,11 +702,11 @@ impl EditorView {
                 .to_str()
                 .unwrap_or_default();
             let icon = crate::ui::icons::file_icon(path);
-            format!(" {icon} {fname} ")
+            (icon, fname.to_string(), format!(" {icon} {fname} "))
         };
         let widths: Vec<usize> = docs
             .iter()
-            .map(|doc| label_for(doc).width() + usize::from(doc.is_modified()) * 3)
+            .map(|doc| label_for(doc).2.width() + usize::from(doc.is_modified()) * 3)
             .collect();
         let mut start = 0;
         while start < current_index {
@@ -740,21 +740,38 @@ impl EditorView {
                 }
             }
 
-            let label = label_for(doc);
+            let (icon, fname, label) = label_for(doc);
             let style = if current_doc == doc.id() {
                 active
             } else {
                 inactive
             };
+            let path = doc.path().unwrap_or(&scratch);
+            let icon_style = style.patch(crate::ui::icons::file_icon_style(path));
+            let icon_width = icon.width();
+            x = surface
+                .set_stringn(x, viewport.y, " ", right.saturating_sub(x) as usize, style)
+                .0;
             x = surface
                 .set_stringn(
                     x,
                     viewport.y,
-                    &label,
+                    icon,
+                    right.saturating_sub(x) as usize,
+                    icon_style,
+                )
+                .0;
+            let rest = format!(" {fname} ");
+            x = surface
+                .set_stringn(
+                    x,
+                    viewport.y,
+                    &rest,
                     right.saturating_sub(x) as usize,
                     style,
                 )
                 .0;
+            let _ = (label, icon_width);
             if doc.is_modified() && x < right {
                 x = surface
                     .set_stringn(
