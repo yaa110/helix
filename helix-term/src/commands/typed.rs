@@ -249,6 +249,27 @@ fn buffer_gather_paths_impl(editor: &mut Editor, args: Args) -> Vec<DocumentId> 
     document_ids
 }
 
+fn open_folder(
+    cx: &mut compositor::Context,
+    _args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    let callback = async move {
+        let call: job::Callback = job::Callback::EditorCompositor(Box::new(
+            |editor: &mut Editor, compositor: &mut crate::compositor::Compositor| {
+                let picker = ui::folder_picker::FolderPicker::new(editor);
+                compositor.push(Box::new(overlaid_with(picker, 92, 92)));
+            },
+        ));
+        Ok(call)
+    };
+    cx.jobs.callback(callback);
+    Ok(())
+}
+
 fn buffer_close(
     cx: &mut compositor::Context,
     args: Args,
@@ -3126,6 +3147,17 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         completer: CommandCompleter::all(completers::filename),
         signature: Signature {
             positionals: (1, None),
+            ..Signature::DEFAULT
+        },
+    },
+    TypableCommand {
+        name: "open-folder",
+        aliases: &["folder"],
+        doc: "Open a folder picker and switch to the selected folder as a workspace.",
+        fun: open_folder,
+        completer: CommandCompleter::none(),
+        signature: Signature {
+            positionals: (0, Some(0)),
             ..Signature::DEFAULT
         },
     },

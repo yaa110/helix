@@ -1,6 +1,7 @@
 use helix_term::application::Application;
 use helix_term::file_watcher;
 use helix_view::doc;
+use helix_view::session::SessionStore;
 use helix_view::sidebar::{SidebarFocus, SidebarMode};
 
 use super::*;
@@ -90,6 +91,52 @@ async fn diagnostics_report_opens_in_a_buffer() -> anyhow::Result<()> {
     assert!(report.contains("Helix diagnostics"));
     assert!(report.contains("Session"));
     assert!(report.contains("Buffers"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn open_folder_command_and_alias_open_the_picker() -> anyhow::Result<()> {
+    let mut app = helpers::AppBuilder::new().build()?;
+    assert_eq!(app.compositor_layer_count(), 1);
+
+    helpers::send_keys(&mut app, ":open-folder<ret>").await?;
+    assert_eq!(app.compositor_layer_count(), 2);
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert_eq!(app.compositor_layer_count(), 1);
+
+    helpers::send_keys(&mut app, ":folder<ret>").await?;
+    assert_eq!(app.compositor_layer_count(), 2);
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert_eq!(app.compositor_layer_count(), 1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn folder_picker_opens_the_selected_folder_as_a_workspace() -> anyhow::Result<()> {
+    let root = tempfile::tempdir()?;
+    let home = root.path().join("home");
+    let child = home.join("child");
+    std::fs::create_dir_all(&child)?;
+    let store = SessionStore::new(root.path().join("state"));
+
+    let mut app = helpers::AppBuilder::new()
+        .with_session_store(store)
+        .with_workspace_dir(root.path())
+        .build()?;
+    helpers::send_keys(&mut app, ":open-folder<ret>").await?;
+    let path = home.display().to_string();
+    helpers::send_keys(&mut app, &format!("p<A-backspace>{path}<ret>")).await?;
+    helpers::send_keys(&mut app, "<ret>").await?;
+
+    assert_eq!(
+        std::fs::canonicalize(&app.editor.workspace_root)?,
+        std::fs::canonicalize(&child)?
+    );
+    assert_eq!(app.compositor_layer_count(), 1);
+    assert!(app
+        .editor
+        .get_status()
+        .is_some_and(|(status, _)| status.starts_with("Opened ")));
     Ok(())
 }
 

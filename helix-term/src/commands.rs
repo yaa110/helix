@@ -3854,7 +3854,7 @@ fn toggle_file_tree(cx: &mut Context) {
     cx.editor.save_ui_state();
 }
 
-fn switch_workspace(editor: &mut Editor, workspace: &Path) {
+pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     let _ = editor.save_session_if_active();
     let old_workspace = editor.workspace_root.clone();
     if editor.session_active {
@@ -3869,9 +3869,8 @@ fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     let sidebar_width = editor.sidebar.width;
     editor.workspace_root = workspace.to_path_buf();
     editor.refresh_workspace_branch();
-    if editor.session_active {
-        let _ = editor.session_store.mark_running(&editor.workspace_root);
-    }
+    editor.session_active = true;
+    let _ = editor.session_store.mark_running(&editor.workspace_root);
     editor.sidebar = helix_view::sidebar::SidebarState::default();
     editor.sidebar.width = sidebar_width;
     editor.sidebar.mode = SidebarMode::Files;
@@ -3884,9 +3883,11 @@ fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     editor.session_dirty = true;
     editor.needs_redraw = true;
 
-    let mut state = helix_view::ui_state::UiState::load();
-    state.record_workspace(workspace);
-    let _ = state.save();
+    if editor.ui_state_persist {
+        let mut state = helix_view::ui_state::UiState::load();
+        state.record_workspace(workspace);
+        let _ = state.save();
+    }
 }
 
 fn diagnostics(cx: &mut Context) {

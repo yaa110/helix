@@ -1564,6 +1564,11 @@ impl Application {
             .unwrap_or_default()
     }
 
+    #[cfg(feature = "integration")]
+    pub fn compositor_layer_count(&self) -> usize {
+        self.compositor.layer_count()
+    }
+
     pub async fn close(&mut self) -> Vec<anyhow::Error> {
         // [NOTE] we intentionally do not return early for errors because we
         //        want to try to run as much cleanup as we can, regardless of

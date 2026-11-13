@@ -207,6 +207,40 @@ from search returns to the tree.
   cursor.
 - Empty search shows hints; no matches shows `No results found`.
 
+### Folder picker
+
+`:open-folder` (alias `:folder`) opens a two-pane folder picker and switches
+the selected folder to a workspace with the same session save/restore behavior
+as launching `hx .` inside it. The selected folder is also added to `<space>W`.
+
+The picker starts at the current working directory when it is inside `$HOME`,
+otherwise at `$HOME`. Browsing with the arrow keys cannot go above `$HOME`;
+typing an absolute path can navigate anywhere. Both panes list only
+directories, including hidden and symlinked directories. Listings are loaded
+one level at a time, so choosing a folder previews its immediate children
+without walking the rest of the tree.
+
+| Key | Action |
+| --- | --- |
+| `/` | Edit fuzzy search over the current folder's items (non-recursive) |
+| `Enter` while searching | Finish editing and keep the filtered items |
+| `Cmd/Alt-Backspace`, `Cmd/Alt-Delete` | Clear the search or path field and keep editing |
+| `Up` / `Down` | Move the selection |
+| `Right`, `Space`, `o` | Enter the selected folder |
+| `Left`, `Delete`, `Backspace` | Go to the parent folder |
+| `p` | Edit the absolute path shown at the bottom |
+| `Enter` while editing the path | Navigate to that directory; `Esc` cancels |
+| `Enter` while browsing | Open the selected folder as a workspace |
+| `Esc` | Cancel search/path editing, otherwise close the picker |
+
+The search field is at the top and the absolute path is always shown at the
+bottom. Both fields use the command-line I-beam cursor and editing keys. When
+searching, the left pane is filtered and the right pane previews the direct
+subdirectories of the selected item; the preview is not selectable. Entering a
+folder clears the search and selects its first child, while going to the parent
+re-selects the folder that was left. Invalid or unreadable paths show an error
+and leave the current folder unchanged.
+
 ### Peek and code lenses
 
 - `gP` peeks the definition; `gR` peeks references.

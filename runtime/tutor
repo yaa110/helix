@@ -1583,8 +1583,23 @@ letters! that is not good grammar. you can fix this.
  Workspaces and sessions:
    space W        recent workspaces
    :session-save  save the current workspace session
+   :open-folder   open the two-pane folder picker (:folder)
    space i        open the diagnostics report
    :diff          show the git diff for the current file
+
+ Folder picker:
+   :open-folder   start at the current folder (inside HOME) or at HOME
+   /              fuzzy-search the current folder without recursing
+   p              edit the absolute path shown at the bottom
+   Enter          finish editing, navigate a path, or open the folder
+   Right/Space/o  enter the selected folder
+   Left/Del/Bksp   go to the parent folder
+   Esc            cancel editing, otherwise close the picker
+
+ The picker shows only folders, including hidden and symlinked ones.
+ The left pane lists the current folder; the right pane previews the
+ selected folder's direct children. Opening a folder records it in
+ space W and restores/saves its workspace session.
 
  Other additions:
    F1 or space t  text transforms, minify/beautify, format, create paths
