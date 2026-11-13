@@ -1,0 +1,27 @@
+helix-term/src/application.rs
+  s_c79ba96ad71296::t_87e018d4e0b719 185
+helix-term/src/commands.rs
+  s_c79ba96ad71296::t_b77b9a7e357434 3871
+helix-term/src/ui/statusline.rs
+  s_c79ba96ad71296::t_c828f802b37800 589-591
+helix-term/tests/test/sidebar.rs
+  s_c79ba96ad71296::t_b16b5d9ef8c035 96-127
+helix-view/src/editor.rs
+  s_c79ba96ad71296::t_e18014e4de5f02 1405-1406,1558,2330-2360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6f37f8afd72017a97944ae6178d3fa813006b240",
+  "prompts": {},
+  "sessions": {
+    "s_c79ba96ad71296": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "18cfef36-4fc0-4a57-ade5-5bbb3842fcfa",
+        "model": "gemini-3.1-pro-preview"
+      },
+      "human_author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
