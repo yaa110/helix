@@ -83,6 +83,10 @@ impl Sidebar {
                 .set_filter(editor.sidebar.tree_filter.clone(), editor);
         }
 
+        if self.tree.search_mode != editor.sidebar.tree_search_active {
+            self.tree.search_mode = editor.sidebar.tree_search_active;
+        }
+
         if editor.sidebar.mode == SidebarMode::Files {
             self.tree.poll_git_status(editor);
             if self.tree.git_status_needs_refresh(editor) {
@@ -183,6 +187,12 @@ impl Sidebar {
 
         if cx.editor.sidebar.mode == SidebarMode::Files && self.tree.handle_key(*key, cx) {
             return EventResult::Consumed(None);
+        }
+
+        // `:` belongs to the main command line even while the tree is focused.
+        // In tree search mode the tree consumes it as query text instead.
+        if key.code == KeyCode::Char(':') && self.tree.wants_command_line() {
+            return EventResult::Ignored(None);
         }
 
         match key.code {

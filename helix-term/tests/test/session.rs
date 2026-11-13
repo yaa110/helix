@@ -3,6 +3,7 @@ use helix_view::editor::Action;
 use helix_view::session::{self, SessionStore};
 use helix_view::sidebar::SidebarMode;
 use helix_view::view::ViewPosition;
+use std::path::PathBuf;
 
 use super::*;
 
@@ -54,6 +55,56 @@ async fn restore_round_trip_preserves_buffers_and_positions() -> anyhow::Result<
             vertical_offset: 0,
         }
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restoring_views_before_job_queue_init_does_not_deadlock() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let workspace = std::fs::canonicalize(dir.path())?;
+    let file = workspace.join("one.txt");
+    std::fs::write(&file, "one\n")?;
+
+    let path = PathBuf::from("one.txt");
+    let selection = session::SelectionState {
+        anchor: session::Point { line: 0, col: 0 },
+        head: session::Point { line: 0, col: 1 },
+    };
+    let saved = session::Session {
+        version: session::SESSION_VERSION,
+        workspace: workspace.clone(),
+        focused: Some(path.clone()),
+        buffers: vec![session::BufferState {
+            path: path.clone(),
+            selections: vec![selection.clone()],
+            primary: 0,
+            scroll: session::ScrollState::default(),
+        }],
+        views: vec![session::ViewSession {
+            path,
+            selections: vec![selection],
+            primary: 0,
+            scroll: session::ScrollState::default(),
+            split: session::SplitKind::Replace,
+        }],
+        focused_view: 0,
+        sidebar: session::SidebarSession::default(),
+        search: Default::default(),
+    };
+
+    let store = SessionStore::new(workspace.join("state"));
+    store.save(&saved)?;
+
+    // Build only one Application in this runtime. Adding a second build would
+    // initialize the job queue first and mask the startup deadlock.
+    let app = helpers::AppBuilder::new()
+        .with_session_store(store)
+        .with_workspace_dir(&workspace)
+        .with_config(session_config())
+        .build()?;
+
+    assert_eq!(app.editor.documents().count(), 1);
+    assert!(app.editor.documents().all(|doc| !doc.is_pristine_scratch()));
     Ok(())
 }
 

@@ -56,8 +56,10 @@ pub struct FileTree {
     pub cursor: usize,
     pub scroll: usize,
     pub filter: String,
+    pub search_mode: bool,
     pub command_mode: bool,
     pub overflow_hint: Option<String>,
+    g_pending: bool,
     pub dirty_only: bool,
     git_status: HashMap<PathBuf, GitFileStatus>,
     ignored_paths: HashSet<PathBuf>,
@@ -79,8 +81,10 @@ impl FileTree {
             cursor: 0,
             scroll: 0,
             filter: String::new(),
+            search_mode: false,
             command_mode: false,
             overflow_hint: None,
+            g_pending: false,
             dirty_only: false,
             git_status: HashMap::new(),
             ignored_paths: HashSet::new(),
@@ -327,9 +331,13 @@ impl FileTree {
         }
 
         let (tx, rx) = std::sync::mpsc::channel();
+        // `request_redraw` uses runtime-local state. Carry the runtime handle
+        // into the worker so integration builds do not panic when it completes.
+        let runtime = tokio::runtime::Handle::current();
         std::thread::spawn(move || {
             let statuses = load_git_status(&root);
             let _ = tx.send(statuses);
+            let _guard = runtime.enter();
             helix_event::request_redraw();
         });
         self.git_status_rx = Some(rx);
@@ -445,7 +453,9 @@ impl FileTree {
             title.patch(header_bg),
         );
 
-        // Dedicated fuzzy-search input beneath the project name.
+        // Dedicated `/` search input beneath the project name. Plain typing no
+        // longer filters; the query is only editable in search mode. Existing
+        // results stay visible after moving focus to the code area.
         if area.height > 1 {
             let search_area = Rect::new(area.x, area.y + 1, area.width, 1);
             surface.clear_with(search_area, theme.get("ui.menu"));
@@ -453,7 +463,19 @@ impl FileTree {
                 .try_get_exact("ui.linenr")
                 .or_else(|| theme.try_get_exact("ui.text.inactive"))
                 .unwrap_or_default();
-            if !focused {
+            let label = " / ";
+            let label_width = label.width() as u16;
+            let query_width = (area.width as usize).saturating_sub(label_width as usize);
+
+            if self.command_mode {
+                surface.set_stringn(
+                    area.x,
+                    search_area.y,
+                    " Esc to close commands",
+                    area.width as usize,
+                    muted,
+                );
+            } else if !focused && self.filter.is_empty() {
                 surface.set_stringn(
                     area.x,
                     search_area.y,
@@ -461,28 +483,31 @@ impl FileTree {
                     area.width as usize,
                     muted,
                 );
-            } else {
-                let label = " Find: ";
-                let label_width = label.width() as u16;
-                let label_style = if self.filter.is_empty() {
-                    muted
-                } else {
-                    text_style
-                };
+            } else if !focused {
+                surface.set_stringn(area.x, search_area.y, label, area.width as usize, muted);
+                if query_width > 0 {
+                    surface.set_stringn(
+                        area.x + label_width,
+                        search_area.y,
+                        &self.filter,
+                        query_width,
+                        text_style,
+                    );
+                }
+            } else if self.search_mode {
                 surface.set_stringn(
                     area.x,
                     search_area.y,
                     label,
                     area.width as usize,
-                    label_style,
+                    text_style,
                 );
-                let query_width = (area.width as usize).saturating_sub(label_width as usize);
                 if query_width > 0 {
                     if self.filter.is_empty() {
                         surface.set_stringn(
                             area.x + label_width,
                             search_area.y,
-                            "type to filter",
+                            "type to search",
                             query_width,
                             muted,
                         );
@@ -495,16 +520,49 @@ impl FileTree {
                             text_style,
                         );
                     }
-                    if !self.command_mode {
-                        let cursor_x = label_width as usize + self.filter.width();
-                        if cursor_x < area.width as usize {
-                            surface.set_style(
-                                Rect::new(area.x + cursor_x as u16, search_area.y, 1, 1),
-                                theme.get("ui.cursor"),
-                            );
-                        }
+                    let cursor_x = label_width as usize + self.filter.width();
+                    if cursor_x < area.width as usize {
+                        surface.set_style(
+                            Rect::new(area.x + cursor_x as u16, search_area.y, 1, 1),
+                            theme.get("ui.cursor"),
+                        );
                     }
                 }
+            } else if !self.filter.is_empty() {
+                surface.set_stringn(
+                    area.x,
+                    search_area.y,
+                    label,
+                    area.width as usize,
+                    text_style,
+                );
+                if query_width > 0 {
+                    surface.set_stringn(
+                        area.x + label_width,
+                        search_area.y,
+                        &self.filter,
+                        query_width,
+                        text_style,
+                    );
+                    let hint_x = label_width as usize + self.filter.width();
+                    if hint_x < area.width as usize {
+                        surface.set_stringn(
+                            area.x + hint_x as u16,
+                            search_area.y,
+                            "  Esc clear",
+                            area.width as usize - hint_x,
+                            muted,
+                        );
+                    }
+                }
+            } else {
+                surface.set_stringn(
+                    area.x,
+                    search_area.y,
+                    " / search   <space> actions   gw labels",
+                    area.width as usize,
+                    muted,
+                );
             }
         }
 
@@ -1062,6 +1120,8 @@ impl FileTree {
                 if let Err(err) = cx.editor.open(&row.path, action) {
                     cx.editor.set_error(err.to_string());
                 } else {
+                    self.search_mode = false;
+                    cx.editor.sidebar.tree_search_active = false;
                     cx.editor.sidebar.focus = SidebarFocus::Editor;
                     cx.editor.sidebar.selected = Some(row.path);
                 }
@@ -1114,53 +1174,144 @@ impl FileTree {
             return self.handle_command_key(key, cx);
         }
 
-        // Everything that is not a navigation key is a live fuzzy query. The
-        // tree actions live behind `<space>` so ordinary typing is free.
-        if key.code == KeyCode::Char(' ')
-            && !key
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        // Let global Ctrl/Alt chords through. In particular `<C-w>` must reach
+        // the window keymap so users can move between the tree and code while
+        // keeping the current search results.
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
-            self.enter_command_mode(cx);
-            return true;
+            if self.search_mode
+                && key.modifiers.contains(KeyModifiers::CONTROL)
+                && key.code == KeyCode::Char('u')
+            {
+                self.set_query(String::new(), cx);
+                return true;
+            }
+            self.g_pending = false;
+            return false;
+        }
+
+        if self.g_pending {
+            self.g_pending = false;
+            match key.code {
+                KeyCode::Char('w') => {
+                    self.start_jump_labels(cx);
+                    return true;
+                }
+                KeyCode::Char('g') => {
+                    self.cursor = 0;
+                    self.sync_selection(cx);
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        if self.search_mode {
+            return self.handle_search_key(key, cx);
         }
 
         match key.code {
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.set_query(String::new(), cx);
+            KeyCode::Char(' ') => {
+                self.enter_command_mode(cx);
+                true
             }
-            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let mut query = self.filter.clone();
-                while query.ends_with(char::is_whitespace) {
-                    query.pop();
+            KeyCode::Char('/') => {
+                self.enter_search(cx);
+                true
+            }
+            KeyCode::Char(':') => false,
+            KeyCode::Char('g') => {
+                self.g_pending = true;
+                true
+            }
+            KeyCode::Char('G') => {
+                self.cursor = self.rows.len().saturating_sub(1);
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Char('j') => {
+                if !self.rows.is_empty() {
+                    self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
                 }
-                while query.chars().last().is_some_and(|c| !c.is_whitespace()) {
-                    query.pop();
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Char('k') => {
+                self.cursor = self.cursor.saturating_sub(1);
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Char('J') => {
+                self.cursor = (self.cursor + 10).min(self.rows.len().saturating_sub(1));
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Char('K') => {
+                self.cursor = self.cursor.saturating_sub(10);
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Down => {
+                if !self.rows.is_empty() {
+                    self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
                 }
-                self.set_query(query, cx);
+                self.sync_selection(cx);
+                true
             }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                let mut query = self.filter.clone();
-                query.push(c);
-                self.set_query(query, cx);
+            KeyCode::Up => {
+                self.cursor = self.cursor.saturating_sub(1);
+                self.sync_selection(cx);
+                true
             }
-            KeyCode::Backspace => {
-                let mut query = self.filter.clone();
-                query.pop();
-                self.set_query(query, cx);
+            KeyCode::Right => {
+                if let Some(row) = self.selected_row().cloned() {
+                    if row.kind == EntryKind::Dir && !row.expanded {
+                        self.toggle_expand(cx);
+                    } else {
+                        self.open_selected(cx, Action::Replace);
+                    }
+                }
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Left => {
+                self.collapse_or_parent(cx);
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Enter => {
+                self.open_selected(cx, Action::Replace);
+                self.sync_selection(cx);
+                true
+            }
+            KeyCode::Tab => {
+                if self
+                    .selected_row()
+                    .is_some_and(|row| row.kind == EntryKind::File)
+                {
+                    self.open_selected(cx, Action::Replace);
+                } else {
+                    self.focus_editor(cx);
+                }
+                self.sync_selection(cx);
+                true
             }
             KeyCode::Esc => {
-                if !self.filter.is_empty() {
-                    self.set_query(String::new(), cx);
+                if self.search_mode || !self.filter.is_empty() {
+                    self.cancel_search(cx);
                 } else {
-                    cx.editor.sidebar.focus = SidebarFocus::Editor;
-                    cx.editor.needs_redraw = true;
+                    self.focus_editor(cx);
                 }
+                true
             }
+            _ => true,
+        }
+    }
+
+    fn handle_search_key(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
+        match key.code {
             KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
                 if !self.rows.is_empty() {
@@ -1183,47 +1334,48 @@ impl FileTree {
                 self.cursor = self.cursor.saturating_sub(1);
                 self.sync_selection(cx);
             }
-            KeyCode::Right => {
-                if let Some(row) = self.selected_row().cloned() {
-                    if row.kind == EntryKind::Dir && !row.expanded {
-                        self.toggle_expand(cx);
-                    } else {
-                        self.open_selected(cx, Action::Replace);
-                    }
-                }
-                self.sync_selection(cx);
+            KeyCode::Backspace => {
+                let mut query = self.filter.clone();
+                query.pop();
+                self.set_query(query, cx);
             }
-            KeyCode::Left => {
-                self.collapse_or_parent(cx);
-                self.sync_selection(cx);
+            KeyCode::Char(c) => {
+                let mut query = self.filter.clone();
+                query.push(c);
+                self.set_query(query, cx);
             }
-            KeyCode::Enter => {
-                self.open_selected(cx, Action::Replace);
-                self.sync_selection(cx);
-            }
-            KeyCode::Tab => {
-                if self
-                    .selected_row()
-                    .is_some_and(|row| row.kind == EntryKind::File)
-                {
-                    self.open_selected(cx, Action::Replace);
-                } else {
-                    cx.editor.sidebar.focus = SidebarFocus::Editor;
-                }
-                self.sync_selection(cx);
-            }
-            _ => {
-                // Let global Ctrl/Alt chords through.
-                if key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-                {
-                    return false;
-                }
-            }
+            KeyCode::Esc => self.cancel_search(cx),
+            _ => {}
         }
 
+        // Ctrl/Alt are handled before this function so that global window
+        // commands such as `<C-w><right>` keep working during search.
         true
+    }
+
+    pub fn wants_command_line(&self) -> bool {
+        self.labels.is_none() && !self.command_mode && !self.search_mode
+    }
+
+    fn enter_search(&mut self, cx: &mut commands::Context) {
+        self.search_mode = true;
+        cx.editor.sidebar.tree_search_active = true;
+        cx.editor.needs_redraw = true;
+    }
+
+    fn cancel_search(&mut self, cx: &mut commands::Context) {
+        self.search_mode = false;
+        self.g_pending = false;
+        cx.editor.sidebar.tree_search_active = false;
+        self.set_query(String::new(), cx);
+    }
+
+    fn focus_editor(&mut self, cx: &mut commands::Context) {
+        self.search_mode = false;
+        self.g_pending = false;
+        cx.editor.sidebar.tree_search_active = false;
+        cx.editor.sidebar.focus = SidebarFocus::Editor;
+        cx.editor.needs_redraw = true;
     }
 
     fn set_query(&mut self, query: String, cx: &mut commands::Context) {
@@ -1249,7 +1401,6 @@ impl FileTree {
             ("l, Right", "Expand or open"),
             ("g / G", "First / last row"),
             ("J / K", "Move ten rows"),
-            ("w", "Jump labels"),
             ("", "── Open ──"),
             ("Enter, o", "Open"),
             ("s / v", "Open in horizontal / vertical split"),
@@ -1269,6 +1420,7 @@ impl FileTree {
             ("", "── Session ──"),
             ("/", "Open global search"),
             ("b", "Hide sidebar"),
+            (":", "Open command line"),
             ("q / Esc", "Return to editor / close commands"),
         ];
         cx.editor.autoinfo = Some(Info::new("Tree commands (Space)", &body));
@@ -1295,9 +1447,13 @@ impl FileTree {
                 self.leave_command_mode(cx);
                 return true;
             }
+            KeyCode::Char(':') => {
+                self.leave_command_mode(cx);
+                return false;
+            }
             KeyCode::Char('q') => {
                 self.leave_command_mode(cx);
-                cx.editor.sidebar.focus = SidebarFocus::Editor;
+                self.focus_editor(cx);
                 return true;
             }
             KeyCode::Char('j') | KeyCode::Down => {
@@ -1358,11 +1514,6 @@ impl FileTree {
                 cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
                 cx.editor.sidebar.focus = SidebarFocus::Editor;
                 cx.editor.save_ui_state();
-                return true;
-            }
-            KeyCode::Char('w') => {
-                self.start_jump_labels(cx);
-                self.leave_command_mode(cx);
                 return true;
             }
             KeyCode::Char('g') => self.cursor = 0,

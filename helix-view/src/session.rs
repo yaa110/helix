@@ -8,7 +8,8 @@ use sha2::{Digest, Sha256};
 
 use crate::editor::Action;
 use crate::sidebar::{SearchInputs, SidebarConfig, SidebarMode};
-use crate::view::ViewPosition;
+use crate::tree::Layout;
+use crate::view::{View, ViewPosition};
 use crate::{DocumentId, Editor};
 
 pub const SESSION_VERSION: u32 = 2;
@@ -456,26 +457,50 @@ fn restore_views(editor: &mut Editor, session: &Session) -> RestoreOutcome {
             outcome.skipped.push(path);
             continue;
         }
-        let action = if index == 0 {
-            Action::Replace
-        } else {
-            match view_session.split {
-                SplitKind::Horizontal => Action::HorizontalSplit,
-                SplitKind::Vertical | SplitKind::Replace => Action::VerticalSplit,
+
+        // Open with `Action::Load`: unlike `Replace`/splits this does not
+        // dispatch `DocumentFocusLost`. That event's prompt handler dispatches
+        // a blocking job, which previously deadlocked startup before the job
+        // queue was ready and can leave stale callbacks during restore.
+        let doc_id = match editor.open(&path, Action::Load) {
+            Ok(doc_id) => doc_id,
+            Err(_) => {
+                outcome.skipped.push(path);
+                continue;
             }
         };
-        match editor.open(&path, action) {
-            Ok(doc_id) => {
-                let view_id = editor.tree.focus;
-                outcome.restored += 1;
-                restored.push((index, view_id, doc_id, view_session));
-            }
-            Err(_) => outcome.skipped.push(path),
-        }
+
+        let view_id = if restored.is_empty() {
+            // Reuse the existing (scratch) view for the first restored buffer.
+            let view = crate::view_mut!(editor);
+            view.doc = doc_id;
+            let doc = crate::doc_mut!(editor, &doc_id);
+            doc.ensure_view_init(view.id);
+            doc.mark_as_focused();
+            view.id
+        } else {
+            let layout = match view_session.split {
+                SplitKind::Horizontal => Layout::Horizontal,
+                SplitKind::Vertical | SplitKind::Replace => Layout::Vertical,
+            };
+            let view_id = editor
+                .tree
+                .split(View::new(doc_id, editor.config().gutters.clone()), layout);
+            let doc = crate::doc_mut!(editor, &doc_id);
+            doc.ensure_view_init(view_id);
+            doc.mark_as_focused();
+            view_id
+        };
+
+        outcome.restored += 1;
+        restored.push((index, view_id, doc_id, view_session));
     }
 
+    // The scratch view was only a placeholder for restoring the first buffer.
+    // If nothing could be restored it stays as the empty editor buffer, but it
+    // is hidden from tabs/breadcrumbs.
     if let Some(scratch) = scratch {
-        if !restored.iter().any(|(_, _, doc_id, _)| *doc_id == scratch) {
+        if !restored.is_empty() {
             let _ = editor.close_document(scratch, true);
         }
     }

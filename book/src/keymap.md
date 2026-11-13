@@ -342,20 +342,29 @@ tree is focused hides the sidebar. `Esc`/`q` returns focus to the editor while
 keeping the sidebar visible. The old global-search picker is still available as
 the static `global_search` command if you want to bind it yourself.
 
-The tree is search-first: plain typing is a live fuzzy filter. Tree actions
-live behind `Space`, which opens a which-key-style hint box.
+Press `/` to start fuzzy search; plain typing no longer filters the tree.
+Search results persist when moving to the editor with `Ctrl-w Right` and back
+with `Ctrl-w Left`. Tree actions live behind `Space`, which opens a
+which-key-style hint box.
 
 | Direct key        | Description                                      |
 | -----             | -----------                                      |
-| printable text    | Live fuzzy filter                                |
+| `/`               | Start fuzzy search                               |
+| printable text    | Edit the query while search is active            |
 | `Backspace`       | Delete the last query character                  |
-| `Ctrl-u`, `Ctrl-w`| Clear the query / delete the last query word     |
-| `Down`, `Up`      | Move the selection                               |
+| `Ctrl-u`          | Clear the query                                 |
+| `j`, `k`, `Down`, `Up` | Move the selection                         |
+| `J`, `K`          | Move ten rows                                    |
+| `g`, `G`, `gg`    | First / last / first row                         |
+| `gw`              | Show two-letter jump labels                      |
 | `Ctrl-Down`, `Ctrl-Up` | Smooth-scroll by `scroll-lines`             |
 | `Right`, `Left`   | Expand/open, or collapse/parent                  |
 | `Enter`           | Open the file                                    |
 | `Tab`             | Open the file, or return to the editor           |
-| `Esc`             | Clear the filter, then return to the editor      |
+| `:`               | Open the main command line                       |
+| `Ctrl-w Left`     | Move to the tree from the leftmost buffer        |
+| `Ctrl-w Right`    | Move from the tree back to the editor            |
+| `Esc`             | Cancel search; press again to return to editor   |
 
 `Space` commands:
 
@@ -375,7 +384,7 @@ live behind `Space`, which opens a which-key-style hint box.
 | `W`               | Open a recently used workspace                   |
 | `/`               | Open global search                               |
 | `b`               | Hide the sidebar                                 |
-| `w`               | Show two-letter jump labels                      |
+| `:`               | Open the main command line                       |
 | `g`, `G`          | First / last row                                 |
 | `J`, `K`          | Move ten rows                                    |
 | `H`, `R`          | Collapse all / refresh                           |
@@ -392,9 +401,11 @@ changes.
 
 Unhandled `Ctrl`/`Alt` chords are passed through to the normal keymap while the
 sidebar is focused, so custom global bindings (for example
-`C-e = "file_picker"`) work from the tree. `Space` is owned by the tree command
-box; focus the editor first to use the global `Space` menu. Tree rows are
-clipped at the pane edge and the statusline shows the full path when the
+`C-e = "file_picker"`) work from the tree. This includes `Ctrl-w Left` from the
+leftmost editor buffer (focus the tree) and `Ctrl-w Right` from the tree (focus
+the editor) without clearing the current search. `Space` is owned by the tree
+command box; focus the editor first to use the global `Space` menu. Tree rows
+are clipped at the pane edge and the statusline shows the full path when the
 selected row is too long; use `Space` `<` / `Space` `>` to scroll.
 
 Selection is shown with the row background only; tree names stay regular (not

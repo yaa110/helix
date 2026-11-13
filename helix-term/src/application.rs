@@ -181,6 +181,11 @@ impl Application {
         editor.session_store = session_store;
         editor.session_active = session_active;
 
+        // Initialize the job queue before restoring the session. Focus events
+        // dispatched during restore can enqueue blocking jobs; starting the
+        // queue later would deadlock startup.
+        let jobs = Jobs::new();
+
         let mut restored_buffers = 0;
         let mut session_loaded = false;
         if session_active && restore_enabled {
@@ -206,8 +211,6 @@ impl Application {
         }));
         let editor_view = Box::new(ui::EditorView::new(Keymaps::new(keys)));
         compositor.push(editor_view);
-
-        let jobs = Jobs::new();
 
         let (file_watcher, fs_events, fs_tx) = {
             let editor_config = config.load();

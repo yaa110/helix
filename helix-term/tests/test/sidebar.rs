@@ -181,6 +181,68 @@ async fn gw_jump_labels_select_a_row() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn slash_starts_tree_search_and_escape_unwinds() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a\n")?;
+    std::fs::write(dir.path().join("b.txt"), "b\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>b").await?;
+
+    // Plain typing no longer filters the tree.
+    helpers::send_keys(&mut app, "a").await?;
+    assert_eq!(app.sidebar_row_paths().len(), 2);
+
+    // `/` starts search; only then does typing filter.
+    helpers::send_keys(&mut app, "/a").await?;
+    assert_eq!(app.sidebar_row_paths().len(), 1);
+    assert!(app.editor.sidebar.tree_search_active);
+
+    // First Esc cancels search, second leaves the tree.
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Sidebar);
+    assert!(app.editor.sidebar.tree_filter.is_empty());
+    assert!(!app.editor.sidebar.tree_search_active);
+    assert_eq!(app.sidebar_row_paths().len(), 2);
+
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Editor);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ctrl_w_moves_between_tree_and_editor_and_keeps_results() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a\n")?;
+    std::fs::write(dir.path().join("b.txt"), "b\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>b/a<C-w><right>").await?;
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Editor);
+    assert_eq!(app.editor.sidebar.tree_filter, "a");
+    assert!(!app.editor.sidebar.tree_search_active);
+    assert_eq!(app.sidebar_row_paths().len(), 1);
+
+    helpers::send_keys(&mut app, "<C-w><left>").await?;
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Sidebar);
+    assert_eq!(app.editor.sidebar.tree_filter, "a");
+    assert_eq!(app.sidebar_row_paths().len(), 1);
+
+    helpers::send_keys(&mut app, "<esc>").await?;
+    assert!(app.editor.sidebar.tree_filter.is_empty());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn colon_from_tree_opens_the_command_line() -> anyhow::Result<()> {
+    let mut app = helpers::AppBuilder::new().build()?;
+    test_key_sequences(&mut app, vec![(Some("<space>b:q!<ret>"), None)], true).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn creating_an_existing_file_does_not_truncate_it() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let file = dir.path().join("keep.txt");
@@ -188,7 +250,7 @@ async fn creating_an_existing_file_does_not_truncate_it() -> anyhow::Result<()> 
     let mut app = helpers::AppBuilder::new().build()?;
     app.editor.workspace_root = dir.path().to_path_buf();
 
-    helpers::send_keys(&mut app, "<space>ba").await?;
+    helpers::send_keys(&mut app, "<space>b<space>a").await?;
     helpers::send_keys(&mut app, "keep.txt<ret>").await?;
     assert_eq!(std::fs::read_to_string(&file)?, "keep me\n");
     Ok(())
@@ -222,11 +284,11 @@ async fn create_rename_and_delete_from_tree() -> anyhow::Result<()> {
     test_key_sequences(
         &mut app,
         vec![
-            (Some("<space>ba"), None),
+            (Some("<space>b<space>a"), None),
             (Some("new<ret>"), Some(&check_created)),
-            (Some("r<C-u>renamed<ret>"), Some(&check_renamed)),
+            (Some("<space>r<C-u>renamed<ret>"), Some(&check_renamed)),
             // The delete confirmation defaults to No; Tab selects Yes.
-            (Some("d<tab><ret>"), Some(&check_deleted)),
+            (Some("<space>d<tab><ret>"), Some(&check_deleted)),
             (Some("<esc>:q!<ret>"), None),
         ],
         true,

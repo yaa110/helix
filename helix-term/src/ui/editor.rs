@@ -687,7 +687,10 @@ impl EditorView {
             .unwrap_or_else(|| theme.get("ui.linenr"));
 
         let current_doc = view!(editor).doc;
-        let docs: Vec<&Document> = editor.documents().collect();
+        let docs: Vec<&Document> = editor
+            .documents()
+            .filter(|doc| !doc.is_pristine_scratch())
+            .collect();
         let current_index = docs
             .iter()
             .position(|doc| doc.id() == current_doc)
@@ -798,12 +801,17 @@ impl EditorView {
         let Some(doc) = editor.document(doc_id) else {
             return;
         };
+        // An untouched scratch buffer is just an empty editor placeholder, not
+        // a real open file. Keep the breadcrumb row blank for it.
+        if doc.is_pristine_scratch() {
+            return;
+        }
         let Some(path) = doc.path() else {
             surface.set_stringn(
-                viewport.x,
+                viewport.x.saturating_add(1),
                 viewport.y,
                 SCRATCH_BUFFER_NAME,
-                viewport.width as usize,
+                viewport.width.saturating_sub(1) as usize,
                 theme.get("ui.text.inactive"),
             );
             return;
@@ -838,7 +846,7 @@ impl EditorView {
             .unwrap_or_else(|| theme.get("ui.text"));
         let separator = theme.get("ui.linenr");
         let right = viewport.right();
-        let mut x = viewport.x;
+        let mut x = viewport.x.saturating_add(1);
         for (index, part) in parts.iter().enumerate() {
             if index > 0 {
                 x = surface
@@ -1859,10 +1867,16 @@ impl Component for EditorView {
 
         // check if bufferline should be rendered
         use helix_view::editor::BufferLine;
+        let visible_document_count = cx
+            .editor
+            .documents()
+            .filter(|doc| !doc.is_pristine_scratch())
+            .count();
         let use_bufferline = cx.editor.bufferline_visible
+            && visible_document_count > 0
             && match config.bufferline {
                 BufferLine::Always => true,
-                BufferLine::Multiple if cx.editor.documents.len() > 1 => true,
+                BufferLine::Multiple if visible_document_count > 1 => true,
                 _ => false,
             };
 
@@ -1948,7 +1962,12 @@ impl Component for EditorView {
             let hint = if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
                 && cx.editor.sidebar.mode == helix_view::sidebar::SidebarMode::Files
             {
-                " Press Esc to return to the editor"
+                if cx.editor.sidebar.tree_search_active || !cx.editor.sidebar.tree_filter.is_empty()
+                {
+                    " Press Esc to cancel search, Esc again to return to the editor"
+                } else {
+                    " Press Esc to return to the editor"
+                }
             } else {
                 " Type : to run a command"
             };

@@ -82,6 +82,8 @@ pub struct SidebarState {
     pub reveal_current: bool,
     /// Current file-tree filter text (runtime only).
     pub tree_filter: String,
+    /// Whether the tree's `/` search input currently owns typing (runtime only).
+    pub tree_search_active: bool,
 }
 
 impl Default for SidebarState {
@@ -100,6 +102,7 @@ impl Default for SidebarState {
             search_focus_query: false,
             reveal_current: false,
             tree_filter: String::new(),
+            tree_search_active: false,
         }
     }
 }

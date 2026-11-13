@@ -3825,18 +3825,22 @@ fn toggle_file_tree(cx: &mut Context) {
         (SidebarMode::Hidden, _) => {
             sidebar.mode = SidebarMode::Files;
             sidebar.focus = SidebarFocus::Sidebar;
+            sidebar.tree_search_active = false;
         }
         (_, SidebarFocus::Editor) => {
             sidebar.mode = SidebarMode::Files;
             sidebar.focus = SidebarFocus::Sidebar;
+            sidebar.tree_search_active = false;
         }
         (SidebarMode::Files, SidebarFocus::Sidebar) => {
             sidebar.mode = SidebarMode::Hidden;
             sidebar.focus = SidebarFocus::Editor;
+            sidebar.tree_search_active = false;
         }
         (SidebarMode::Search, SidebarFocus::Sidebar) => {
             sidebar.mode = SidebarMode::Files;
             sidebar.focus = SidebarFocus::Sidebar;
+            sidebar.tree_search_active = false;
         }
     }
     cx.editor.needs_redraw = true;
@@ -3927,6 +3931,7 @@ fn buffer_picker(cx: &mut Context) {
         .editor
         .documents
         .values()
+        .filter(|doc| !doc.is_pristine_scratch())
         .map(new_meta)
         .collect::<Vec<BufferMeta>>();
 
@@ -6522,10 +6527,32 @@ fn rotate_view_reverse(cx: &mut Context) {
 }
 
 fn jump_view_right(cx: &mut Context) {
+    if cx.editor.sidebar.focus == SidebarFocus::Sidebar {
+        cx.editor.sidebar.focus = SidebarFocus::Editor;
+        cx.editor.sidebar.tree_search_active = false;
+        cx.editor.needs_redraw = true;
+        return;
+    }
     cx.editor.focus_direction(tree::Direction::Right)
 }
 
 fn jump_view_left(cx: &mut Context) {
+    if cx.editor.sidebar.focus == SidebarFocus::Editor
+        && cx.editor.sidebar.mode != SidebarMode::Hidden
+        && cx
+            .editor
+            .tree
+            .find_split_in_direction(cx.editor.tree.focus, tree::Direction::Left)
+            .is_none()
+    {
+        cx.editor.sidebar.focus = SidebarFocus::Sidebar;
+        cx.editor.sidebar.tree_search_active = false;
+        cx.editor.needs_redraw = true;
+        return;
+    }
+    if cx.editor.sidebar.focus == SidebarFocus::Sidebar {
+        return;
+    }
     cx.editor.focus_direction(tree::Direction::Left)
 }
 

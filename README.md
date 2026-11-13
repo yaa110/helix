@@ -1,6 +1,6 @@
 # Helix Code
 
-![Helix Improved screenshot](assets/helix.png)
+![Helix Improved screenshot](assets/helix2.png)
 
 A personal, AI-assisted fork of [Helix](https://github.com/helix-editor/helix)
 that keeps modal editing while adding the VSCode-style workflow pieces this fork
@@ -79,22 +79,31 @@ hx --version
 ### File tree and sidebar
 
 `<space>b` shows and focuses the tree; press it again from the editor to hide
-it. The tree is search-first: typing filters it live with fuzzy matching.
+it. Press `/` to start fuzzy search; plain typing no longer filters the tree.
+Search results stay visible when you move to the code area with
+`Ctrl-w Right` and come back with `Ctrl-w Left`.
 
 | Direct key | Action |
 | --- | --- |
-| printable characters | Live fuzzy filter |
-| `Backspace` | Delete the last query character |
-| `Ctrl-u` / `Ctrl-w` | Clear the query / delete the last query word |
-| `Down` / `Up` | Move the selection |
+| `/` | Start fuzzy search |
+| printable characters | Edit the query while search is active |
+| `Backspace` / `Ctrl-u` | Delete a query character / clear the query |
+| `j` / `k`, `Down` / `Up` | Move the selection |
+| `J` / `K` | Move ten rows |
+| `g` / `G`, `gg` | First / last / first row |
+| `gw` | Show two-letter jump labels |
 | `Ctrl-Down` / `Ctrl-Up` | Smooth-scroll by `scroll-lines` (default 3) |
 | `Right` / `Left` | Expand/open, or collapse/parent |
 | `Enter` | Open the selected file and focus the editor |
 | `Tab` | Open the selected file, or return to the editor on a directory |
-| `Esc` | Clear the filter; when empty, return focus to the editor |
+| `:` | Open the main command line |
+| `Ctrl-w Left` | Move to the tree from the leftmost editor buffer |
+| `Ctrl-w Right` | Move from the tree back to the editor, keeping results |
+| `Esc` | Cancel search; press again to return focus to the editor |
 
-A dedicated `Find:` box sits below the project name and filters files with the
-same fuzzy matcher as `<space>f`.
+A dedicated `/` search box sits below the project name and filters files with
+the same fuzzy matcher as `<space>f`. The command-line hint shows whether
+`Esc` will cancel search or leave the tree.
 
 Press `<space>` in the tree to open a categorized which-key-style hint box:
 
@@ -114,7 +123,7 @@ Press `<space>` in the tree to open a categorized which-key-style hint box:
 | `W` | Open a recently used workspace |
 | `/` | Open global search |
 | `b` | Hide the sidebar |
-| `w` | Show two-letter jump labels |
+| `:` | Open the main command line |
 | `g` / `G` | First / last row |
 | `J` / `K` | Move ten rows |
 | `H` / `R` | Collapse all / refresh |
@@ -190,7 +199,10 @@ Code lenses use the same peek-style picker:
 - **Session restore** of buffers, split layout, per-view selections and scroll,
   sidebar state, and search inputs per workspace. Sessions are stored in a
   compact binary format. Split layout and each view's selection/scroll are
-  restored; hidden buffers are reopened after the visible views.
+  restored; hidden buffers are reopened after the visible views. Missing or
+  unreadable entries are skipped so a broken restore never blocks startup. An
+  untouched empty scratch buffer is hidden from tabs, breadcrumbs, the
+  statusline file name, and the buffer picker when no file is open.
 - **Automatic file reload** with silent reload for clean buffers and a
   Keep/Reload/Overwrite prompt for dirty buffers.
 - **F1 action picker** (`F1` or `<space>t`): base64/hex encode/decode, case
