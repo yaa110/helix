@@ -1,0 +1,19 @@
+helix-term/src/ui/sidebar/file_tree.rs
+  s_c79ba96ad71296::t_a2de343374e07e 11-12,14,84-85,115-116,462,581-582,592,596,601-606,782,1379-1385,1387-1412,1419-1420,1423-1425,1427-1428,1430-1431,1556-1557,1559,1566,1581-1629,1632-1640,1651-1658,1665,1694-1697,1704-1806,2092-2095
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aedb2dcba2f46cc647ac0d7f70a86809a4248848",
+  "prompts": {},
+  "sessions": {
+    "s_c79ba96ad71296": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "18cfef36-4fc0-4a57-ade5-5bbb3842fcfa",
+        "model": "gemini-3.8-flash"
+      },
+      "human_author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
