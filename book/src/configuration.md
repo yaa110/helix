@@ -34,7 +34,7 @@ The sidebar width is configured with:
 
 ```toml
 [editor.sidebar]
-width = 30
+width = 35
 min-width = 20
 max-width = 50
 git-status = true
