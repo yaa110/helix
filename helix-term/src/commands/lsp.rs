@@ -37,7 +37,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt::Display,
     future::Future,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 /// Gets the first language server that is attached to a document which supports a specific feature.
@@ -599,16 +599,9 @@ impl ui::menu::Item for CodeActionItem {
 struct CodeLensItem {
     title: String,
     line: usize,
+    path: PathBuf,
     ls_id: LanguageServerId,
     command: lsp::Command,
-}
-
-impl ui::menu::Item for CodeLensItem {
-    type Data = ();
-
-    fn format(&self, _data: &Self::Data) -> Row<'_> {
-        format!("{}: {}", self.line + 1, self.title).into()
-    }
 }
 
 pub fn code_lens(cx: &mut Context) {
@@ -631,14 +624,19 @@ pub(crate) fn update_code_lenses(cx: &mut Context) {
 }
 
 fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: bool) {
-    let (doc_id, identifier, cursor_line) = {
+    let (doc_id, identifier, cursor_line, doc_path) = {
         let (view, doc) = current_ref!(cx.editor);
-        if doc.path().is_none() {
+        let Some(path) = doc.path() else {
             return;
-        }
+        };
         let text = doc.text().slice(..);
         let cursor = doc.selection(view.id).primary().cursor(text);
-        (doc.id(), doc.identifier(), text.char_to_line(cursor))
+        (
+            doc.id(),
+            doc.identifier(),
+            text.char_to_line(cursor),
+            path.to_path_buf(),
+        )
     };
 
     let client_ids: Vec<_> = {
@@ -694,6 +692,7 @@ fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: boo
                             lenses.push(CodeLensItem {
                                 title: command.title.clone(),
                                 line: lens.range.start.line as usize,
+                                path: doc_path.clone(),
                                 ls_id,
                                 command,
                             });
@@ -744,15 +743,14 @@ fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: boo
                 return;
             }
 
-            let picker = ui::Menu::new(items, (), |editor, item, event| {
-                if event != PromptEvent::Validate {
-                    return;
-                }
-                let Some(item) = item else {
-                    return;
-                };
-                let Some(client) = editor.language_servers.get_by_id(item.ls_id) else {
-                    editor.set_error("language server is no longer available");
+            let columns = [ui::PickerColumn::new(
+                "code-lens",
+                |item: &CodeLensItem, _: &()| format!("{}: {}", item.line + 1, item.title).into(),
+            )];
+            let picker = Picker::new(columns, 0, items, (), |cx, item, _action| {
+                let Some(client) = cx.editor.language_servers.get_by_id(item.ls_id) else {
+                    cx.editor
+                        .set_error("language server is no longer available");
                     return;
                 };
                 if let Some(request) = client.command(item.command.clone()) {
@@ -762,11 +760,11 @@ fn request_code_lenses(cx: &mut Context, current_line_only: bool, show_menu: boo
                         }
                     });
                 }
+            })
+            .with_preview(|_editor, item| {
+                Some((item.path.as_path().into(), Some((item.line, item.line))))
             });
-            let popup = Popup::new("code-lens", picker)
-                .with_scrollbar(false)
-                .auto_close(true);
-            compositor.replace_or_push("code-lens", popup);
+            compositor.push(Box::new(overlaid(picker)));
         };
 
         Ok(Callback::EditorCompositor(Box::new(call)))

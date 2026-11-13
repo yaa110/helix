@@ -419,21 +419,22 @@ Code lenses are the LSP mechanism VSCode uses for gopls’s `run test` /
 `run benchmark` above Go functions and rust-analyzer’s `▶ Run` lens. This fork
 adds generic code-lens support — no Go-specific or debug-adapter code.
 
-- `<space>l` — open a menu of code lenses on the cursor line
-- `<space>L` — open a menu of all code lenses in the current file
+- `<space>l` — open a peek-style picker of code lenses on the cursor line
+- `<space>L` — open a peek-style picker of all code lenses in the current file
 - The first lens on the cursor line is shown in the statusline (`CodeLens`
   statusline element, enabled by default)
-- Selecting a menu item executes the LSP command via
+- Selecting a lens executes the LSP command via
   `workspace/executeCommand`; server-initiated `workspace/applyEdit` is handled
   by the existing LSP integration
 
-The menu is keyboard only: `j`/`k` or arrows to move, `Enter` to execute, `Esc`
-to cancel. Lenses are refreshed on idle after edits. Code actions remain on
-`<space>a`; they are a different protocol.
+The picker uses the same layout and preview pane as `gP`/`gR`: `j`/`k` or
+arrows to move, typing to filter, `Enter` to execute, `Esc` to cancel. The
+preview shows the source around the selected lens. Lenses are refreshed on idle
+after edits. Code actions remain on `<space>a`; they are a different protocol.
 
 Lenses whose command is supplied lazily through `codeLens/resolve` are resolved
-automatically before the menu is shown. No inline virtual-text button is
-rendered: the menu + statusline is less intrusive for a modal editor.
+automatically before the picker is shown. No inline virtual-text button is
+rendered: the picker + statusline is less intrusive for a modal editor.
 
 > **gopls note:** recent gopls versions disable the `test` code-lens source by
 > default (VS Code renders tests through its own UI). This fork's
