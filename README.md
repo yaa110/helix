@@ -182,9 +182,11 @@ from search returns to the tree.
   toggle the same settings, `/` starts editing, `b` opens the tree.
 - `Esc` leaves edit mode, then closes the hint box, then closes the search
   window without moving the cursor.
-- `Enter` previews/opens the selected match while browsing results.
-- Replace: `Ctrl-r` replaces the selected match/file, and `Ctrl-Alt-Enter`
-  replaces all.
+- `Enter` opens the selected result as-is while browsing results.
+- `r` replaces the selected result item; `R` replaces all results.
+- `Ctrl-r` and `Ctrl-Alt-Enter` remain available as aliases.
+- The active field/result area is marked with `▸` and the focused field shows a
+  cursor.
 - Empty search shows hints; no matches shows `No results found`.
 
 ### Peek and code lenses

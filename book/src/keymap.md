@@ -495,9 +495,10 @@ window returns to the tree.
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve-case |
 | `Space` | Categorized options/replace hint box |
 | `j` / `k` | Move through results |
-| `Enter` in results | Open the selected match |
-| `Ctrl-r` | Replace selected match/file |
-| `Ctrl-Alt-Enter` | Replace all |
+| `Enter` in results | Open the selected result as-is |
+| `r` | Replace the selected result item |
+| `R` | Replace all results |
+| `Ctrl-r` / `Ctrl-Alt-Enter` | Replace aliases |
 | `Alt-Enter` | Select all matches in file |
 | `Esc` | Leave edit mode, then close hint box, then window |
 

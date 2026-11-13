@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
+use helix_core::unicode::width::UnicodeWidthStr;
 use helix_view::graphics::Rect;
 use helix_view::info::Info;
 use helix_view::input::{KeyCode, KeyModifiers};
@@ -187,22 +188,34 @@ impl SearchPane {
         let selected = theme.get("ui.menu.selected");
         let dim = theme.get("ui.linenr");
         let label = theme.get("ui.sidebar.title");
+        let focus_style = theme.get("ui.text.focus");
         let width = area.width.saturating_sub(2);
         let max_x = area.x + area.width - 1;
         let mut y = area.y;
 
-        // Query input. Labels make it obvious that this is an editable field,
-        // and TextInput clips/scolls long queries internally.
-        let query_label = "Find: ";
-        let query_label_width = query_label.len() as u16;
-        surface.set_stringn(area.x + 1, y, query_label, width as usize, label);
+        // Query input. Labels make it obvious which field is active, and
+        // TextInput clips/scolls long queries internally.
+        let query_active = self.editing && self.focus == SearchFocus::Query;
+        let query_label = if query_active {
+            "▸ Find: "
+        } else {
+            "  Find: "
+        };
+        let query_label_width = query_label.width() as u16;
+        surface.set_stringn(
+            area.x + 1,
+            y,
+            query_label,
+            width as usize,
+            if query_active { focus_style } else { label },
+        );
         let query_width = width.saturating_sub(query_label_width);
         if query_width > 0 {
             self.query.render(
                 Rect::new(area.x + 1 + query_label_width, y, query_width, 1),
                 surface,
                 theme,
-                self.editing && self.focus == SearchFocus::Query,
+                query_active,
             );
         }
         y += 1;
@@ -241,27 +254,56 @@ impl SearchPane {
         }
 
         if y < area.y + area.height {
-            let hints = if self.editing {
-                "Enter search · Tab Find/Replace · Esc results · Space options"
+            let (focus_name, hints) = if self.editing {
+                if self.focus == SearchFocus::Replace {
+                    ("Replace", "Enter search · Tab Find · Esc results")
+                } else {
+                    ("Find", "Enter search · Tab Replace · Esc results")
+                }
             } else {
-                "/ edit · Space options · Alt-c/w/r/p"
+                (
+                    "Results",
+                    "j/k move · Enter open · r replace · R replace all · / edit",
+                )
             };
-            surface.set_stringn(area.x + 1, y, hints, width as usize, dim);
+            let prefix = format!("▸ {focus_name}  ");
+            let prefix_width = prefix.width() as u16;
+            surface.set_stringn(area.x + 1, y, &prefix, width as usize, focus_style);
+            if prefix_width < width {
+                surface.set_stringn(
+                    area.x + 1 + prefix_width,
+                    y,
+                    hints,
+                    width.saturating_sub(prefix_width) as usize,
+                    dim,
+                );
+            }
             y += 1;
         }
 
         // Replacement input.
-        let replace_label = "Replace: ";
-        let replace_label_width = replace_label.len() as u16;
+        let replace_active = self.editing && self.focus == SearchFocus::Replace;
+        let replace_label = if replace_active {
+            "▸ Replace: "
+        } else {
+            "  Replace: "
+        };
+        let replace_label_width = replace_label.width() as u16;
         if y < area.y + area.height {
-            surface.set_stringn(area.x + 1, y, replace_label, width as usize, label);
+            surface.set_stringn(
+                area.x + 1,
+                y,
+                replace_label,
+                width as usize,
+                if replace_active { focus_style } else { label },
+            );
             let replace_width = width.saturating_sub(replace_label_width);
             if replace_width > 0 {
                 self.replacement.render(
                     Rect::new(area.x + 1 + replace_label_width, y, replace_width, 1),
                     surface,
                     theme,
-                    self.editing && self.focus == SearchFocus::Replace,
+                    replace_active,
                 );
             }
             y += 1;
@@ -754,11 +796,12 @@ impl SearchPane {
             ("p", "Preserve case"),
             ("", "── Search ──"),
             ("/", "Edit Find (without clearing)"),
-            ("Enter", "Run search / leave edit mode"),
-            ("Tab", "Switch Find ⇄ Replace while editing"),
-            ("", "── Replace ──"),
-            ("Ctrl-r", "Replace selected match / file"),
-            ("Ctrl-Alt-Enter", "Replace all"),
+            ("Enter (editing)", "Run search"),
+            ("Tab (editing)", "Switch Find ⇄ Replace"),
+            ("", "── Results ──"),
+            ("Enter", "Open selected item"),
+            ("r", "Replace selected item"),
+            ("R", "Replace all"),
             ("Alt-Enter", "Select all matches in file"),
             ("", "── Pane ──"),
             ("b", "Open file tree"),
@@ -963,7 +1006,7 @@ impl SearchPane {
                 return EventResult::Consumed(None);
             }
             SearchFocus::Results => match key.code {
-                KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('r') => {
                     let result = if matches!(&self.rows.get(self.cursor), Some(ResultRow::File(_)))
                     {
                         self.selected_file()
@@ -981,6 +1024,11 @@ impl SearchPane {
                         Err(err) => cx.editor.set_error(err.to_string()),
                     }
                 }
+                KeyCode::Char('R') => {
+                    if let Err(err) = self.replace_all(cx) {
+                        cx.editor.set_error(err.to_string());
+                    }
+                }
                 KeyCode::Char('j') | KeyCode::Down => {
                     if !self.rows.is_empty() {
                         self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
@@ -991,9 +1039,6 @@ impl SearchPane {
                 }
                 KeyCode::Char('h') | KeyCode::Left => self.collapse_selected(),
                 KeyCode::Char('l') | KeyCode::Right => self.expand_selected(),
-                KeyCode::Char('R') => {
-                    self.pending = true;
-                }
                 KeyCode::Enter => {
                     if let Some(matched) = self.selected_match() {
                         if let Err(err) = open_match_with_action(

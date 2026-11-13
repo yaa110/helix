@@ -224,10 +224,36 @@ async fn replace_all_from_search_pane_updates_disk_and_reports() -> anyhow::Resu
     wait_for_search_results(&mut app, 2).await;
     // Put the replace text into the pane, then replace across the result set.
     app.editor.sidebar.search.replacement = "bar".into();
-    helpers::send_keys(&mut app, "<C-A-ret>").await?;
+    helpers::send_keys(&mut app, "R").await?;
 
     assert_eq!(std::fs::read_to_string(&a)?, "bar\n");
     assert_eq!(std::fs::read_to_string(&b)?, "bar\n");
     assert!(app.editor.get_status().is_some());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn r_replaces_selected_item_and_r_replaces_all() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    std::fs::write(&a, "foo\n")?;
+    std::fs::write(&b, "foo\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>//foo<ret>").await?;
+    wait_for_search_results(&mut app, 2).await;
+    app.editor.sidebar.search.replacement = "bar".into();
+
+    // The first row is a file header: `r` replaces only that file.
+    helpers::send_keys(&mut app, "r").await?;
+    assert_eq!(std::fs::read_to_string(&a)?, "bar\n");
+    assert_eq!(std::fs::read_to_string(&b)?, "foo\n");
+    wait_for_search_results(&mut app, 1).await;
+
+    // Uppercase R replaces the remaining result set.
+    helpers::send_keys(&mut app, "R").await?;
+    assert_eq!(std::fs::read_to_string(&b)?, "bar\n");
     Ok(())
 }
