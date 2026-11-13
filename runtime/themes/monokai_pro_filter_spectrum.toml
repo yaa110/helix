@@ -98,7 +98,7 @@
 
 # VSCode "Monokai Pro (Filter Spectrum)" UI mappings.
 # Sidebar/explorer
-"ui.sidebar" = { bg = "base1" }
+"ui.sidebar" = { bg = "#252526" }
 "ui.sidebar.border" = { fg = "base0" }
 "ui.sidebar.title" = { fg = "base7", modifiers = ["bold"] }
 "ui.tree.header" = { fg = "base7", bg = "base2", modifiers = ["bold"] }
