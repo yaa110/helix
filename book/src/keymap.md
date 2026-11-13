@@ -351,6 +351,8 @@ which-key-style hint box.
 | -----             | -----------                                      |
 | `/`               | Start / resume editing the fuzzy query           |
 | printable text    | Edit the query while search is active            |
+| arrows, `Home`/`End`, `Ctrl/Alt+Left`/`Right` | Move the text cursor |
+| `Ctrl+Backspace`/`Delete` | Delete the previous/next word         |
 | `Enter`           | Finish editing; keep filtered rows               |
 | `Backspace`       | Delete the last query character                  |
 | `Ctrl-u`          | Clear the query                                 |
@@ -493,6 +495,8 @@ window returns to the tree.
 | --- | --- |
 | `/` | Edit Find without clearing it |
 | printable text | Edit Find/Replace while in edit mode |
+| arrows, `Home`/`End`, `Ctrl/Alt+Left`/`Right` | Move the text cursor |
+| `Ctrl+Backspace`/`Delete` | Delete the previous/next word |
 | `Enter` in edit mode | Run the search and return to results |
 | `Tab` in edit mode | Cycle Find ⇄ Replace |
 | terminal paste | Enter edit mode and insert into the active input |

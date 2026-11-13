@@ -106,8 +106,10 @@ Search results stay visible when you move to the code area with
 A dedicated `/` search box sits below the project name and filters files with
 the same fuzzy matcher as `<space>f`. Press `Enter` to stop editing while
 keeping the filtered rows; `gw`, `<space>` actions, and navigation keep working
-on those rows. Press `/` again to resume editing the same query. The
-command-line hint shows whether `Esc` will cancel search or leave the tree.
+on those rows. Press `/` again to resume editing the same query. The search
+field uses the command-line I-beam cursor and editing keys: arrows,
+`Home`/`End`, `Ctrl/Alt+Left`/`Right` for word movement, and word deletion.
+The command-line hint shows whether `Esc` will cancel search or leave the tree.
 
 Press `<space>` in the tree to open a categorized which-key-style hint box:
 
@@ -190,6 +192,8 @@ from search returns to the tree.
   into the focused Find/Replace input instead of the document.
 - `Cmd-Backspace`/`Cmd-Delete` (or `Alt-Backspace`/`Alt-Delete`) clears the
   focused Find/Replace field.
+- Both fields use the command-line I-beam cursor and editing keys: arrows,
+  `Home`/`End`, `Ctrl/Alt+Left`/`Right` for word movement, and word deletion.
 - Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
 - `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
 - `<space>` opens a categorized options/replace hint box; `c`/`w`/`r`/`p`

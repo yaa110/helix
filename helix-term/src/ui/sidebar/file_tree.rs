@@ -8,8 +8,10 @@ use std::time::{Duration, Instant};
 
 use helix_core::fuzzy::fuzzy_match;
 use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
+use helix_core::Position;
+use helix_view::document::Mode;
 use helix_view::editor::Action;
-use helix_view::graphics::{Modifier, Rect};
+use helix_view::graphics::{CursorKind, Modifier, Rect};
 use helix_view::info::Info;
 use helix_view::input::KeyEvent;
 use helix_view::keyboard::{KeyCode, KeyModifiers};
@@ -79,6 +81,8 @@ pub struct FileTree {
     pub cursor: usize,
     pub scroll: usize,
     pub filter: String,
+    filter_cursor: usize,
+    cursor_pos: Option<Position>,
     pub search_mode: bool,
     pub command_mode: bool,
     pub overflow_hint: Option<String>,
@@ -108,6 +112,8 @@ impl FileTree {
             cursor: 0,
             scroll: 0,
             filter: String::new(),
+            filter_cursor: 0,
+            cursor_pos: None,
             search_mode: false,
             command_mode: false,
             overflow_hint: None,
@@ -453,6 +459,7 @@ impl FileTree {
     }
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
+        self.cursor_pos = None;
         let theme = &editor.theme;
         let title = if focused {
             theme
@@ -571,6 +578,8 @@ impl FileTree {
                     text_style,
                 );
                 if query_width > 0 {
+                    let cursor_column = self.filter[..self.filter_cursor].width();
+                    let offset = cursor_column.saturating_sub(query_width.saturating_sub(1));
                     if self.filter.is_empty() {
                         surface.set_stringn(
                             area.x + label_width,
@@ -580,21 +589,21 @@ impl FileTree {
                             muted,
                         );
                     } else {
+                        let visible = skip_columns(&self.filter, offset);
                         surface.set_stringn(
                             area.x + label_width,
                             search_area.y,
-                            &self.filter,
+                            visible,
                             query_width,
                             text_style,
                         );
                     }
-                    let cursor_x = label_width as usize + self.filter.width();
-                    if cursor_x < area.width as usize {
-                        surface.set_style(
-                            Rect::new(area.x + cursor_x as u16, search_area.y, 1, 1),
-                            theme.get("ui.cursor"),
-                        );
-                    }
+                    let cursor_x =
+                        area.x + label_width + cursor_column.saturating_sub(offset) as u16;
+                    self.cursor_pos = Some(Position::new(
+                        search_area.y as usize,
+                        cursor_x.min(area.x + area.width - 1) as usize,
+                    ));
                 }
             } else if !self.filter.is_empty() {
                 surface.set_stringn(
@@ -770,6 +779,7 @@ impl FileTree {
     }
 
     pub fn set_filter(&mut self, filter: String, editor: &mut Editor) {
+        self.filter_cursor = filter.len();
         self.filter = filter.clone();
         editor.sidebar.tree_filter = filter;
         self.rebuild_from_editor(editor);
@@ -1366,49 +1376,59 @@ impl FileTree {
             return self.handle_command_key(key, cx);
         }
 
-        // Let global Ctrl/Alt chords through. In particular `<C-w>` must reach
-        // the window keymap so users can move between the tree and code while
-        // keeping the current search results.
-        if key.modifiers.contains(KeyModifiers::SUPER)
-            && self.search_mode
-            && matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+        // While editing, route Ctrl/Alt editing chords into the search field.
+        // `<C-w>` remains available to the global window keymap so users can
+        // move between tree and code without cancelling search.
+        if self.search_mode
+            && key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
         {
-            self.set_query(String::new(), cx);
-            return true;
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(key.code, KeyCode::Up | KeyCode::Down)
+            {
+                let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+                if key.code == KeyCode::Down {
+                    if !self.rows.is_empty() {
+                        self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
+                    }
+                } else {
+                    self.cursor = self.cursor.saturating_sub(lines);
+                }
+                self.sync_selection(cx);
+                return true;
+            }
+            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('w') {
+                self.g_pending = false;
+                return false;
+            }
+            if (key.modifiers.contains(KeyModifiers::ALT)
+                || key.modifiers.contains(KeyModifiers::SUPER))
+                && matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+            {
+                self.set_query(String::new(), cx);
+                return true;
+            }
+            return self.handle_search_key(key, cx);
         }
 
         if key
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
-            if key.modifiers.contains(KeyModifiers::ALT)
-                && self.search_mode
-                && matches!(key.code, KeyCode::Backspace | KeyCode::Delete)
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(key.code, KeyCode::Up | KeyCode::Down)
             {
-                self.set_query(String::new(), cx);
-                return true;
-            }
-            if key.modifiers.contains(KeyModifiers::CONTROL) {
                 let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
-                match key.code {
-                    KeyCode::Down => {
-                        if !self.rows.is_empty() {
-                            self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
-                        }
-                        self.sync_selection(cx);
-                        return true;
+                if key.code == KeyCode::Down {
+                    if !self.rows.is_empty() {
+                        self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
                     }
-                    KeyCode::Up => {
-                        self.cursor = self.cursor.saturating_sub(lines);
-                        self.sync_selection(cx);
-                        return true;
-                    }
-                    KeyCode::Char('u') if self.search_mode => {
-                        self.set_query(String::new(), cx);
-                        return true;
-                    }
-                    _ => {}
+                } else {
+                    self.cursor = self.cursor.saturating_sub(lines);
                 }
+                self.sync_selection(cx);
+                return true;
             }
             self.g_pending = false;
             return false;
@@ -1533,15 +1553,17 @@ impl FileTree {
     }
 
     fn handle_search_key(&mut self, key: KeyEvent, cx: &mut commands::Context) -> bool {
+        let control = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
         match key.code {
-            KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Down if control => {
                 let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
                 if !self.rows.is_empty() {
                     self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
                 }
                 self.sync_selection(cx);
             }
-            KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Up if control => {
                 let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
                 self.cursor = self.cursor.saturating_sub(lines);
                 self.sync_selection(cx);
@@ -1556,14 +1578,66 @@ impl FileTree {
                 self.cursor = self.cursor.saturating_sub(1);
                 self.sync_selection(cx);
             }
-            KeyCode::Backspace => {
-                let mut query = self.filter.clone();
-                query.pop();
+            KeyCode::Backspace if control || alt => self.delete_filter_word_backward(cx),
+            KeyCode::Backspace => self.delete_filter_char_backward(cx),
+            KeyCode::Delete if control || alt => self.delete_filter_word_forward(cx),
+            KeyCode::Delete => self.delete_filter_char_forward(cx),
+            KeyCode::Left if control || alt => {
+                self.move_filter_word_backward();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Right if control || alt => {
+                self.move_filter_word_forward();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Left => {
+                self.move_filter_char_backward();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Right => {
+                self.move_filter_char_forward();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Home => {
+                self.filter_cursor = 0;
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::End => {
+                self.filter_cursor = self.filter.len();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Char('a') if control => {
+                self.filter_cursor = 0;
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Char('e') if control => {
+                self.filter_cursor = self.filter.len();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Char('b') if control || alt => {
+                self.move_filter_word_backward();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Char('f') if control || alt => {
+                self.move_filter_word_forward();
+                cx.editor.needs_redraw = true;
+            }
+            KeyCode::Char('d') if alt => self.delete_filter_word_forward(cx),
+            KeyCode::Char('u') if control => {
+                self.filter.replace_range(..self.filter_cursor, "");
+                self.filter_cursor = 0;
+                let query = self.filter.clone();
                 self.set_query(query, cx);
             }
-            KeyCode::Char(c) => {
-                let mut query = self.filter.clone();
-                query.push(c);
+            KeyCode::Char('k') if control => {
+                self.filter.replace_range(self.filter_cursor.., "");
+                let query = self.filter.clone();
+                self.set_query(query, cx);
+            }
+            KeyCode::Char(c) if !control && !alt => {
+                self.filter.insert(self.filter_cursor, c);
+                self.filter_cursor += c.len_utf8();
+                let query = self.filter.clone();
                 self.set_query(query, cx);
             }
             KeyCode::Enter => self.finish_search(cx),
@@ -1571,9 +1645,15 @@ impl FileTree {
             _ => {}
         }
 
-        // Ctrl/Alt are handled before this function so that global window
-        // commands such as `<C-w><right>` keep working during search.
         true
+    }
+
+    pub fn cursor(&self, editor: &Editor) -> Option<(Position, CursorKind)> {
+        if !self.search_mode {
+            return None;
+        }
+        self.cursor_pos
+            .map(|pos| (pos, editor.config().cursor_shape.from_mode(Mode::Insert)))
     }
 
     pub fn wants_command_line(&self) -> bool {
@@ -1582,6 +1662,7 @@ impl FileTree {
 
     fn enter_search(&mut self, cx: &mut commands::Context) {
         self.search_mode = true;
+        self.filter_cursor = self.filter.len();
         cx.editor.sidebar.tree_search_active = true;
         cx.editor.needs_redraw = true;
     }
@@ -1610,10 +1691,117 @@ impl FileTree {
 
     fn set_query(&mut self, query: String, cx: &mut commands::Context) {
         self.filter = query;
+        self.filter_cursor = self.filter_cursor.min(self.filter.len());
+        while self.filter_cursor > 0 && !self.filter.is_char_boundary(self.filter_cursor) {
+            self.filter_cursor -= 1;
+        }
         cx.editor.sidebar.tree_filter = self.filter.clone();
         self.cursor = 0;
         self.rebuild_from_editor(cx.editor);
         self.sync_selection(cx);
+    }
+
+    fn filter_char_position(&self) -> usize {
+        self.filter
+            .char_indices()
+            .position(|(index, _)| index == self.filter_cursor)
+            .unwrap_or_else(|| self.filter.chars().count())
+    }
+
+    fn move_filter_char_backward(&mut self) {
+        let mut position = self.filter_cursor;
+        while position > 0 {
+            position -= 1;
+            if self.filter.is_char_boundary(position) {
+                self.filter_cursor = position;
+                return;
+            }
+        }
+        self.filter_cursor = 0;
+    }
+
+    fn move_filter_char_forward(&mut self) {
+        let mut position = self.filter_cursor;
+        while position < self.filter.len() {
+            position += 1;
+            if self.filter.is_char_boundary(position) {
+                self.filter_cursor = position;
+                return;
+            }
+        }
+        self.filter_cursor = self.filter.len();
+    }
+
+    fn move_filter_word_backward(&mut self) {
+        let chars: Vec<(usize, char)> = self.filter.char_indices().collect();
+        if chars.is_empty() {
+            self.filter_cursor = 0;
+            return;
+        }
+        let mut position = self.filter_char_position();
+        if position == 0 {
+            return;
+        }
+        while position > 0 && is_search_word_sep(chars[position - 1].1) {
+            position -= 1;
+        }
+        while position > 0 && !is_search_word_sep(chars[position - 1].1) {
+            position -= 1;
+        }
+        self.filter_cursor = chars[position].0;
+    }
+
+    fn move_filter_word_forward(&mut self) {
+        let chars: Vec<(usize, char)> = self.filter.char_indices().collect();
+        if chars.is_empty() {
+            self.filter_cursor = 0;
+            return;
+        }
+        let mut position = self.filter_char_position();
+        while position < chars.len() && !is_search_word_sep(chars[position].1) {
+            position += 1;
+        }
+        while position < chars.len() && is_search_word_sep(chars[position].1) {
+            position += 1;
+        }
+        self.filter_cursor = chars
+            .get(position)
+            .map(|(index, _)| *index)
+            .unwrap_or(self.filter.len());
+    }
+
+    fn delete_filter_char_backward(&mut self, cx: &mut commands::Context) {
+        let before = self.filter_cursor;
+        self.move_filter_char_backward();
+        self.filter.replace_range(self.filter_cursor..before, "");
+        let query = self.filter.clone();
+        self.set_query(query, cx);
+    }
+
+    fn delete_filter_char_forward(&mut self, cx: &mut commands::Context) {
+        let before = self.filter_cursor;
+        self.move_filter_char_forward();
+        self.filter.replace_range(before..self.filter_cursor, "");
+        self.filter_cursor = before;
+        let query = self.filter.clone();
+        self.set_query(query, cx);
+    }
+
+    fn delete_filter_word_backward(&mut self, cx: &mut commands::Context) {
+        let before = self.filter_cursor;
+        self.move_filter_word_backward();
+        self.filter.replace_range(self.filter_cursor..before, "");
+        let query = self.filter.clone();
+        self.set_query(query, cx);
+    }
+
+    fn delete_filter_word_forward(&mut self, cx: &mut commands::Context) {
+        let before = self.filter_cursor;
+        self.move_filter_word_forward();
+        self.filter.replace_range(before..self.filter_cursor, "");
+        self.filter_cursor = before;
+        let query = self.filter.clone();
+        self.set_query(query, cx);
     }
 
     fn sync_selection(&mut self, cx: &mut commands::Context) {
@@ -1899,6 +2087,10 @@ fn load_git_status(root: &Path, paths: &[PathBuf]) -> HashMap<PathBuf, GitFileSt
         }
     }
     statuses
+}
+
+fn is_search_word_sep(c: char) -> bool {
+    c == std::path::MAIN_SEPARATOR || c.is_whitespace()
 }
 
 /// Skip a number of terminal columns from the start of `text`, preserving

@@ -94,6 +94,22 @@ async fn diagnostics_report_opens_in_a_buffer() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn tree_search_cursor_supports_arrows_and_modifiers() -> anyhow::Result<()> {
+    let mut app = helpers::AppBuilder::new().build()?;
+    helpers::send_keys(&mut app, "<space>b/foo bar").await?;
+
+    helpers::send_keys(&mut app, "<left><left><left>X").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "foo Xbar");
+
+    helpers::send_keys(&mut app, "<C-left>Y").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "foo YXbar");
+
+    helpers::send_keys(&mut app, "<C-backspace>").await?;
+    assert_eq!(app.editor.sidebar.tree_filter, "foo Xbar");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn tree_batch_delete_and_undo() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let a = dir.path().join("a.txt");

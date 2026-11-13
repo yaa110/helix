@@ -148,6 +148,22 @@ async fn slash_edits_then_enter_runs_and_tab_cycles_fields() -> anyhow::Result<(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn search_fields_support_arrow_and_modifier_movement() -> anyhow::Result<()> {
+    let mut app = helpers::AppBuilder::new().build()?;
+
+    helpers::send_keys(&mut app, "<space>//foo bar").await?;
+    helpers::send_keys(&mut app, "<left><left><left>X").await?;
+    assert_eq!(app.editor.sidebar.search.query, "foo Xbar");
+
+    helpers::send_keys(&mut app, "<C-left>Y").await?;
+    assert_eq!(app.editor.sidebar.search.query, "foo YXbar");
+
+    helpers::send_keys(&mut app, "<C-backspace>").await?;
+    assert_eq!(app.editor.sidebar.search.query, "foo Xbar");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn alt_or_cmd_delete_clears_search_inputs() -> anyhow::Result<()> {
     let mut app = helpers::AppBuilder::new().build()?;
 

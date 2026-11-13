@@ -34,6 +34,10 @@ impl TextInput {
         self.cursor
     }
 
+    pub fn cursor_column(&self) -> usize {
+        self.value[..self.cursor.min(self.value.len())].width()
+    }
+
     /// Insert pasted text at the cursor. The widget is single-line, so line
     /// breaks are flattened into spaces.
     pub fn insert_str(&mut self, text: &str) {
@@ -55,17 +59,16 @@ impl TextInput {
 
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
         let control = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let sup = key.modifiers.contains(KeyModifiers::SUPER);
+
         match key.code {
-            KeyCode::Char(c) if !control && !key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Char(c) if !control && !alt && !sup => {
                 self.value.insert(self.cursor, c);
                 self.cursor += c.len_utf8();
                 true
             }
-            KeyCode::Backspace | KeyCode::Delete
-                if key
-                    .modifiers
-                    .intersects(KeyModifiers::SUPER | KeyModifiers::ALT) =>
-            {
+            KeyCode::Backspace | KeyCode::Delete if sup || alt => {
                 self.value.clear();
                 self.cursor = 0;
                 true
@@ -75,34 +78,31 @@ impl TextInput {
                 true
             }
             KeyCode::Backspace => {
-                let rope = self.rope();
-                let char_cursor = self.char_cursor(&rope);
-                let previous = prev_grapheme_boundary(rope.slice(..), char_cursor);
-                let start = rope.char_to_byte(previous);
-                self.value.replace_range(start..self.cursor, "");
-                self.cursor = start;
+                self.delete_char_backward();
+                true
+            }
+            KeyCode::Delete if control => {
+                self.delete_word_forward();
                 true
             }
             KeyCode::Delete => {
-                let rope = self.rope();
-                let char_cursor = self.char_cursor(&rope);
-                let next = next_grapheme_boundary(rope.slice(..), char_cursor);
-                let end = rope.char_to_byte(next);
-                if end > self.cursor {
-                    self.value.replace_range(self.cursor..end, "");
-                }
+                self.delete_char_forward();
+                true
+            }
+            KeyCode::Left if control || alt => {
+                self.move_word_backward();
+                true
+            }
+            KeyCode::Right if control || alt => {
+                self.move_word_forward();
                 true
             }
             KeyCode::Left => {
-                let rope = self.rope();
-                let previous = prev_grapheme_boundary(rope.slice(..), self.char_cursor(&rope));
-                self.cursor = rope.char_to_byte(previous);
+                self.move_char_backward();
                 true
             }
             KeyCode::Right => {
-                let rope = self.rope();
-                let next = next_grapheme_boundary(rope.slice(..), self.char_cursor(&rope));
-                self.cursor = rope.char_to_byte(next);
+                self.move_char_forward();
                 true
             }
             KeyCode::Home => {
@@ -113,50 +113,125 @@ impl TextInput {
                 self.cursor = self.value.len();
                 true
             }
+            KeyCode::Char('a') if control => {
+                self.cursor = 0;
+                true
+            }
+            KeyCode::Char('e') if control => {
+                self.cursor = self.value.len();
+                true
+            }
+            KeyCode::Char('b') if control || alt => {
+                self.move_word_backward();
+                true
+            }
+            KeyCode::Char('f') if control || alt => {
+                self.move_word_forward();
+                true
+            }
+            KeyCode::Char('d') if alt => {
+                self.delete_word_forward();
+                true
+            }
             KeyCode::Char('w') if control => {
                 self.delete_word_backward();
                 true
             }
             KeyCode::Char('u') if control => {
-                self.value.clear();
+                self.value.replace_range(..self.cursor, "");
                 self.cursor = 0;
+                true
+            }
+            KeyCode::Char('k') if control => {
+                self.value.replace_range(self.cursor.., "");
                 true
             }
             _ => false,
         }
     }
 
-    fn delete_word_backward(&mut self) {
-        let mut start = self.cursor;
-        while start > 0 {
-            let previous = self.value[..start]
-                .char_indices()
-                .next_back()
-                .map(|(index, _)| index)
-                .unwrap_or(0);
-            if !self.value[previous..start].chars().all(char::is_whitespace) {
-                break;
-            }
-            start = previous;
-        }
-        let mut end = start;
-        while start > 0 {
-            let previous = self.value[..start]
-                .char_indices()
-                .next_back()
-                .map(|(index, _)| index)
-                .unwrap_or(0);
-            if self.value[previous..start].chars().all(char::is_whitespace) {
-                break;
-            }
-            start = previous;
-            end = end.max(start);
-        }
-        self.value.replace_range(start..self.cursor, "");
-        self.cursor = start;
+    fn move_char_backward(&mut self) {
+        let rope = self.rope();
+        let previous = prev_grapheme_boundary(rope.slice(..), self.char_cursor(&rope));
+        self.cursor = rope.char_to_byte(previous);
     }
 
-    pub fn render(&self, area: Rect, surface: &mut Surface, theme: &Theme, focused: bool) {
+    fn move_char_forward(&mut self) {
+        let rope = self.rope();
+        let next = next_grapheme_boundary(rope.slice(..), self.char_cursor(&rope));
+        self.cursor = rope.char_to_byte(next);
+    }
+
+    fn char_position(&self) -> usize {
+        self.value
+            .char_indices()
+            .position(|(index, _)| index == self.cursor)
+            .unwrap_or_else(|| self.value.chars().count())
+    }
+
+    fn move_word_backward(&mut self) {
+        let chars: Vec<(usize, char)> = self.value.char_indices().collect();
+        if chars.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+        let mut position = self.char_position();
+        if position == 0 {
+            return;
+        }
+        while position > 0 && is_word_sep(chars[position - 1].1) {
+            position -= 1;
+        }
+        while position > 0 && !is_word_sep(chars[position - 1].1) {
+            position -= 1;
+        }
+        self.cursor = chars[position].0;
+    }
+
+    fn move_word_forward(&mut self) {
+        let chars: Vec<(usize, char)> = self.value.char_indices().collect();
+        if chars.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+        let mut position = self.char_position();
+        while position < chars.len() && !is_word_sep(chars[position].1) {
+            position += 1;
+        }
+        while position < chars.len() && is_word_sep(chars[position].1) {
+            position += 1;
+        }
+        self.cursor = chars
+            .get(position)
+            .map(|(index, _)| *index)
+            .unwrap_or(self.value.len());
+    }
+
+    fn delete_char_backward(&mut self) {
+        let before = self.cursor;
+        self.move_char_backward();
+        self.value.replace_range(self.cursor..before, "");
+    }
+
+    fn delete_char_forward(&mut self) {
+        let before = self.cursor;
+        self.move_char_forward();
+        self.value.replace_range(before..self.cursor, "");
+    }
+
+    fn delete_word_backward(&mut self) {
+        let before = self.cursor;
+        self.move_word_backward();
+        self.value.replace_range(self.cursor..before, "");
+    }
+
+    fn delete_word_forward(&mut self) {
+        let before = self.cursor;
+        self.move_word_forward();
+        self.value.replace_range(before..self.cursor, "");
+    }
+
+    pub fn render(&self, area: Rect, surface: &mut Surface, theme: &Theme, _focused: bool) {
         let style = theme.get("ui.text");
         if area.height == 0 || area.width == 0 {
             return;
@@ -169,18 +244,11 @@ impl TextInput {
         let offset = cursor_column.saturating_sub(width.saturating_sub(1));
         let visible = skip_columns(&self.value, offset);
         surface.set_stringn(area.x, area.y, visible, width, style);
-
-        if focused {
-            let cursor_x = cursor_column.saturating_sub(offset);
-            if cursor_x < width {
-                let cursor_style = theme.get("ui.cursor");
-                surface.set_style(
-                    Rect::new(area.x + cursor_x as u16, area.y, 1, 1),
-                    cursor_style,
-                );
-            }
-        }
     }
+}
+
+fn is_word_sep(c: char) -> bool {
+    c == std::path::MAIN_SEPARATOR || c.is_whitespace()
 }
 
 fn skip_columns(text: &str, columns: usize) -> &str {

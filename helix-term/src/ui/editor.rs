@@ -2064,6 +2064,14 @@ impl Component for EditorView {
     }
 
     fn cursor(&self, _area: Rect, editor: &Editor) -> (Option<Position>, CursorKind) {
+        if editor.sidebar.search_modal
+            || editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
+        {
+            return match self.sidebar.cursor(editor) {
+                Some((pos, kind)) => (Some(pos), kind),
+                None => (None, CursorKind::Hidden),
+            };
+        }
         match editor.cursor() {
             // all block cursors are drawn manually
             (pos, CursorKind::Block) => {

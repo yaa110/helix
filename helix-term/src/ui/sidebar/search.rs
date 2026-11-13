@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use helix_core::unicode::width::UnicodeWidthStr;
-use helix_view::graphics::Rect;
+use helix_core::Position;
+use helix_view::document::Mode;
+use helix_view::graphics::{CursorKind, Rect};
 use helix_view::info::Info;
 use helix_view::input::{KeyCode, KeyModifiers};
 use helix_view::sidebar::SearchInputs;
@@ -61,6 +63,7 @@ pub struct SearchPane {
     editing: bool,
     options_mode: bool,
     replace_preview: Option<ReplacePreview>,
+    cursor_pos: Option<Position>,
     capped: bool,
     error: Option<String>,
 }
@@ -80,6 +83,7 @@ impl SearchPane {
             editing: false,
             options_mode: false,
             replace_preview: None,
+            cursor_pos: None,
             capped: false,
             error: None,
         }
@@ -116,6 +120,11 @@ impl SearchPane {
 
     pub fn replace_preview_open(&self) -> bool {
         self.replace_preview.is_some()
+    }
+
+    pub fn cursor(&self, editor: &Editor) -> Option<(Position, CursorKind)> {
+        self.cursor_pos
+            .map(|pos| (pos, editor.config().cursor_shape.from_mode(Mode::Insert)))
     }
 
     fn begin_edit(&mut self, cx: &mut commands::Context, focus: SearchFocus) {
@@ -213,6 +222,7 @@ impl SearchPane {
         let width = area.width.saturating_sub(2);
         let max_x = area.x + area.width - 1;
         let mut y = area.y;
+        self.cursor_pos = None;
 
         // Query input. Labels make it obvious which field is active, and
         // TextInput clips/scolls long queries internally.
@@ -238,6 +248,13 @@ impl SearchPane {
                 theme,
                 query_active,
             );
+            if query_active {
+                let cursor_column = self.query.cursor_column();
+                let offset = cursor_column.saturating_sub(query_width.saturating_sub(1) as usize);
+                let cursor_x =
+                    area.x + 1 + query_label_width + cursor_column.saturating_sub(offset) as u16;
+                self.cursor_pos = Some(Position::new(y as usize, cursor_x as usize));
+            }
         }
         y += 1;
 
@@ -339,6 +356,16 @@ impl SearchPane {
                     theme,
                     replace_active,
                 );
+                if replace_active {
+                    let cursor_column = self.replacement.cursor_column();
+                    let offset =
+                        cursor_column.saturating_sub(replace_width.saturating_sub(1) as usize);
+                    let cursor_x = area.x
+                        + 1
+                        + replace_label_width
+                        + cursor_column.saturating_sub(offset) as u16;
+                    self.cursor_pos = Some(Position::new(y as usize, cursor_x as usize));
+                }
             }
             y += 1;
         }
@@ -1203,7 +1230,12 @@ impl SearchPane {
             return EventResult::Consumed(None);
         }
 
-        if key.modifiers.contains(KeyModifiers::ALT) {
+        let alt_moves_field = self.editing
+            && matches!(
+                key.code,
+                KeyCode::Left | KeyCode::Right | KeyCode::Char('b' | 'f' | 'd')
+            );
+        if key.modifiers.contains(KeyModifiers::ALT) && !alt_moves_field {
             if key.code == KeyCode::Char(' ') {
                 self.open_options(cx);
                 cx.editor.needs_redraw = true;

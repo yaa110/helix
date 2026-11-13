@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use helix_view::graphics::Rect;
+use helix_core::Position;
+use helix_view::graphics::{CursorKind, Rect};
 use helix_view::input::KeyCode;
 use helix_view::sidebar::{SidebarFocus, SidebarMode};
 use helix_view::Editor;
@@ -73,6 +74,18 @@ impl Sidebar {
 
     pub fn search_preview_open(&self) -> bool {
         self.search.replace_preview_open()
+    }
+
+    pub fn cursor(&self, editor: &Editor) -> Option<(Position, CursorKind)> {
+        if editor.sidebar.search_modal {
+            return self.search.cursor(editor);
+        }
+        if editor.sidebar.focus == SidebarFocus::Sidebar
+            && editor.sidebar.mode == SidebarMode::Files
+        {
+            return self.tree.cursor(editor);
+        }
+        None
     }
 
     pub fn render_search_modal(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
