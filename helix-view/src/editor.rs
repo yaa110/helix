@@ -2231,7 +2231,7 @@ impl Editor {
                     editor: self,
                     doc: id,
                 });
-                return;
+                None
             }
             Action::Load => {
                 let view_id = view!(self).id;

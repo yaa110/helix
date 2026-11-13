@@ -422,6 +422,37 @@ async fn tree_reveals_the_current_buffer() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn navigating_buffers_reveals_each_file_in_the_tree() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    std::fs::write(&a, "a\n")?;
+    std::fs::write(&b, "b\n")?;
+
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+    app.editor.sidebar.mode = SidebarMode::Files;
+    app.editor.sidebar.focus = SidebarFocus::Editor;
+    app.editor.open(&a, helix_view::editor::Action::Replace)?;
+    app.editor.open(&b, helix_view::editor::Action::Load)?;
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(a.as_path()));
+
+    helpers::send_keys(&mut app, "gn").await?;
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(b.as_path()));
+
+    helpers::send_keys(&mut app, "gp").await?;
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(a.as_path()));
+
+    app.editor.new_file(helix_view::editor::Action::Replace);
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+    assert_eq!(app.editor.sidebar.selected.as_deref(), Some(a.as_path()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn manual_tree_selection_survives_escaping_to_editor() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let a = dir.path().join("a.txt");
