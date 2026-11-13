@@ -462,7 +462,12 @@ impl FileTree {
                 let max_scroll = full_width.saturating_sub(content_width);
                 self.horizontal_scroll = self.horizontal_scroll.min(max_scroll);
                 if full_width > content_width {
-                    self.overflow_hint = Some(row.path.display().to_string());
+                    self.overflow_hint = Some(
+                        row.path
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| row.path.display().to_string()),
+                    );
                 }
             }
             let y = area.y + 2 + offset as u16;

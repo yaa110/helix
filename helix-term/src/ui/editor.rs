@@ -1945,10 +1945,17 @@ impl Component for EditorView {
                 style,
             );
         } else {
+            let hint = if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar
+                && cx.editor.sidebar.mode == helix_view::sidebar::SidebarMode::Files
+            {
+                " Press Esc to return to the editor"
+            } else {
+                " Type : to run a command"
+            };
             surface.set_stringn(
                 commandline_area.x,
                 commandline_y,
-                " Type : to run a command",
+                hint,
                 commandline_area.width as usize,
                 cx.editor
                     .theme
