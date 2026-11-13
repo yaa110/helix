@@ -205,11 +205,13 @@ impl View {
     }
 
     pub fn inner_area(&self, doc: &Document) -> Rect {
-        self.area.clip_left(self.gutter_offset(doc)).clip_bottom(1) // -1 for statusline
+        // This fork renders a single global powerline below all views, so
+        // views do not reserve a row for an individual statusline.
+        self.area.clip_left(self.gutter_offset(doc))
     }
 
     pub fn inner_height(&self) -> usize {
-        self.area.clip_bottom(1).height.into() // -1 for statusline
+        self.area.height.into()
     }
 
     pub fn inner_width(&self, doc: &Document) -> u16 {
