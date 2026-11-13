@@ -487,6 +487,7 @@ window returns to the tree.
 | Key | Description |
 | --- | --- |
 | printable text | Edit the find query |
+| terminal paste | Insert into the focused Find/Replace input |
 | `Tab` | Find → Replace → Results |
 | `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` | Toggle case / word / regex / preserve-case |
 | `Space` | Categorized options/replace hint box |

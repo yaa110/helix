@@ -34,6 +34,17 @@ impl TextInput {
         self.cursor
     }
 
+    /// Insert pasted text at the cursor. The widget is single-line, so line
+    /// breaks are flattened into spaces.
+    pub fn insert_str(&mut self, text: &str) {
+        let text = text.replace("\r\n", " ").replace(['\r', '\n'], " ");
+        if text.is_empty() {
+            return;
+        }
+        self.value.insert_str(self.cursor, &text);
+        self.cursor += text.len();
+    }
+
     fn rope(&self) -> Rope {
         Rope::from_str(&self.value)
     }

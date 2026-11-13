@@ -115,6 +115,32 @@ async fn global_space_shortcuts_work_from_search_results() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn paste_goes_into_the_global_search_inputs() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "foo\n")?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space>/").await?;
+    helpers::send_paste(&mut app, "foo").await?;
+    assert_eq!(app.editor.sidebar.search.query, "foo");
+    assert!(!helix_view::doc!(app.editor)
+        .text()
+        .to_string()
+        .contains("foo"));
+    wait_for_search_results(&mut app, 1).await;
+
+    helpers::send_keys(&mut app, "<tab>").await?;
+    helpers::send_paste(&mut app, "bar").await?;
+    assert_eq!(app.editor.sidebar.search.replacement, "bar");
+    assert!(!helix_view::doc!(app.editor)
+        .text()
+        .to_string()
+        .contains("bar"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn esc_dismisses_search_options_before_the_window() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::write(dir.path().join("a.txt"), "foo\n")?;

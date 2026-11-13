@@ -120,6 +120,16 @@ pub async fn send_keys(app: &mut Application, in_keys: &str) -> anyhow::Result<(
     Ok(())
 }
 
+#[inline]
+/// Send a bracketed paste event and drive the event loop until idle.
+pub async fn send_paste(app: &mut Application, contents: &str) -> anyhow::Result<()> {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut rx_stream = UnboundedReceiverStream::new(rx);
+    tx.send(Ok(Event::Paste(contents.to_string())))?;
+    app.event_loop_until_idle(&mut rx_stream).await;
+    Ok(())
+}
+
 pub async fn test_key_sequence(
     app: &mut Application,
     in_keys: Option<&str>,

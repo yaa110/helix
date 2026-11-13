@@ -168,6 +168,8 @@ selection when reopened. `<space>/` from the tree opens it too, and `<space>b`
 from search returns to the tree.
 
 - `Find:` and `Replace:` inputs.
+- Terminal paste (`Cmd-V`, `Ctrl-Shift-V`, etc.) inserts into the focused
+  Find/Replace input instead of the document behind the window.
 - Options: `[Aa]` case, `[ab]` whole word, `[.*]` regex, `[AB]` preserve case.
 - `Alt-c` / `Alt-w` / `Alt-r` / `Alt-p` toggle those options directly.
 - `<space>` opens a categorized options/replace hint box; `c`/`w`/`r`/`p`

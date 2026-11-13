@@ -754,6 +754,24 @@ impl SearchPane {
     }
 
     pub fn handle_event(&mut self, event: &Event, cx: &mut commands::Context) -> EventResult {
+        if let Event::Paste(contents) = event {
+            self.close_options(cx.editor);
+            match self.focus {
+                SearchFocus::Query => self.query.insert_str(contents),
+                SearchFocus::Replace => self.replacement.insert_str(contents),
+                SearchFocus::Results => {
+                    self.focus = SearchFocus::Query;
+                    self.query.insert_str(contents);
+                }
+            }
+            let inputs = &mut cx.editor.sidebar.search;
+            inputs.query = self.query.value().to_string();
+            inputs.replacement = self.replacement.value().to_string();
+            self.pending = true;
+            cx.editor.needs_redraw = true;
+            return EventResult::Consumed(None);
+        }
+
         let Event::Key(key) = event else {
             return EventResult::Consumed(None);
         };

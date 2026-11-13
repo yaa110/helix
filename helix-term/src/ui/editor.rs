@@ -1655,6 +1655,11 @@ impl Component for EditorView {
 
         match event {
             Event::Paste(contents) => {
+                // Global search is modal: paste belongs in its active input,
+                // not in the document underneath.
+                if cx.editor.sidebar.search_modal {
+                    return self.sidebar.handle_search_modal(event, &mut cx);
+                }
                 self.handle_non_key_input(&mut cx);
                 cx.count = cx.editor.count;
                 commands::paste_bracketed_value(&mut cx, contents.clone());
