@@ -346,12 +346,17 @@ impl FileTree {
             } else {
                 let label = " Find: ";
                 let label_width = label.width() as u16;
+                let label_style = if self.filter.is_empty() {
+                    muted
+                } else {
+                    text_style
+                };
                 surface.set_stringn(
                     area.x,
                     search_area.y,
                     label,
                     area.width as usize,
-                    text_style,
+                    label_style,
                 );
                 let query_width = (area.width as usize).saturating_sub(label_width as usize);
                 if query_width > 0 {
