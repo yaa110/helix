@@ -1,6 +1,6 @@
-# Author : WindSoilder<WindSoilder@outlook.com>
-# The unofficial Monokai Pro theme, simply migrate from jetbrains monokai pro theme: https://github.com/subtheme-dev/monokai-pro
-# Credit goes to the original creator: https://monokai.pro
+# Mirrors VSCode's "Monokai Pro (Filter Spectrum)", including its TextMate
+# token colors. VSCode theme source: monokai.theme-monokai-pro-vscode.
+# UI colors below are adapted to Helix's sidebar/statusline widgets.
 
 "ui.text.focus" = { fg = "yellow", modifiers= ["bold"] }
 "ui.virtual.whitespace" = "base4"
@@ -21,52 +21,62 @@
 # bufferline, inlay hints
 "ui.virtual.inlay-hint" = { fg = "base6" }
 
-# comments, nord3 based lighter color
+# comments
 "comment" = { fg = "base5", modifiers = ["italic"] }
 
 # cursor, variables, constants, attributes, fields
 "ui.cursor.primary" = { fg = "base7", modifiers = ["reversed"] }
-"attribute" = "blue"
-"variable"  = "base8"
-"constant"  = "orange"
-"variable.builtin" = "red"
-"constant.builtin" = "red"
-"namespace" = "base8"
+"attribute" = { fg = "blue", modifiers = ["italic"] }
+"variable" = "base8"
+"constant" = "purple"
+"variable.builtin" = { fg = "base7", modifiers = ["italic"] }
+"constant.builtin" = "purple"
+"namespace" = "blue"
 
 # base text, punctuation
 "ui.text" = { fg = "base8" }
 "punctuation" = "base6"
+"punctuation.bracket" = "base6"
+"punctuation.delimiter" = "base6"
+"punctuation.special" = "base6"
 
 # classes, types, primitives
-"type" = "green"
-"type.builtin" = { fg = "red"}
+"type" = "blue"
+"type.builtin" = { fg = "blue", modifiers = ["italic"] }
+# `label` is used for Markdown code-fence info strings in Helix, which VSCode
+# leaves at the default text color.
 "label" = "base8"
 
 # declaration, methods, routines
 "constructor" = "blue"
 "function" = "green"
-"function.macro" = { fg = "blue" }
-"function.builtin" = { fg = "blue" }
+"function.macro" = { fg = "green" }
+"function.builtin" = { fg = "green" }
 
 # operator, tags, units, punctuations
 "operator" = "red"
 "variable.other.member" = "base8"
+"property" = "base8"
+"tag" = "red"
 
 # keywords, special
 "keyword" = { fg = "red" }
-"keyword.directive" = "blue"
-"variable.parameter" = "#f59762"
+"keyword.directive" = { fg = "red" }
+"variable.parameter" = { fg = "orange", modifiers = ["italic"] }
 
 # error
 "error" = { fg = "red", modifiers = ["bold"] }
 
 # annotations, decorators
-"special" = "#f59762"
-"module" = "#f59762"
+"special" = "orange"
+"module" = "blue"
 
 # warnings, escape characters, regex
-"warning" = { fg = "#fd9353" }
-"constant.character.escape" = { fg = "base8" }
+"warning" = { fg = "orange" }
+"constant.character" = "yellow"
+"constant.character.escape" = "purple"
+"string.escape" = "purple"
+"string.regexp" = "yellow"
 
 # strings
 "string" = "yellow"
@@ -87,14 +97,32 @@
 "diagnostic.unnecessary" = { modifiers = ["dim"] }
 "diagnostic.deprecated" = { modifiers = ["crossed_out"] }
 
-# markup highlight, no need for `markup.raw` and `markup.list`, make them to be default
-"markup.heading" = "green"
-"markup.bold" = { fg = "orange", modifiers = ["bold"] }
-"markup.italic" = { fg = "orange", modifiers = ["italic"] }
+# Markdown and other markup, matching VSCode Monokai Pro:
+# headings yellow, bold/italic inherit the base text color, inline/block raw
+# orange, link URLs green+underlined, link titles pink, quotes italic.
+"markup.heading" = "yellow"
+"markup.heading.marker" = "base6"
+"markup.bold" = { modifiers = ["bold"] }
+"markup.italic" = { modifiers = ["italic"] }
 "markup.strikethrough" = { modifiers = ["crossed_out"] }
-"markup.link.url" = { fg = "orange", modifiers = ["underlined"] }
-"markup.link.text" = "yellow"
-"markup.quote" = "green"
+"markup.underline" = { modifiers = ["underlined"] }
+"markup.raw" = "orange"
+"markup.raw.inline" = "orange"
+"markup.raw.block" = "orange"
+"markup.link" = { fg = "green", modifiers = ["underlined"] }
+"markup.link.url" = { fg = "green", modifiers = ["underlined"] }
+"markup.link.text" = "red"
+"markup.link.label" = "red"
+"markup.quote" = { modifiers = ["italic"] }
+"markup.list.unnumbered" = "base6"
+"markup.list.numbered" = "base6"
+"markup.list.checked" = "green"
+"markup.list.unchecked" = "base6"
+"markup.inserted" = "green"
+"markup.deleted" = "red"
+"markup.changed" = "yellow"
+"markup.ignored" = "base6"
+"markup.untracked" = "base6"
 
 # VSCode "Monokai Pro (Filter Spectrum)" UI mappings.
 # Sidebar/explorer
@@ -148,4 +176,3 @@
 "base8" = "#f7f1ff"
 # variants
 "base8x0c" = "#2b2b2b"
-

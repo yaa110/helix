@@ -685,6 +685,54 @@ mod tests {
     }
 
     #[test]
+    fn monokai_filter_spectrum_matches_vscode_markdown() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("runtime");
+        let loader = Loader::new(&[root]);
+        let theme = loader
+            .load("monokai_pro_filter_spectrum")
+            .expect("default fork theme should parse");
+
+        let yellow = Color::Rgb(0xfc, 0xe5, 0x66);
+        assert_eq!(theme.get("markup.heading").fg, Some(yellow));
+        assert_eq!(theme.get("markup.heading.1").fg, Some(yellow));
+        assert_eq!(
+            theme.get("markup.heading.marker").fg,
+            Some(Color::Rgb(0x8b, 0x88, 0x8f))
+        );
+
+        let bold = theme.get("markup.bold");
+        assert_eq!(bold.fg, None);
+        assert!(bold.add_modifier.contains(Modifier::BOLD));
+        let italic = theme.get("markup.italic");
+        assert_eq!(italic.fg, None);
+        assert!(italic.add_modifier.contains(Modifier::ITALIC));
+
+        let orange = Color::Rgb(0xfd, 0x93, 0x53);
+        assert_eq!(theme.get("markup.raw.inline").fg, Some(orange));
+        assert_eq!(theme.get("markup.raw.block").fg, Some(orange));
+
+        let link = theme.get("markup.link.url");
+        assert_eq!(link.fg, Some(Color::Rgb(0x7b, 0xd8, 0x8f)));
+        assert_eq!(link.underline_style, Some(UnderlineStyle::Line));
+        assert_eq!(
+            theme.get("markup.link.text").fg,
+            Some(Color::Rgb(0xfc, 0x61, 0x8d))
+        );
+
+        let quote = theme.get("markup.quote");
+        assert_eq!(quote.fg, None);
+        assert!(quote.add_modifier.contains(Modifier::ITALIC));
+
+        assert_eq!(
+            theme.get("markup.list.unnumbered").fg,
+            Some(Color::Rgb(0x8b, 0x88, 0x8f))
+        );
+    }
+
+    #[test]
     fn test_parse_style_string() {
         let fg = Value::String("#ffffff".to_string());
 
