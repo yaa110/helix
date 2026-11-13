@@ -130,8 +130,11 @@ Additional tree behavior:
   trees stay readable without competing with names or selection.
 - Git status colors: modified files use the `diff.delta` color, untracked files
   use `diff.plus`, conflicts use `diff.delta.conflict`, and directories inherit
-  the color of changed children. `<space>D` shows dirty files only; status is
-  refreshed in the background (every 2s in dirty-only mode, otherwise 10s).
+  the color of changed children; gitignored files use a muted gray. `<space>D`
+  shows dirty files only; status is refreshed in the background (every 2s in
+  dirty-only mode, otherwise 10s).
+- `.git`/VCS directories are never listed, expanded, or searched. Fuzzy tree
+  search filters loaded/expanded rows and excludes gitignored entries.
 - Long names are clipped at the pane boundary; the statusline shows the full
   selected path, and `<space><` / `<space>>` scroll long rows.
 - Selection is shown with the row background only; tree names stay regular

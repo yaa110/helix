@@ -102,6 +102,7 @@
 "ui.sidebar.border" = { fg = "base0" }
 "ui.sidebar.title" = { fg = "base7", modifiers = ["bold"] }
 "ui.tree.header" = { fg = "base7", bg = "base2", modifiers = ["bold"] }
+"ui.tree.ignored" = { fg = "base4" }
 "ui.tree.directory" = { fg = "blue" }
 "ui.tree.selected" = { bg = "base3" }
 

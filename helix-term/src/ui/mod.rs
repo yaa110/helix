@@ -417,6 +417,12 @@ pub(crate) fn directory_entries(
                 })
                 .ok()
                 .filter(|entry| entry.0 != root)
+                .filter(|entry| {
+                    !matches!(
+                        entry.0.file_name().and_then(|name| name.to_str()),
+                        Some(".git" | ".pijul" | ".jj" | ".hg" | ".svn")
+                    )
+                })
         })
         .collect();
 

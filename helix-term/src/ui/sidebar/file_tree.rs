@@ -14,6 +14,7 @@ use helix_view::input::KeyEvent;
 use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::sidebar::{SidebarFocus, SidebarState};
 use helix_view::Editor;
+use ignore::gitignore::GitignoreBuilder;
 use tui::buffer::Buffer as Surface;
 
 use crate::commands;
@@ -58,6 +59,7 @@ pub struct FileTree {
     pub overflow_hint: Option<String>,
     pub dirty_only: bool,
     git_status: HashMap<PathBuf, GitFileStatus>,
+    ignored_paths: HashSet<PathBuf>,
     git_status_root: Option<PathBuf>,
     git_status_epoch: Option<u64>,
     git_status_last_refresh: Option<Instant>,
@@ -80,6 +82,7 @@ impl FileTree {
             overflow_hint: None,
             dirty_only: false,
             git_status: HashMap::new(),
+            ignored_paths: HashSet::new(),
             git_status_root: None,
             git_status_epoch: None,
             git_status_last_refresh: None,
@@ -110,13 +113,15 @@ impl FileTree {
             depth: usize,
             expanded: &HashSet<PathBuf>,
             list: &impl Fn(&Path) -> io::Result<Vec<(PathBuf, bool)>>,
-            recurse_all: bool,
         ) {
             let Ok(entries) = list(dir) else {
                 return;
             };
             for (path, is_dir) in entries {
-                let is_expanded = is_dir && (recurse_all || expanded.contains(&path));
+                if path.file_name().and_then(|name| name.to_str()) == Some(".git") {
+                    continue;
+                }
+                let is_expanded = is_dir && expanded.contains(&path);
                 rows.push(Row {
                     path: path.clone(),
                     depth,
@@ -128,15 +133,20 @@ impl FileTree {
                     expanded: is_expanded,
                 });
                 if is_expanded {
-                    push_dir(rows, &path, depth + 1, expanded, list, recurse_all);
+                    push_dir(rows, &path, depth + 1, expanded, list);
                 }
             }
         }
 
         let mut rows = Vec::new();
-        // While filtering, walk the whole tree so matches inside collapsed
-        // directories are still discoverable.
-        push_dir(&mut rows, root, 0, expanded, &list, !self.filter.is_empty());
+        // Only filter rows that are already loaded. Recursively walking the
+        // whole workspace on every keystroke can include `.git`, `target`, and
+        // huge grammar caches and makes the UI unresponsive.
+        push_dir(&mut rows, root, 0, expanded, &list);
+        self.mark_ignored(&rows);
+        if !self.filter.is_empty() {
+            rows.retain(|row| !self.ignored_paths.contains(&row.path));
+        }
         if self.dirty_only {
             rows.retain(|row| self.git_status.contains_key(&row.path));
         }
@@ -173,6 +183,23 @@ impl FileTree {
         self.labels = None;
         self.label_prefix = None;
         self.clamp_scroll();
+    }
+
+    fn mark_ignored(&mut self, rows: &[Row]) {
+        self.ignored_paths.clear();
+        let mut builder = GitignoreBuilder::new(&self.root);
+        let _ = builder.add(self.root.join(".gitignore"));
+        let Ok(gitignore) = builder.build() else {
+            return;
+        };
+        for row in rows {
+            if gitignore
+                .matched_path_or_any_parents(&row.path, row.kind == EntryKind::Dir)
+                .is_ignore()
+            {
+                self.ignored_paths.insert(row.path.clone());
+            }
+        }
     }
 
     pub fn git_status_needs_refresh(&self, editor: &Editor) -> bool {
@@ -443,7 +470,9 @@ impl FileTree {
             } else {
                 text_style
             };
+            let mut dirty = false;
             if let Some(status) = self.git_status.get(&row.path) {
+                dirty = true;
                 let dirty = match status {
                     GitFileStatus::Untracked => theme.get("diff.plus"),
                     GitFileStatus::Modified => theme.get("diff.delta"),
@@ -452,6 +481,9 @@ impl FileTree {
                     GitFileStatus::Deleted => theme.get("diff.minus"),
                 };
                 style = style.patch(dirty);
+            }
+            if !dirty && self.ignored_paths.contains(&row.path) {
+                style = style.patch(theme.get("ui.tree.ignored"));
             }
 
             let selected_row = index == self.cursor;
@@ -1518,11 +1550,11 @@ mod tree_tests {
     }
 
     #[test]
-    fn filter_walks_collapsed_directories() {
+    fn filter_searches_expanded_tree() {
         let root = PathBuf::from("/repo");
         let mut tree = FileTree::new(root.clone());
         tree.filter = "ndl".to_string();
-        tree.rebuild_with(&root, &HashSet::new(), |dir| {
+        tree.rebuild_with(&root, &HashSet::from([PathBuf::from("/repo/src")]), |dir| {
             Ok(match dir {
                 _ if dir == Path::new("/repo") => vec![
                     (PathBuf::from("/repo/src"), true),
