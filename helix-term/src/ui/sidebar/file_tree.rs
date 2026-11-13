@@ -65,12 +65,6 @@ struct GitStatusUpdate {
     statuses: HashMap<PathBuf, GitFileStatus>,
 }
 
-struct TreeSmoothScroll {
-    remaining: usize,
-    direction: i8,
-    next_at: Instant,
-}
-
 #[derive(Debug, Clone)]
 enum FsUndo {
     Created(Vec<PathBuf>),
@@ -94,7 +88,6 @@ pub struct FileTree {
     marked: HashSet<PathBuf>,
     undo_log: Arc<Mutex<Vec<FsUndo>>>,
     search_cache: Option<SearchCache>,
-    smooth_scroll: Option<TreeSmoothScroll>,
     git_status: HashMap<PathBuf, GitFileStatus>,
     ignored_paths: HashSet<PathBuf>,
     git_status_root: Option<PathBuf>,
@@ -124,7 +117,6 @@ impl FileTree {
             marked: HashSet::new(),
             undo_log: Arc::new(Mutex::new(Vec::new())),
             search_cache: None,
-            smooth_scroll: None,
             git_status: HashMap::new(),
             ignored_paths: HashSet::new(),
             git_status_root: None,
@@ -953,56 +945,6 @@ impl FileTree {
         }
     }
 
-    fn scroll_step(&mut self, direction: i8) {
-        if direction > 0 {
-            if !self.rows.is_empty() {
-                self.cursor = (self.cursor + 1).min(self.rows.len() - 1);
-            }
-        } else {
-            self.cursor = self.cursor.saturating_sub(1);
-        }
-    }
-
-    fn start_smooth_scroll(&mut self, cx: &mut commands::Context, lines: usize, direction: i8) {
-        if self.rows.is_empty() || lines == 0 {
-            return;
-        }
-        self.scroll_step(direction);
-        self.sync_selection(cx);
-        if lines > 1 {
-            self.smooth_scroll = Some(TreeSmoothScroll {
-                remaining: lines - 1,
-                direction,
-                next_at: Instant::now() + Duration::from_millis(10),
-            });
-        }
-        cx.editor.needs_redraw = true;
-    }
-
-    pub fn advance_smooth_scroll(&mut self, editor: &mut Editor) {
-        let Some(scroll) = self.smooth_scroll.as_mut() else {
-            return;
-        };
-        if Instant::now() < scroll.next_at {
-            helix_event::request_redraw();
-            return;
-        }
-
-        let direction = scroll.direction;
-        scroll.remaining = scroll.remaining.saturating_sub(1);
-        if scroll.remaining == 0 {
-            self.smooth_scroll = None;
-        } else {
-            scroll.next_at = Instant::now() + Duration::from_millis(10);
-        }
-        self.scroll_step(direction);
-        editor.sidebar.selected = self.selected_row().map(|row| row.path.clone());
-        editor.needs_redraw = true;
-        if self.smooth_scroll.is_some() {
-            helix_event::request_redraw();
-        }
-    }
-
     fn toggle_mark(&mut self, cx: &mut commands::Context) {
         let Some(row) = self.selected_row().cloned() else {
             return;
@@ -1435,11 +1377,15 @@ impl FileTree {
                 let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
                 match key.code {
                     KeyCode::Down => {
-                        self.start_smooth_scroll(cx, lines, 1);
+                        if !self.rows.is_empty() {
+                            self.cursor = (self.cursor + lines).min(self.rows.len() - 1);
+                        }
+                        self.sync_selection(cx);
                         return true;
                     }
                     KeyCode::Up => {
-                        self.start_smooth_scroll(cx, lines, -1);
+                        self.cursor = self.cursor.saturating_sub(lines);
+                        self.sync_selection(cx);
                         return true;
                     }
                     KeyCode::Char('u') if self.search_mode => {
