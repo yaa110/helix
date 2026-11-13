@@ -1,0 +1,16 @@
+helix-term/src/application.rs
+  h_20fc4d483d1064 141,345-354
+helix-view/src/ui_state.rs
+  h_20fc4d483d1064 1,31-54,57,60-64,69,82-86,90-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f68bb0eedb60a4df7937d7e80cc4dfe09fd2ea54",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
