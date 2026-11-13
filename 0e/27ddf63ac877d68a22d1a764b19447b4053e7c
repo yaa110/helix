@@ -1,0 +1,44 @@
+.cargo/config.toml
+  h_a09932ba751076 11
+Cargo.lock
+  h_a09932ba751076 1771
+Cargo.toml
+  h_a09932ba751076 25-28
+README.md
+  h_a09932ba751076 20-22,113-114,140-142,185-188,202
+book/src/keymap.md
+  h_a09932ba751076 374-375
+helix-term/src/application.rs
+  h_a09932ba751076 86,338,342-345,370,415-429
+helix-term/src/commands.rs
+  h_a09932ba751076 415,418,3808-3821,3846-3886
+helix-term/src/keymap/default.rs
+  h_a09932ba751076 238,240
+helix-tui/src/backend/crossterm.rs
+  h_a09932ba751076 300-303
+helix-tui/src/backend/mod.rs
+  h_a09932ba751076 43-46
+helix-tui/src/backend/termina.rs
+  h_a09932ba751076 557-560
+helix-view/Cargo.toml
+  h_a09932ba751076 53
+helix-view/src/editor.rs
+  h_a09932ba751076 1705-1707
+helix-view/src/session.rs
+  h_a09932ba751076 1,14,59-74,109-110,122-123,192,199,214,216,222-245,331-393,399-400,426-543,546-548,633,667,670-671,709
+helix-view/src/tree.rs
+  h_a09932ba751076 272-283
+helix-view/src/ui_state.rs
+  h_a09932ba751076 13-14,22,39-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0e27ddf63ac877d68a22d1a764b19447b4053e7c",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
