@@ -32,6 +32,16 @@ pub fn overlaid<T>(content: T) -> Overlay<T> {
     }
 }
 
+/// Centers a component using explicit percentages of the available area.
+pub fn overlaid_with<T>(content: T, percent_horizontal: u8, percent_vertical: u8) -> Overlay<T> {
+    Overlay {
+        content,
+        calc_child_size: Box::new(move |rect: Rect| {
+            clip_rect_relative(rect.clip_bottom(2), percent_horizontal, percent_vertical)
+        }),
+    }
+}
+
 fn clip_rect_relative(rect: Rect, percent_horizontal: u8, percent_vertical: u8) -> Rect {
     fn mul_and_cast(size: u16, factor: u8) -> u16 {
         ((size as u32) * (factor as u32) / 100).try_into().unwrap()
@@ -81,5 +91,18 @@ impl<T: Component + 'static> Component for Overlay<T> {
 
     fn id(&self) -> Option<&'static str> {
         self.content.id()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compact_overlay_uses_requested_percentages() {
+        let overlay = overlaid_with((), 30, 30);
+        let child = (overlay.calc_child_size)(Rect::new(0, 0, 100, 40));
+        assert_eq!(child.width, 30);
+        assert_eq!(child.height, 11);
     }
 }

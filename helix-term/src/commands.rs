@@ -67,7 +67,11 @@ use crate::{
     compositor::{self, Component, Compositor},
     filter_picker_entry,
     job::Callback,
-    ui::{self, overlay::overlaid, Picker, PickerColumn, Popup, Prompt, PromptEvent},
+    ui::{
+        self,
+        overlay::{overlaid, overlaid_with},
+        Picker, PickerColumn, Popup, Prompt, PromptEvent,
+    },
 };
 
 use crate::job::{self, Jobs};
@@ -3727,7 +3731,8 @@ fn transform_picker(cx: &mut Context) {
             cx.editor.set_error(err.to_string());
         }
     });
-    cx.push_layer(Box::new(overlaid(picker)));
+    // Keep the F1 action picker compact instead of nearly full-screen.
+    cx.push_layer(Box::new(overlaid_with(picker, 30, 30)));
 }
 
 #[cfg(test)]
