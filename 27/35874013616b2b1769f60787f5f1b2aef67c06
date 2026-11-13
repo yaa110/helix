@@ -1,0 +1,28 @@
+README.md
+  h_20fc4d483d1064 210-243
+helix-term/src/application.rs
+  h_20fc4d483d1064 1567-1571
+helix-term/src/commands.rs
+  h_20fc4d483d1064 3857,3872-3873,3886-3890
+helix-term/src/commands/typed.rs
+  h_20fc4d483d1064 252-272,3153-3163
+helix-term/src/ui/folder_picker.rs
+  h_20fc4d483d1064 1-997
+helix-term/src/ui/mod.rs
+  h_20fc4d483d1064 4
+helix-term/tests/test/sidebar.rs
+  h_20fc4d483d1064 4,97-142
+runtime/tutor
+  h_20fc4d483d1064 1586,1590-1603
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2735874013616b2b1769f60787f5f1b2aef67c06",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
