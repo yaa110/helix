@@ -1949,13 +1949,9 @@ fn switch_to_lowercase(cx: &mut Context) {
 }
 
 pub fn scroll(cx: &mut Context, offset: usize, direction: Direction, sync_cursor: bool) {
-    scroll_editor(cx.editor, offset, direction, sync_cursor);
-}
-
-fn scroll_editor(editor: &mut Editor, offset: usize, direction: Direction, sync_cursor: bool) {
     use Direction::*;
-    let config = editor.config();
-    let (view, doc) = current!(editor);
+    let config = cx.editor.config();
+    let (view, doc) = current!(cx.editor);
     let mut view_offset = doc.view_offset(view.id);
 
     let range = doc.selection(view.id).primary();
@@ -1988,7 +1984,7 @@ fn scroll_editor(editor: &mut Editor, offset: usize, direction: Direction, sync_
     let mut annotations = view.text_annotations(&*doc, None);
 
     if sync_cursor {
-        let movement = match editor.mode {
+        let movement = match cx.editor.mode {
             Mode::Select => Movement::Extend,
             _ => Movement::Move,
         };
@@ -2047,7 +2043,7 @@ fn scroll_editor(editor: &mut Editor, offset: usize, direction: Direction, sync_
         }
     }
 
-    let anchor = if editor.mode == Mode::Select {
+    let anchor = if cx.editor.mode == Mode::Select {
         range.anchor
     } else {
         head
@@ -2060,36 +2056,6 @@ fn scroll_editor(editor: &mut Editor, offset: usize, direction: Direction, sync_
     sel = sel.replace(idx, prim_sel);
     drop(annotations);
     doc.set_selection(view.id, sel);
-}
-
-fn smooth_scroll_job(generation: u64, direction: Direction, remaining: usize) -> crate::job::Job {
-    crate::job::Job::with_callback(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        Ok(crate::job::Callback::Followup(Box::new(move |editor| {
-            if editor.smooth_scroll_generation != generation {
-                return None;
-            }
-            scroll_editor(editor, 1, direction, false);
-            if remaining > 1 {
-                Some(smooth_scroll_job(generation, direction, remaining - 1))
-            } else {
-                None
-            }
-        })))
-    })
-}
-
-fn smooth_scroll(cx: &mut Context, direction: Direction) {
-    let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
-    let total = lines.saturating_mul(cx.count().max(1)).min(50);
-    let generation = cx.editor.smooth_scroll_generation.wrapping_add(1);
-    cx.editor.smooth_scroll_generation = generation;
-    // Scroll immediately for responsiveness, then animate the rest at ~100 FPS.
-    scroll_editor(cx.editor, 1, direction, false);
-    if total > 1 {
-        cx.jobs
-            .add(smooth_scroll_job(generation, direction, total - 1));
-    }
 }
 
 fn page_up(cx: &mut Context) {
@@ -6961,11 +6927,13 @@ fn scroll_down(cx: &mut Context) {
 }
 
 fn scroll_up_smooth(cx: &mut Context) {
-    smooth_scroll(cx, Direction::Backward);
+    let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+    scroll(cx, lines, Direction::Backward, false);
 }
 
 fn scroll_down_smooth(cx: &mut Context) {
-    smooth_scroll(cx, Direction::Forward);
+    let lines = cx.editor.config().scroll_lines.unsigned_abs().max(1);
+    scroll(cx, lines, Direction::Forward, false);
 }
 
 fn goto_ts_object_impl(cx: &mut Context, object: &'static str, direction: Direction) {
