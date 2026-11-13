@@ -207,6 +207,30 @@ from search returns to the tree.
   cursor.
 - Empty search shows hints; no matches shows `No results found`.
 
+### Mouse scrolling
+
+`mouse-native-scroll` is enabled by default while `mouse` remains disabled.
+This enables terminal mouse reporting for the wheel only: scrolling works in
+the code area, file tree, search results and previews, pickers, menus, folder
+picker panes, and scrollable popups. Clicks, drags, releases, middle-click
+paste, and clickable popup actions are ignored.
+
+Each wheel event scrolls by `scroll-lines` (default 3). Scrolling moves the
+viewport without moving the selection; if the selection would leave the
+visible area, it is clamped to the nearest edge, matching the code editor's
+mouse scrolling. Changes apply immediately, without restarting `hx`.
+
+Because terminals have no scroll-only mouse protocol, enabling this option
+captures mouse reporting. Terminal-native text selection is therefore blocked
+while `hx` is running. Set `mouse-native-scroll = false` for fully mouse-free
+behavior, or enable `mouse = true` for full click and scroll support.
+
+```toml
+[editor]
+mouse = false
+mouse-native-scroll = true
+```
+
 ### Folder picker
 
 `:open-folder` (alias `:folder`) opens a two-pane folder picker and switches
@@ -311,8 +335,10 @@ Code lenses use the same peek-style picker:
 
 ### Defaults
 
-- Mouse capture and middle-click paste are disabled; enable with `mouse = true`
-  / `middle-click-paste = true`.
+- Mouse buttons and middle-click paste are disabled (`mouse = false`,
+  `middle-click-paste = false`), but native wheel scrolling is enabled by
+  default (`mouse-native-scroll = true`). Set it to `false` for fully mouse-free
+  behavior, or enable `mouse = true` for full mouse support.
 - Cursor shape: underline in Normal/Select, I-beam-style bar in Insert.
 - `cursorline`, `color-modes`, `auto-save`, and `true-color` are enabled.
 - Auto-save runs on focus loss and after 1 second of inactivity.

@@ -1603,6 +1603,7 @@ letters! that is not good grammar. you can fix this.
 
  Other additions:
    F1 or space t  text transforms, minify/beautify, format, create paths
+   Native mouse-wheel scrolling is enabled by default; clicks stay off.
    Monokai Community (Filter Spectrum) is the default theme.
    Sessions and crash recovery are enabled by default.
    Large files skip syntax highlighting and LSP with a warning.

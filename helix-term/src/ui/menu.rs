@@ -32,6 +32,7 @@ pub struct Menu<T: Item> {
     callback_fn: MenuCallback<T>,
 
     scroll: usize,
+    last_area: Rect,
     size: (u16, u16),
     viewport: (u16, u16),
     recalculate: bool,
@@ -57,6 +58,7 @@ impl<T: Item> Menu<T> {
             widths: Vec::new(),
             callback_fn: Box::new(callback_fn),
             scroll: 0,
+            last_area: Rect::new(0, 0, 0, 0),
             size: (0, 0),
             viewport: (0, 0),
             recalculate: true,
@@ -236,8 +238,29 @@ impl<T: Item + 'static> Component for Menu<T> {
         let event = match event {
             Event::Key(event) => *event,
             // Menu is a modal and should consume mouse events so clicks don't fall
-            // through to the editor underneath
-            Event::Mouse(_) => return EventResult::Consumed(None),
+            // through to the editor underneath. Wheel events scroll the viewport.
+            Event::Mouse(mouse) => {
+                let Some(delta) = super::scroll::wheel_delta(
+                    mouse.kind,
+                    cx.editor.config().scroll_lines.unsigned_abs(),
+                ) else {
+                    return EventResult::Consumed(None);
+                };
+                if super::scroll::contains(self.last_area, mouse.column, mouse.row) {
+                    let len = self.matches.len();
+                    let height = self.size.1 as usize;
+                    self.scroll = super::scroll::scroll_offset(self.scroll, delta, len, height);
+                    if let Some(cursor) = self.cursor {
+                        self.cursor = Some(super::scroll::clamp_selection(
+                            cursor,
+                            self.scroll,
+                            len,
+                            height,
+                        ));
+                    }
+                }
+                return EventResult::Consumed(None);
+            }
             _ => return EventResult::Ignored(None),
         };
 
@@ -333,6 +356,7 @@ impl<T: Item + 'static> Component for Menu<T> {
     }
 
     fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
+        self.last_area = area;
         let theme = &cx.editor.theme;
         let style = theme
             .try_get("ui.menu")

@@ -31,10 +31,29 @@ pub struct Config {
 impl From<&EditorConfig> for Config {
     fn from(config: &EditorConfig) -> Self {
         Self {
-            enable_mouse_capture: config.mouse,
+            enable_mouse_capture: config.mouse || config.mouse_native_scroll,
             force_enable_extended_underlines: config.undercurl,
             kitty_keyboard_protocol: config.kitty_keyboard_protocol,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_scroll_enables_mouse_capture_without_clicks() {
+        let mut config = EditorConfig::default();
+        config.mouse = false;
+        config.mouse_native_scroll = true;
+        assert!(Config::from(&config).enable_mouse_capture);
+
+        config.mouse_native_scroll = false;
+        assert!(!Config::from(&config).enable_mouse_capture);
+
+        config.mouse = true;
+        assert!(Config::from(&config).enable_mouse_capture);
     }
 }
 

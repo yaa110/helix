@@ -1392,6 +1392,12 @@ impl EditorView {
             ..
         } = *event;
 
+        if matches!(kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+            && self.sidebar.handle_mouse_scroll(event, cxt.editor)
+        {
+            return EventResult::Consumed(None);
+        }
+
         // Only the code area participates in mouse selection. Mouse activity
         // over the tree/search sidebar is swallowed so drags cannot create a
         // selection from the pane into the buffer.

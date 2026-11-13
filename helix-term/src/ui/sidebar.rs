@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use helix_core::Position;
 use helix_view::graphics::{CursorKind, Rect};
-use helix_view::input::KeyCode;
+use helix_view::input::{KeyCode, MouseEvent};
 use helix_view::sidebar::{SidebarFocus, SidebarMode};
 use helix_view::Editor;
 use tui::buffer::Buffer as Surface;
@@ -23,6 +23,7 @@ pub struct Sidebar {
     search: SearchPane,
     last_refresh_epoch: u64,
     last_mode: SidebarMode,
+    last_area: Rect,
 }
 
 impl Sidebar {
@@ -32,6 +33,7 @@ impl Sidebar {
             search: SearchPane::new(&helix_view::sidebar::SearchInputs::default()),
             last_refresh_epoch: 0,
             last_mode: SidebarMode::Hidden,
+            last_area: Rect::new(0, 0, 0, 0),
         }
     }
 
@@ -62,6 +64,31 @@ impl Sidebar {
         cx: &mut commands::Context,
     ) -> EventResult {
         self.search.handle_event(event, cx)
+    }
+
+    pub fn handle_mouse_scroll(&mut self, event: &MouseEvent, editor: &mut Editor) -> bool {
+        if editor.sidebar.search_modal {
+            return self.search.handle_mouse_scroll(event, editor);
+        }
+
+        if editor.sidebar.mode == SidebarMode::Hidden
+            || !super::scroll::contains(self.last_area, event.column, event.row)
+        {
+            return false;
+        }
+
+        let Some(delta) =
+            super::scroll::wheel_delta(event.kind, editor.config().scroll_lines.unsigned_abs())
+        else {
+            return false;
+        };
+
+        if event.row >= self.last_area.y.saturating_add(2) {
+            self.tree.scroll_view(delta);
+            editor.sidebar.selected = self.tree.selected_path().map(std::path::Path::to_path_buf);
+            editor.needs_redraw = true;
+        }
+        true
     }
 
     pub fn search_options_open(&self) -> bool {
@@ -158,6 +185,7 @@ impl Sidebar {
     }
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
+        self.last_area = area;
         let theme = &cx.editor.theme;
         let background = theme
             .try_get_exact("ui.sidebar")

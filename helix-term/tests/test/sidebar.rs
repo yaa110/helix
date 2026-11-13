@@ -140,6 +140,96 @@ async fn folder_picker_opens_the_selected_folder_as_a_workspace() -> anyhow::Res
     Ok(())
 }
 
+#[cfg(not(windows))]
+#[tokio::test(flavor = "multi_thread")]
+async fn native_scroll_wheel_scrolls_code_and_ignores_clicks() -> anyhow::Result<()> {
+    use termina::event::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    let text = format!(
+        "#[|]#{}",
+        (0..200)
+            .map(|line| format!("line {line}\n"))
+            .collect::<String>()
+    );
+    let mut app = helpers::AppBuilder::new().with_input_text(text).build()?;
+    let before_offset = {
+        let (view, doc) = helix_view::current_ref!(app.editor);
+        doc.view_offset(view.id)
+    };
+
+    helpers::send_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 60,
+            row: 10,
+            modifiers: Modifiers::NONE,
+        },
+    )
+    .await?;
+
+    let after_offset = {
+        let (view, doc) = helix_view::current_ref!(app.editor);
+        doc.view_offset(view.id)
+    };
+    assert_ne!(before_offset, after_offset);
+
+    let before_selection = {
+        let (view, doc) = helix_view::current_ref!(app.editor);
+        doc.selection(view.id).clone()
+    };
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        helpers::send_mouse(
+            &mut app,
+            MouseEvent {
+                kind,
+                column: 60,
+                row: 10,
+                modifiers: Modifiers::NONE,
+            },
+        )
+        .await?;
+    }
+    let after_selection = {
+        let (view, doc) = helix_view::current_ref!(app.editor);
+        doc.selection(view.id).clone()
+    };
+    assert_eq!(before_selection, after_selection);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tokio::test(flavor = "multi_thread")]
+async fn native_scroll_wheel_scrolls_the_tree_viewport() -> anyhow::Result<()> {
+    use termina::event::{Modifiers, MouseEvent, MouseEventKind};
+
+    let root = tempfile::tempdir()?;
+    for index in 0..30 {
+        std::fs::create_dir(root.path().join(format!("dir{index:02}")))?;
+    }
+    let mut app = helpers::AppBuilder::new()
+        .with_workspace_dir(root.path())
+        .build()?;
+    helpers::run_event_loop_until_idle(&mut app).await;
+
+    helpers::send_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 5,
+            row: 5,
+            modifiers: Modifiers::NONE,
+        },
+    )
+    .await?;
+
+    assert!(app.editor.sidebar.selected.is_some());
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn empty_workspace_has_a_branch_fallback() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;

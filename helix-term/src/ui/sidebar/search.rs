@@ -7,7 +7,7 @@ use helix_core::Position;
 use helix_view::document::Mode;
 use helix_view::graphics::{CursorKind, Rect};
 use helix_view::info::Info;
-use helix_view::input::{KeyCode, KeyModifiers};
+use helix_view::input::{KeyCode, KeyModifiers, MouseEvent};
 use helix_view::sidebar::SearchInputs;
 use helix_view::Editor;
 use tui::buffer::Buffer as Surface;
@@ -58,6 +58,10 @@ pub struct SearchPane {
     rows: Vec<ResultRow>,
     cursor: usize,
     scroll: usize,
+    results_area: Rect,
+    preview_area: Rect,
+    results_height: usize,
+    preview_height: usize,
     receiver: Option<Receiver<SearchEvent>>,
     pending: bool,
     editing: bool,
@@ -78,6 +82,10 @@ impl SearchPane {
             rows: Vec::new(),
             cursor: 0,
             scroll: 0,
+            results_area: Rect::new(0, 0, 0, 0),
+            preview_area: Rect::new(0, 0, 0, 0),
+            results_height: 0,
+            preview_height: 0,
             receiver: None,
             pending: false,
             editing: false,
@@ -125,6 +133,47 @@ impl SearchPane {
     pub fn cursor(&self, editor: &Editor) -> Option<(Position, CursorKind)> {
         self.cursor_pos
             .map(|pos| (pos, editor.config().cursor_shape.from_mode(Mode::Insert)))
+    }
+
+    pub fn handle_mouse_scroll(&mut self, event: &MouseEvent, editor: &mut Editor) -> bool {
+        let Some(delta) = super::super::scroll::wheel_delta(
+            event.kind,
+            editor.config().scroll_lines.unsigned_abs(),
+        ) else {
+            return false;
+        };
+
+        if self.replace_preview.is_some() {
+            if super::super::scroll::contains(self.preview_area, event.column, event.row) {
+                if let Some(preview) = self.replace_preview.as_mut() {
+                    preview.scroll = super::super::scroll::scroll_offset(
+                        preview.scroll,
+                        delta,
+                        preview.lines.len(),
+                        self.preview_height,
+                    );
+                }
+                editor.needs_redraw = true;
+            }
+            return true;
+        }
+
+        if super::super::scroll::contains(self.results_area, event.column, event.row) {
+            self.scroll = super::super::scroll::scroll_offset(
+                self.scroll,
+                delta,
+                self.rows.len(),
+                self.results_height,
+            );
+            self.cursor = super::super::scroll::clamp_selection(
+                self.cursor,
+                self.scroll,
+                self.rows.len(),
+                self.results_height,
+            );
+            editor.needs_redraw = true;
+        }
+        true
     }
 
     fn begin_edit(&mut self, cx: &mut commands::Context, focus: SearchFocus) {
@@ -386,6 +435,8 @@ impl SearchPane {
         if height == 0 {
             return;
         }
+        self.results_area = Rect::new(area.x, y, area.width, height as u16);
+        self.results_height = height;
 
         if editor.sidebar.search.query.is_empty() {
             let empty_hint = if self.editing {
@@ -519,6 +570,8 @@ impl SearchPane {
     }
 
     fn render_replace_preview(&mut self, area: Rect, surface: &mut Surface, editor: &Editor) {
+        self.preview_area = area;
+        self.preview_height = area.height as usize;
         let theme = &editor.theme;
         surface.clear_with(area, theme.get("ui.background"));
         let Some(preview) = self.replace_preview.as_mut() else {
@@ -565,7 +618,8 @@ impl SearchPane {
         }
     }
 
-    fn render_preview(&self, area: Rect, surface: &mut Surface, editor: &Editor) {
+    fn render_preview(&mut self, area: Rect, surface: &mut Surface, editor: &Editor) {
+        self.preview_area = area;
         if area.width == 0 || area.height == 0 {
             return;
         }

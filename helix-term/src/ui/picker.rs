@@ -249,6 +249,11 @@ pub struct Picker<T: 'static + Send + Sync, D: 'static> {
     completion_height: u16,
 
     cursor: u32,
+    scroll: u32,
+    preview_scroll: usize,
+    last_preview_cursor: u32,
+    last_area: Rect,
+    preview_area: Rect,
     prompt: Prompt,
     query: PickerQuery,
 
@@ -381,6 +386,11 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
             editor_data,
             version,
             cursor: 0,
+            scroll: 0,
+            preview_scroll: 0,
+            last_preview_cursor: 0,
+            last_area: Rect::new(0, 0, 0, 0),
+            preview_area: Rect::new(0, 0, 0, 0),
             prompt,
             query,
             truncate_start: true,
@@ -745,11 +755,19 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
         // subtract area of prompt from top
         let inner = inner.clip_top(2);
         let rows = inner.height.saturating_sub(self.header_height()) as u32;
-        let offset = self.cursor - (self.cursor % std::cmp::max(1, rows));
+        self.completion_height = rows as u16;
+        let matched = snapshot.matched_item_count();
+        self.scroll = self.scroll.min(matched.saturating_sub(rows));
+        if rows > 0 {
+            if self.cursor < self.scroll {
+                self.scroll = self.cursor;
+            } else if self.cursor >= self.scroll.saturating_add(rows) {
+                self.scroll = self.cursor.saturating_add(1).saturating_sub(rows);
+            }
+        }
+        let offset = self.scroll;
         let cursor = self.cursor.saturating_sub(offset);
-        let end = offset
-            .saturating_add(rows)
-            .min(snapshot.matched_item_count());
+        let end = offset.saturating_add(rows).min(matched);
         let mut indices = Vec::new();
         let mut matcher = MATCHER.lock();
         matcher.config = Config::DEFAULT;
@@ -896,6 +914,11 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
         let inner = inner.inner(margin);
         BLOCK.render(area, surface);
 
+        if self.cursor != self.last_preview_cursor {
+            self.preview_scroll = 0;
+            self.last_preview_cursor = self.cursor;
+        }
+        let preview_scroll = self.preview_scroll;
         if let Some((preview, range)) = self.get_preview(cx.editor) {
             let doc = match preview.document() {
                 Some(doc)
@@ -907,8 +930,10 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
                 }
                 _ => {
                     if let Some(dir_content) = preview.dir_content() {
+                        let height = inner.height as usize;
+                        let scroll = preview_scroll.min(dir_content.len().saturating_sub(height));
                         for (i, (path, is_dir)) in
-                            dir_content.iter().take(inner.height as usize).enumerate()
+                            dir_content.iter().skip(scroll).take(height).enumerate()
                         {
                             let style = if *is_dir { directory } else { text };
                             surface.set_stringn(
@@ -955,6 +980,21 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
                 } else {
                     offset.anchor = start;
                 }
+            }
+
+            let text = doc.text().slice(..);
+            let scroll =
+                preview_scroll.min(doc.text().len_lines().saturating_sub(inner.height as usize));
+            if scroll > 0 {
+                let text_fmt = doc.text_format(inner.width, None);
+                (offset.anchor, offset.vertical_offset) = char_idx_at_visual_offset(
+                    text,
+                    offset.anchor,
+                    offset.vertical_offset as isize + scroll as isize,
+                    0,
+                    &text_fmt,
+                    &TextAnnotations::default(),
+                );
             }
 
             let loader = cx.editor.syn_loader.load();
@@ -1025,6 +1065,8 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
 
 impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I, D> {
     fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
+        self.last_area = area;
+
         // +---------+ +---------+
         // |prompt   | |preview  |
         // +---------+ |         |
@@ -1039,6 +1081,11 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
             area.width / 2
         } else {
             area.width
+        };
+        self.preview_area = if render_preview {
+            area.clip_left(picker_width)
+        } else {
+            Rect::new(0, 0, 0, 0)
         };
 
         let picker_area = area.with_width(picker_width);
@@ -1058,8 +1105,35 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
             Event::Paste(..) => return self.prompt_handle_event(event, ctx),
             Event::Resize(..) => return EventResult::Consumed(None),
             // Picker is a modal and should consume mouse events so clicks don't fall
-            // through to the editor underneath
-            Event::Mouse(_) => return EventResult::Consumed(None),
+            // through to the editor underneath. Wheel events scroll the list viewport.
+            Event::Mouse(mouse) => {
+                let Some(delta) = super::scroll::wheel_delta(
+                    mouse.kind,
+                    ctx.editor.config().scroll_lines.unsigned_abs(),
+                ) else {
+                    return EventResult::Consumed(None);
+                };
+                if super::scroll::contains(self.last_area, mouse.column, mouse.row) {
+                    let len = self.matcher.snapshot().matched_item_count() as usize;
+                    let height = self.completion_height as usize;
+                    self.scroll =
+                        super::scroll::scroll_offset(self.scroll as usize, delta, len, height)
+                            as u32;
+                    self.cursor = super::scroll::clamp_selection(
+                        self.cursor as usize,
+                        self.scroll as usize,
+                        len,
+                        height,
+                    ) as u32;
+                } else if super::scroll::contains(self.preview_area, mouse.column, mouse.row) {
+                    self.preview_scroll = if delta < 0 {
+                        self.preview_scroll.saturating_sub(delta.unsigned_abs())
+                    } else {
+                        self.preview_scroll.saturating_add(delta as usize)
+                    };
+                }
+                return EventResult::Consumed(None);
+            }
             _ => return EventResult::Ignored(None),
         };
 

@@ -17,9 +17,25 @@ pub enum EventResult {
 
 use crate::job::Jobs;
 use crate::ui::picker;
-use helix_view::Editor;
+use helix_view::{input::MouseEventKind, Editor};
 
 pub use helix_view::input::Event;
+
+pub(crate) fn should_ignore_mouse_event(
+    config: &helix_view::editor::Config,
+    event: &Event,
+) -> bool {
+    if config.mouse || !config.mouse_native_scroll {
+        return false;
+    }
+    let Event::Mouse(mouse) = event else {
+        return false;
+    };
+    !matches!(
+        mouse.kind,
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+    )
+}
 
 pub struct Context<'a> {
     pub editor: &'a mut Editor,
@@ -142,6 +158,10 @@ impl Compositor {
             .retain(|component| component.type_name() != type_name);
     }
     pub fn handle_event(&mut self, event: &Event, cx: &mut Context) -> bool {
+        if should_ignore_mouse_event(&cx.editor.config(), event) {
+            return true;
+        }
+
         // If it is a key event, a macro is being recorded, and a macro isn't being replayed,
         // push the key event to the recording.
         if let (Event::Key(key), Some((_, keys))) = (event, &mut cx.editor.macro_recording) {
@@ -295,5 +315,67 @@ impl dyn AnyComponent {
     /// Checks if this view is of type `T`.
     pub fn is<T: Any>(&mut self) -> bool {
         self.as_any().is::<T>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use helix_view::input::{KeyModifiers, MouseButton, MouseEvent};
+
+    fn mouse(kind: MouseEventKind) -> Event {
+        Event::Mouse(MouseEvent {
+            kind,
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        })
+    }
+
+    #[test]
+    fn native_scroll_filters_clicks_but_not_wheel_events() {
+        let mut config = helix_view::editor::Config::default();
+        config.mouse = false;
+        config.mouse_native_scroll = true;
+
+        assert!(should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Down(MouseButton::Left))
+        ));
+        assert!(should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Drag(MouseButton::Left))
+        ));
+        assert!(!should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::ScrollUp)
+        ));
+        assert!(!should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::ScrollDown)
+        ));
+    }
+
+    #[test]
+    fn full_mouse_mode_keeps_clicks() {
+        let mut config = helix_view::editor::Config::default();
+        config.mouse = true;
+
+        assert!(!should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Down(MouseButton::Left))
+        ));
+    }
+
+    #[test]
+    fn disabled_mouse_modes_pass_no_events_anyway() {
+        let mut config = helix_view::editor::Config::default();
+        config.mouse = false;
+        config.mouse_native_scroll = false;
+
+        assert!(!should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Down(MouseButton::Left))
+        ));
     }
 }

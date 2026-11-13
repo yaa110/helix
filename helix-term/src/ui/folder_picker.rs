@@ -43,6 +43,11 @@ pub struct FolderPicker {
     mode: Mode,
     error: Option<String>,
     scroll: usize,
+    preview_scroll: usize,
+    left_area: Rect,
+    right_area: Rect,
+    left_height: usize,
+    right_height: usize,
 }
 
 impl FolderPicker {
@@ -73,6 +78,11 @@ impl FolderPicker {
             mode: Mode::Browse,
             error: None,
             scroll: 0,
+            preview_scroll: 0,
+            left_area: Rect::new(0, 0, 0, 0),
+            right_area: Rect::new(0, 0, 0, 0),
+            left_height: 0,
+            right_height: 0,
         };
         if let Err(err) = picker.set_directory(start, None) {
             picker.error = Some(format!("Cannot read {}: {err}", picker.current.display()));
@@ -339,6 +349,7 @@ impl FolderPicker {
 
     fn update_preview(&mut self) {
         self.preview.clear();
+        self.preview_scroll = 0;
         self.preview_error = None;
         let Some(path) = self.selected_path().map(Path::to_path_buf) else {
             return;
@@ -466,6 +477,10 @@ impl Component for FolderPicker {
         let pane_y = divider_y.saturating_add(1);
         let pane_bottom = error_y.unwrap_or(hints_y);
         let pane_height = pane_bottom.saturating_sub(pane_y);
+        self.left_area = Rect::new(0, 0, 0, 0);
+        self.right_area = Rect::new(0, 0, 0, 0);
+        self.left_height = 0;
+        self.right_height = 0;
 
         if pane_height > 0 {
             let split = inner.width / 2;
@@ -477,6 +492,10 @@ impl Component for FolderPicker {
                 inner.width.saturating_sub(split).saturating_sub(1),
                 pane_height,
             );
+            self.left_area = left_area;
+            self.right_area = right_area;
+            self.left_height = pane_height as usize;
+            self.right_height = pane_height as usize;
             if split > 0 {
                 for y in pane_y..pane_y + pane_height {
                     surface.set_string(inner.x + split, y, "│", dim);
@@ -544,10 +563,15 @@ impl Component for FolderPicker {
                     dim,
                 );
             } else {
+                let height = right_area.height as usize;
+                self.preview_scroll = self
+                    .preview_scroll
+                    .min(self.preview.len().saturating_sub(height));
                 for (offset, path) in self
                     .preview
                     .iter()
-                    .take(right_area.height as usize)
+                    .skip(self.preview_scroll)
+                    .take(height)
                     .enumerate()
                 {
                     surface.set_stringn(
@@ -596,16 +620,55 @@ impl Component for FolderPicker {
 
     fn handle_event(&mut self, event: &Event, cx: &mut Context) -> EventResult {
         let Event::Key(key) = event else {
-            if let Event::Paste(contents) = event {
-                match self.mode {
+            match event {
+                Event::Paste(contents) => match self.mode {
                     Mode::Search => {
                         self.query.insert_str(contents);
                         self.apply_filter(None);
+                        cx.editor.needs_redraw = true;
                     }
-                    Mode::Path => self.path.insert_str(contents),
-                    Mode::Browse => return EventResult::Consumed(None),
+                    Mode::Path => {
+                        self.path.insert_str(contents);
+                        cx.editor.needs_redraw = true;
+                    }
+                    Mode::Browse => {}
+                },
+                Event::Mouse(mouse) => {
+                    if let Some(delta) = super::scroll::wheel_delta(
+                        mouse.kind,
+                        cx.editor.config().scroll_lines.unsigned_abs(),
+                    ) {
+                        if super::scroll::contains(self.left_area, mouse.column, mouse.row) {
+                            let previous = self.selected;
+                            self.scroll = super::scroll::scroll_offset(
+                                self.scroll,
+                                delta,
+                                self.filtered.len(),
+                                self.left_height,
+                            );
+                            self.selected = super::scroll::clamp_selection(
+                                self.selected,
+                                self.scroll,
+                                self.filtered.len(),
+                                self.left_height,
+                            );
+                            if self.selected != previous {
+                                self.update_preview();
+                            }
+                            cx.editor.needs_redraw = true;
+                        } else if super::scroll::contains(self.right_area, mouse.column, mouse.row)
+                        {
+                            self.preview_scroll = super::scroll::scroll_offset(
+                                self.preview_scroll,
+                                delta,
+                                self.preview.len(),
+                                self.right_height,
+                            );
+                            cx.editor.needs_redraw = true;
+                        }
+                    }
                 }
-                cx.editor.needs_redraw = true;
+                _ => {}
             }
             return EventResult::Consumed(None);
         };

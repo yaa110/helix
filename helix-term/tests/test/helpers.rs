@@ -22,7 +22,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(windows)]
 use crossterm::event::{Event, KeyEvent};
 #[cfg(not(windows))]
-use termina::event::{Event, KeyEvent};
+use termina::event::{Event, KeyEvent, MouseEvent};
 
 /// Specify how to set up the input text with line feeds
 #[derive(Clone, Debug)]
@@ -116,6 +116,17 @@ pub async fn send_keys(app: &mut Application, in_keys: &str) -> anyhow::Result<(
     for key_event in parse_macro(in_keys)?.into_iter() {
         tx.send(Ok(Event::Key(KeyEvent::from(key_event))))?;
     }
+    app.event_loop_until_idle(&mut rx_stream).await;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[inline]
+/// Send a mouse event and drive the event loop until idle.
+pub async fn send_mouse(app: &mut Application, mouse: MouseEvent) -> anyhow::Result<()> {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut rx_stream = UnboundedReceiverStream::new(rx);
+    tx.send(Ok(Event::Mouse(mouse)))?;
     app.event_loop_until_idle(&mut rx_stream).await;
     Ok(())
 }

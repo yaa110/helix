@@ -80,6 +80,7 @@ pub struct FileTree {
     pub rows: Vec<Row>,
     pub cursor: usize,
     pub scroll: usize,
+    viewport_height: usize,
     pub filter: String,
     filter_cursor: usize,
     cursor_pos: Option<Position>,
@@ -111,6 +112,7 @@ impl FileTree {
             rows: Vec::new(),
             cursor: 0,
             scroll: 0,
+            viewport_height: 0,
             filter: String::new(),
             filter_cursor: 0,
             cursor_pos: None,
@@ -647,6 +649,7 @@ impl FileTree {
         if height == 0 {
             return;
         }
+        self.viewport_height = height;
         if self.cursor < self.scroll {
             self.scroll = self.cursor;
         } else if self.cursor >= self.scroll + height {
@@ -2019,6 +2022,24 @@ impl FileTree {
         true
     }
 
+    pub fn scroll_view(&mut self, delta: isize) {
+        if self.rows.is_empty() || self.viewport_height == 0 {
+            return;
+        }
+        self.scroll = super::super::scroll::scroll_offset(
+            self.scroll,
+            delta,
+            self.rows.len(),
+            self.viewport_height,
+        );
+        self.cursor = super::super::scroll::clamp_selection(
+            self.cursor,
+            self.scroll,
+            self.rows.len(),
+            self.viewport_height,
+        );
+    }
+
     fn clamp_scroll(&mut self) {
         if self.rows.is_empty() {
             self.cursor = 0;
@@ -2305,6 +2326,50 @@ mod tree_tests {
         assert_eq!(skip_columns("abcdef", 4), "ef");
         assert_eq!(skip_columns("abcdef", 99), "");
         assert_eq!(skip_columns("a世b", 2), "b");
+    }
+
+    #[test]
+    fn wheel_scroll_moves_the_viewport_without_moving_a_visible_selection() {
+        let mut tree = FileTree::new(PathBuf::from("/repo"));
+        tree.rows = (0..20)
+            .map(|index| Row {
+                path: PathBuf::from(format!("/repo/file{index}")),
+                depth: 0,
+                kind: EntryKind::File,
+                expanded: false,
+            })
+            .collect();
+        tree.viewport_height = 5;
+        tree.cursor = 8;
+        tree.scroll = 5;
+
+        tree.scroll_view(2);
+        assert_eq!(tree.scroll, 7);
+        assert_eq!(tree.cursor, 8);
+
+        tree.scroll_view(-2);
+        assert_eq!(tree.scroll, 5);
+        assert_eq!(tree.cursor, 8);
+    }
+
+    #[test]
+    fn wheel_scroll_clamps_selection_to_the_viewport_edge() {
+        let mut tree = FileTree::new(PathBuf::from("/repo"));
+        tree.rows = (0..20)
+            .map(|index| Row {
+                path: PathBuf::from(format!("/repo/file{index}")),
+                depth: 0,
+                kind: EntryKind::File,
+                expanded: false,
+            })
+            .collect();
+        tree.viewport_height = 5;
+        tree.cursor = 5;
+        tree.scroll = 3;
+
+        tree.scroll_view(4);
+        assert_eq!(tree.scroll, 7);
+        assert_eq!(tree.cursor, 7);
     }
 
     #[test]

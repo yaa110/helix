@@ -211,6 +211,21 @@ mod tests {
     }
 
     #[test]
+    fn mouse_native_scroll_defaults_true_and_parses() {
+        let config = Config::load_test("");
+        assert!(!config.editor.mouse);
+        assert!(config.editor.mouse_native_scroll);
+
+        let config = Config::load_test(
+            r#"
+            [editor]
+            mouse-native-scroll = false
+            "#,
+        );
+        assert!(!config.editor.mouse_native_scroll);
+    }
+
+    #[test]
     fn parses_session_and_sidebar_config() {
         let config = Config::load_test(
             r#"
