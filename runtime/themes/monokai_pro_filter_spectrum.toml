@@ -115,8 +115,9 @@
 "ui.help" = { fg = "base7", bg = "base3" }
 "ui.menu" = { fg = "base8", bg = "base2" }
 "ui.menu.selected" = { fg = "base2", bg = "yellow" }
-"ui.bufferline" = { fg = "base5", bg = "base1" }
-"ui.bufferline.active" = { fg = "base8", bg = "base3" }
+"ui.bufferline.background" = { bg = "base0" }
+"ui.bufferline" = { fg = "base5", bg = "base0" }
+"ui.bufferline.active" = { fg = "base8", bg = "base2" }
 "ui.linenr" = { fg = "base4" }
 "ui.linenr.selected" = { fg = "base7", bg = "base3" }
 "ui.selection" = { bg = "base3" }

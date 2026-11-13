@@ -92,7 +92,10 @@ it. The tree is search-first: typing filters it live with fuzzy matching.
 | `Tab` | Open the selected file, or return to the editor on a directory |
 | `Esc` | Clear the filter; when empty, return focus to the editor |
 
-Press `<space>` in the tree to open a which-key-style command hint box:
+A dedicated `Find:` box sits below the project name and filters files with the
+same fuzzy matcher as `<space>f`.
+
+Press `<space>` in the tree to open a categorized which-key-style hint box:
 
 | Space command | Action |
 | --- | --- |
@@ -190,8 +193,10 @@ Code lenses use the same peek-style picker:
   Keep/Reload/Overwrite prompt for dirty buffers.
 - **Searchable text transforms** with `F1` or `<space>t`: base64/hex encode and
   decode, case conversions, and line sorting.
-- **Always-visible VSCode-like buffer tabs** (`bufferline = "always"`) with
-  inactive separators, bold active tabs, and a colored modified dot.
+- **Always-visible Zellij-style buffer tabs** (`bufferline = "always"`):
+  numbered compact tabs, muted separators, an accent-colored active pill
+  (no bold/underline), and a modified dot. The active tab stays visible when
+  the strip overflows.
 - **Full-width powerline**: spans the tree and buffers. Left:
   `[mode][spinner][branch][file name][read-only][modified]`; right:
   `[diagnostics][selections][selection length] │ [position][total lines] │
@@ -199,6 +204,10 @@ Code lenses use the same peek-style picker:
 - **Layout**: `[panes][tabs]` on the first row, then `[panes][code]`, then a
   full-width command/error line, with the full-width powerline at the very
   bottom.
+- **Startup panes**: opening a file, stdin, or a git commit message starts with
+  the tree and tabs hidden; opening a folder restores the last global pane
+  layout. `<space>T` toggles the tab bar, and pane visibility is saved globally
+  (not per workspace).
 - **Binary-file guard**: images and other binary files are detected before
   decoding and reported instead of rendering terminal garbage.
 - **Monokai Community (Filter Spectrum)** as the default theme.

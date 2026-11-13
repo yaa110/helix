@@ -305,6 +305,7 @@ This layer is a kludge of mappings, mostly pickers.
 | `E`     | Open file explorer at current working directory                          | `file_explorer_in_current_directory`       |
 | `.`     | Open file explorer at current buffer's directory                        | `file_explorer_in_current_buffer_directory`|
 | `b`     | Toggle/focus the file tree sidebar                                      | `toggle_file_tree`                         |
+| `T`     | Toggle the buffer tab bar                                               | `toggle_bufferline`                        |
 | `x`     | Close the current buffer (same as `:buffer-close`)                      | `close_buffer`                             |
 | `B`     | Open buffer picker                                                      | `buffer_picker`                            |
 | `j`     | Open jumplist picker                                                    | `jumplist_picker`                          |

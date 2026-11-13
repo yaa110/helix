@@ -583,10 +583,12 @@ impl SearchPane {
     fn open_options(&mut self, cx: &mut commands::Context) {
         self.options_mode = true;
         let body = [
+            ("", "── Options ──"),
             ("c", "Match case"),
             ("w", "Whole word"),
             ("r", "Regex"),
             ("p", "Preserve case"),
+            ("", "── Pane ──"),
             ("/", "Close search pane"),
             ("Space, Esc", "Close options"),
         ];
@@ -631,6 +633,7 @@ impl SearchPane {
                     self.close_options(cx.editor);
                     cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
                     cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+                    cx.editor.save_ui_state();
                     cx.editor.needs_redraw = true;
                 }
                 KeyCode::Char(' ') | KeyCode::Esc | KeyCode::Tab => {

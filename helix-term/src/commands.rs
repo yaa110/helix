@@ -413,6 +413,7 @@ impl MappableCommand {
         transform_picker, "Open the searchable text-transform picker",
         close_buffer, "Close the current buffer (same as :buffer-close)",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
+        toggle_bufferline, "Toggle the buffer tab bar",
         focus_search, "Open/focus the search sidebar",
         buffer_picker, "Open buffer picker",
         jumplist_picker, "Open jumplist picker",
@@ -3646,6 +3647,13 @@ fn toggle_file_tree(cx: &mut Context) {
         }
     }
     cx.editor.needs_redraw = true;
+    cx.editor.save_ui_state();
+}
+
+fn toggle_bufferline(cx: &mut Context) {
+    cx.editor.bufferline_visible = !cx.editor.bufferline_visible;
+    cx.editor.save_ui_state();
+    cx.editor.needs_redraw = true;
 }
 
 fn focus_search(cx: &mut Context) {
@@ -3653,6 +3661,7 @@ fn focus_search(cx: &mut Context) {
     cx.editor.sidebar.focus = SidebarFocus::Sidebar;
     cx.editor.sidebar.search_focus_query = true;
     cx.editor.needs_redraw = true;
+    cx.editor.save_ui_state();
 }
 
 fn buffer_picker(cx: &mut Context) {

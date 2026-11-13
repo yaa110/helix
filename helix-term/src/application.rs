@@ -137,8 +137,12 @@ impl Application {
         use helix_view::editor::Action;
 
         let workspace_root = workspace_root_from_args(&args);
-        let session_active =
+        let starts_with_folder =
             args.files.is_empty() || args.files.keys().next().is_some_and(|path| path.is_dir());
+        let starts_with_file = !starts_with_folder
+            || args.load_tutor
+            || (args.files.is_empty() && !stdin().is_terminal());
+        let session_active = starts_with_folder;
         let restore_enabled = config.editor.restore_session && !args.load_tutor;
 
         let mut theme_parent_dirs = vec![helix_loader::config_dir()];
@@ -323,6 +327,19 @@ impl Application {
             editor
                 .new_file_from_stdin(Action::VerticalSplit)
                 .unwrap_or_else(|_| editor.new_file(Action::VerticalSplit));
+        }
+
+        // Global pane visibility: file/commit/tutor sessions stay focused on
+        // the buffer, while a workspace launch restores the last global layout.
+        if starts_with_file {
+            editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
+            editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+            editor.bufferline_visible = false;
+        } else {
+            let ui_state = helix_view::ui_state::UiState::load();
+            editor.sidebar.mode = ui_state.sidebar_mode;
+            editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+            editor.bufferline_visible = ui_state.bufferline_visible;
         }
 
         #[cfg(windows)]

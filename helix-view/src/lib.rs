@@ -19,6 +19,7 @@ pub mod session;
 pub mod sidebar;
 pub mod theme;
 pub mod tree;
+pub mod ui_state;
 pub mod view;
 
 use std::num::NonZeroUsize;

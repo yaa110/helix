@@ -26,7 +26,7 @@ use helix_view::{
     annotations::diagnostics::DiagnosticFilter,
     document::{Mode, SCRATCH_BUFFER_NAME},
     editor::{CompleteAction, CursorShapeConfig},
-    graphics::{Color, CursorKind, Modifier, Rect, Style, UnderlineStyle},
+    graphics::{Color, CursorKind, Modifier, Rect, Style},
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
     Document, Editor, Theme, View,
@@ -675,8 +675,6 @@ impl EditorView {
             .try_get("ui.bufferline.active")
             .unwrap_or_else(|| theme.get("ui.statusline.active"))
             .fg(accent)
-            .underline_color(accent)
-            .underline_style(UnderlineStyle::Line)
             .remove_modifier(Modifier::BOLD);
         let inactive = theme
             .try_get("ui.bufferline")
@@ -696,18 +694,23 @@ impl EditorView {
             .unwrap_or(0);
 
         // Keep the active tab visible by scrolling the tab strip when needed.
-        let label_for = |doc: &Document| {
+        let label_for = |doc: &Document, index: usize| {
             let path = doc.path().unwrap_or(&scratch);
             let fname = path
                 .file_name()
                 .unwrap_or_default()
                 .to_str()
                 .unwrap_or_default();
-            format!(" {fname} ")
+            format!(" {} {fname} ", index + 1)
         };
         let widths: Vec<usize> = docs
             .iter()
-            .map(|doc| label_for(doc).width() + usize::from(doc.is_modified()) * 3)
+            .enumerate()
+            .map(|(index, doc)| {
+                label_for(doc, index).width()
+                    + usize::from(doc.is_modified()) * 3
+                    + usize::from(index == current_index) * 2
+            })
             .collect();
         let mut start = 0;
         while start < current_index {
@@ -741,12 +744,14 @@ impl EditorView {
                 }
             }
 
-            let label = label_for(doc);
-            let style = if current_doc == doc.id() {
-                active
-            } else {
-                inactive
-            };
+            let label = label_for(doc, index);
+            let active_tab = current_doc == doc.id();
+            let style = if active_tab { active } else { inactive };
+            if active_tab {
+                x = surface
+                    .set_stringn(x, viewport.y, "▐", right.saturating_sub(x) as usize, style)
+                    .0;
+            }
             x = surface
                 .set_stringn(
                     x,
@@ -756,6 +761,11 @@ impl EditorView {
                     style,
                 )
                 .0;
+            if active_tab {
+                x = surface
+                    .set_stringn(x, viewport.y, "▌", right.saturating_sub(x) as usize, style)
+                    .0;
+            }
             if doc.is_modified() && x < right {
                 x = surface
                     .set_stringn(
@@ -1737,11 +1747,12 @@ impl Component for EditorView {
 
         // check if bufferline should be rendered
         use helix_view::editor::BufferLine;
-        let use_bufferline = match config.bufferline {
-            BufferLine::Always => true,
-            BufferLine::Multiple if cx.editor.documents.len() > 1 => true,
-            _ => false,
-        };
+        let use_bufferline = cx.editor.bufferline_visible
+            && match config.bufferline {
+                BufferLine::Always => true,
+                BufferLine::Multiple if cx.editor.documents.len() > 1 => true,
+                _ => false,
+            };
 
         // Layout:
         //   [panes][buffer tabs]
@@ -1750,8 +1761,7 @@ impl Component for EditorView {
         //   [powerline spanning the full width]
         let powerline_area = area.clip_top(area.height.saturating_sub(1));
         let commandline_area = area.clip_top(area.height.saturating_sub(2)).with_height(1);
-        let command_border_area = area.clip_top(area.height.saturating_sub(3)).with_height(1);
-        let page_area = area.clip_bottom(3);
+        let page_area = area.clip_bottom(2);
         let commandline_y = commandline_area.y;
         let sidebar_width = cx.editor.sidebar.visible_width(area.width, &config.sidebar);
         let editor_full = if sidebar_width > 0 {
@@ -1782,18 +1792,6 @@ impl Component for EditorView {
         for (view, is_focused) in cx.editor.tree.views() {
             let doc = cx.editor.document(view.doc).unwrap();
             self.render_view(cx.editor, doc, view, code_area, surface, is_focused);
-        }
-
-        // A subtle rule separates the command/error line from the code.
-        if command_border_area.height > 0 {
-            let border = "─".repeat(command_border_area.width as usize);
-            surface.set_stringn(
-                command_border_area.x,
-                command_border_area.y,
-                &border,
-                command_border_area.width as usize,
-                cx.editor.theme.get("ui.linenr"),
-            );
         }
 
         // The powerline spans the full width, including the sidebar. It shows
@@ -1832,6 +1830,14 @@ impl Component for EditorView {
                 status_msg,
                 commandline_area.width as usize,
                 style,
+            );
+        } else {
+            surface.set_stringn(
+                commandline_area.x,
+                commandline_y,
+                " Type : to run a command",
+                commandline_area.width as usize,
+                cx.editor.theme.get("ui.text.inactive"),
             );
         }
 

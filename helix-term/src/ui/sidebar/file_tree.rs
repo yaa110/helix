@@ -141,7 +141,15 @@ impl FileTree {
             // keeping the tree hierarchy around every match.
             let by_name: HashMap<String, Row> = rows
                 .into_iter()
-                .map(|row| (row.path.to_string_lossy().into_owned(), row))
+                .map(|row| {
+                    let name = row
+                        .path
+                        .strip_prefix(&self.root)
+                        .unwrap_or(&row.path)
+                        .to_string_lossy()
+                        .into_owned();
+                    (name, row)
+                })
                 .collect();
             let names: Vec<&str> = by_name.keys().map(String::as_str).collect();
             let mut matches: Vec<(Row, u16)> = fuzzy_match(&self.filter, names, true)
@@ -305,20 +313,55 @@ impl FileTree {
         let header = if self.command_mode {
             format!("{root_name}  [commands]")
         } else {
-            format!("{root_name}  /{}", self.filter)
+            root_name
         };
         surface.set_stringn(area.x, area.y, &header, area.width as usize, title);
-        if focused && !self.command_mode {
-            let cursor_x = (root_name.width() + 3 + self.filter.width()) as u16;
-            if cursor_x < area.width {
-                surface.set_style(
-                    Rect::new(area.x + cursor_x, area.y, 1, 1),
-                    theme.get("ui.cursor"),
-                );
+
+        // Dedicated fuzzy-search input beneath the project name.
+        if area.height > 1 {
+            let search_area = Rect::new(area.x, area.y + 1, area.width, 1);
+            surface.clear_with(search_area, theme.get("ui.menu"));
+            let label = " Find: ";
+            let label_width = label.width() as u16;
+            surface.set_stringn(
+                area.x,
+                search_area.y,
+                label,
+                area.width as usize,
+                text_style,
+            );
+            let query_width = (area.width as usize).saturating_sub(label_width as usize);
+            if query_width > 0 {
+                if self.filter.is_empty() {
+                    surface.set_stringn(
+                        area.x + label_width,
+                        search_area.y,
+                        "type to filter",
+                        query_width,
+                        theme.get("ui.text.inactive"),
+                    );
+                } else {
+                    surface.set_stringn(
+                        area.x + label_width,
+                        search_area.y,
+                        &self.filter,
+                        query_width,
+                        text_style,
+                    );
+                }
+                if focused && !self.command_mode {
+                    let cursor_x = label_width as usize + self.filter.width();
+                    if cursor_x < area.width as usize {
+                        surface.set_style(
+                            Rect::new(area.x + cursor_x as u16, search_area.y, 1, 1),
+                            theme.get("ui.cursor"),
+                        );
+                    }
+                }
             }
         }
 
-        let height = area.height.saturating_sub(1) as usize;
+        let height = area.height.saturating_sub(2) as usize;
         if height == 0 {
             return;
         }
@@ -400,7 +443,7 @@ impl FileTree {
                     self.overflow_hint = Some(row.path.display().to_string());
                 }
             }
-            let y = area.y + 1 + offset as u16;
+            let y = area.y + 2 + offset as u16;
             if self.horizontal_scroll == 0 && !indent.is_empty() {
                 // Draw the hierarchy guides with a faded style while keeping
                 // the row's selection background intact.
@@ -1015,26 +1058,31 @@ impl FileTree {
     fn enter_command_mode(&mut self, cx: &mut commands::Context) {
         self.command_mode = true;
         let body = [
+            ("", "── Navigate ──"),
             ("j, Down", "Move down"),
             ("k, Up", "Move up"),
             ("h, Left", "Collapse or go to parent"),
             ("l, Right", "Expand or open"),
+            ("g / G", "First / last row"),
+            ("J / K", "Move ten rows"),
+            ("w", "Jump labels"),
+            ("", "── Open ──"),
             ("Enter, o", "Open"),
             ("s / v", "Open in horizontal / vertical split"),
+            ("", "── Files ──"),
             ("a / A", "Create file / directory"),
             ("r", "Rename"),
             ("d", "Delete"),
             ("c / m / p", "Copy / cut / paste"),
             ("y / Y", "Copy absolute / relative path"),
-            ("w", "Jump labels"),
-            ("g / G", "First / last row"),
-            ("J / K", "Move ten rows"),
-            ("H / R", "Collapse all / refresh"),
+            ("x", "Close current buffer"),
+            ("", "── View ──"),
             ("D", "Show dirty files only"),
             (".", "Reveal current buffer"),
+            ("H / R", "Collapse all / refresh"),
             ("[ / ]", "Shrink / grow sidebar"),
             ("< / >", "Scroll tree left / right"),
-            ("x", "Close current buffer"),
+            ("", "── Session ──"),
             ("b", "Hide sidebar"),
             ("q / Esc", "Return to editor / close commands"),
         ];
@@ -1118,6 +1166,7 @@ impl FileTree {
                 self.leave_command_mode(cx);
                 cx.editor.sidebar.mode = helix_view::sidebar::SidebarMode::Hidden;
                 cx.editor.sidebar.focus = SidebarFocus::Editor;
+                cx.editor.save_ui_state();
                 return true;
             }
             KeyCode::Char('w') => {

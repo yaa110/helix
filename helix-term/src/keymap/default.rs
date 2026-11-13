@@ -235,6 +235,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "." => file_explorer_in_current_buffer_directory,
             "b" => toggle_file_tree,
             "x" => close_buffer,
+            "T" => toggle_bufferline,
             "B" => buffer_picker,
             "j" => jumplist_picker,
             "s" => lsp_or_syntax_symbol_picker,

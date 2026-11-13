@@ -1384,6 +1384,9 @@ pub struct Editor {
     pub workspace_root: PathBuf,
     /// Shared sidebar state (mode, focus, width, expansion, search inputs).
     pub sidebar: SidebarState,
+    /// Global runtime visibility for the buffer tabs. Combined with the
+    /// `bufferline` config.
+    pub bufferline_visible: bool,
     /// Set by document/focus events; the application persists the session when
     /// this is set and the idle/exit conditions allow.
     pub session_dirty: bool,
@@ -1527,6 +1530,7 @@ impl Editor {
             workspace_trust,
             workspace_root: PathBuf::new(),
             sidebar: SidebarState::default(),
+            bufferline_visible: true,
             session_dirty: false,
             session_active: false,
             session_store: SessionStore::default(),
@@ -1692,6 +1696,16 @@ impl Editor {
     /// Remove the saved session for this workspace.
     pub fn clear_session(&self) -> anyhow::Result<()> {
         self.session_store.clear(&self.workspace_root)
+    }
+
+    pub fn save_ui_state(&self) {
+        let state = crate::ui_state::UiState {
+            sidebar_mode: self.sidebar.mode,
+            bufferline_visible: self.bufferline_visible,
+        };
+        if let Err(err) = state.save() {
+            log::warn!("failed to save global UI state: {err}");
+        }
     }
 
     /// Automatic save path: only writes when `restore-session` is enabled.
