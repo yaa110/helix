@@ -99,6 +99,8 @@ impl Sidebar {
             self.tree.search_mode = editor.sidebar.tree_search_active;
         }
 
+        self.tree.advance_smooth_scroll(editor);
+
         if editor.sidebar.mode == SidebarMode::Files {
             self.tree.poll_git_status(editor);
             if self.tree.git_status_needs_refresh(editor) {
