@@ -1722,32 +1722,37 @@ impl Component for EditorView {
             _ => false,
         };
 
-        // Layout: commandline at the very bottom, one full-width statusline
-        // above it (spanning the tree and editor panes), then the content.
+        // Layout:
+        //   [panes][buffer tabs]
+        //   [panes][code]
+        //   [panes][command line]
+        //   [powerline spanning the full width]
+        let powerline_area = area.clip_top(area.height.saturating_sub(1));
         let page_area = area.clip_bottom(1);
-        let statusline_area = page_area.clip_top(page_area.height.saturating_sub(1));
-        let full_editor_area = page_area.clip_bottom(1);
         let sidebar_width = cx.editor.sidebar.visible_width(area.width, &config.sidebar);
         let editor_full = if sidebar_width > 0 {
-            let sidebar_area = full_editor_area.with_width(sidebar_width);
+            let sidebar_area = page_area.with_width(sidebar_width);
             self.sidebar.ensure_init(cx.editor);
             self.sidebar.render(sidebar_area, surface, cx);
-            full_editor_area.clip_left(sidebar_width)
+            page_area.clip_left(sidebar_width)
         } else {
             if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar {
                 cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             }
-            full_editor_area
+            page_area
         };
 
-        // -1 for bufferline
+        // Reserve the top row for buffer tabs, then the bottom row for the
+        // editor command line (`:`, search prompts, etc.).
         let mut editor_area = editor_full;
         if use_bufferline {
             editor_area = editor_area.clip_top(1);
         }
+        let code_area = editor_area.clip_bottom(1);
+        let commandline_y = editor_full.y + editor_full.height.saturating_sub(1);
 
         // if the terminal size suddenly changed, we need to trigger a resize
-        cx.editor.resize(editor_area);
+        cx.editor.resize(code_area);
 
         if use_bufferline {
             Self::render_bufferline(cx.editor, editor_full.with_height(1), surface);
@@ -1755,7 +1760,7 @@ impl Component for EditorView {
 
         for (view, is_focused) in cx.editor.tree.views() {
             let doc = cx.editor.document(view.doc).unwrap();
-            self.render_view(cx.editor, doc, view, editor_area, surface, is_focused);
+            self.render_view(cx.editor, doc, view, code_area, surface, is_focused);
         }
 
         // The powerline spans the full width, including the sidebar. It shows
@@ -1765,7 +1770,7 @@ impl Component for EditorView {
             let doc = cx.editor.document(view.doc).unwrap();
             let mut context =
                 statusline::RenderContext::new(cx.editor, doc, view, true, &self.spinners);
-            statusline::render(&mut context, statusline_area, surface);
+            statusline::render(&mut context, powerline_area, surface);
         }
 
         if config.auto_info {
@@ -1788,15 +1793,10 @@ impl Component for EditorView {
                 cx.editor.theme.get("ui.text")
             };
 
-            surface.set_string(
-                area.x,
-                area.y + area.height.saturating_sub(1),
-                status_msg,
-                style,
-            );
+            surface.set_string(editor_full.x, commandline_y, status_msg, style);
         }
 
-        if area.width.saturating_sub(status_msg_width as u16) > key_width {
+        if editor_full.width.saturating_sub(status_msg_width as u16) > key_width {
             let mut disp = String::new();
             if let Some(count) = cx.editor.count {
                 disp.push_str(&count.to_string())
@@ -1816,11 +1816,11 @@ impl Component for EditorView {
             let restricted = workspace_trust_indicator_visible(cx.editor);
             let trust_width = if restricted { 3 } else { 0 };
             surface.set_string(
-                area.x
-                    + area
+                editor_full.x
+                    + editor_full
                         .width
                         .saturating_sub(key_width + macro_width + trust_width),
-                area.y + area.height.saturating_sub(1),
+                commandline_y,
                 disp.get(disp.len().saturating_sub(key_width as usize)..)
                     .unwrap_or(&disp),
                 style,
@@ -1830,9 +1830,10 @@ impl Component for EditorView {
                     .fg(helix_view::graphics::Color::Yellow)
                     .add_modifier(Modifier::BOLD);
                 surface.set_string(
-                    area.x
-                        .saturating_add(area.width.saturating_sub(3 + macro_width)),
-                    area.y + area.height.saturating_sub(1),
+                    editor_full
+                        .x
+                        .saturating_add(editor_full.width.saturating_sub(3 + macro_width)),
+                    commandline_y,
                     "[⚠]",
                     style,
                 );
@@ -1843,8 +1844,8 @@ impl Component for EditorView {
                     .fg(helix_view::graphics::Color::Yellow)
                     .add_modifier(Modifier::BOLD);
                 surface.set_string(
-                    area.x + area.width.saturating_sub(3),
-                    area.y + area.height.saturating_sub(1),
+                    editor_full.x + editor_full.width.saturating_sub(3),
+                    commandline_y,
                     &disp,
                     style,
                 );

@@ -193,6 +193,8 @@ Code lenses use the same peek-style picker:
 - **Full-width powerline**: spans the tree and buffers. Left:
   `[mode][branch][diagnostics]`; right: `[selections][total lines][indent mode]
   [Tab/Spaces: N][encoding][line ending][file type]`.
+- **Layout**: `[panes][tabs]` on the first row, then `[panes][code]`, then
+  `[panes][command line]`, with the full-width powerline at the very bottom.
 - **Binary-file guard**: images and other binary files are detected before
   decoding and reported instead of rendering terminal garbage.
 - **Monokai Community (Filter Spectrum)** as the default theme.
