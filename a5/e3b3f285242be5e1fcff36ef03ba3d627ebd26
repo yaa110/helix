@@ -1,0 +1,20 @@
+README.md
+  h_a09932ba751076 219-221
+helix-term/src/application.rs
+  h_a09932ba751076 654,659,662
+helix-view/src/theme.rs
+  h_a09932ba751076 675,682,684,688,695
+runtime/themes/monokai_community_filter_spectrum.toml
+  h_a09932ba751076 1-2,100,127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5e3b3f285242be5e1fcff36ef03ba3d627ebd26",
+  "prompts": {},
+  "humans": {
+    "h_a09932ba751076": {
+      "author": "Navid Fathollahzadehmasoule <navid.fathollahzadehmasoule@deliveryhero.com>"
+    }
+  }
+}
