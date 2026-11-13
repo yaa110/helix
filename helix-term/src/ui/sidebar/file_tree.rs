@@ -331,44 +331,55 @@ impl FileTree {
         if area.height > 1 {
             let search_area = Rect::new(area.x, area.y + 1, area.width, 1);
             surface.clear_with(search_area, theme.get("ui.menu"));
-            let label = " Find: ";
-            let label_width = label.width() as u16;
-            surface.set_stringn(
-                area.x,
-                search_area.y,
-                label,
-                area.width as usize,
-                text_style,
-            );
-            let query_width = (area.width as usize).saturating_sub(label_width as usize);
-            if query_width > 0 {
-                if self.filter.is_empty() {
-                    surface.set_stringn(
-                        area.x + label_width,
-                        search_area.y,
-                        "type to filter",
-                        query_width,
-                        theme
-                            .try_get_exact("ui.linenr")
-                            .or_else(|| theme.try_get_exact("ui.text.inactive"))
-                            .unwrap_or_default(),
-                    );
-                } else {
-                    surface.set_stringn(
-                        area.x + label_width,
-                        search_area.y,
-                        &self.filter,
-                        query_width,
-                        text_style,
-                    );
-                }
-                if focused && !self.command_mode {
-                    let cursor_x = label_width as usize + self.filter.width();
-                    if cursor_x < area.width as usize {
-                        surface.set_style(
-                            Rect::new(area.x + cursor_x as u16, search_area.y, 1, 1),
-                            theme.get("ui.cursor"),
+            let muted = theme
+                .try_get_exact("ui.linenr")
+                .or_else(|| theme.try_get_exact("ui.text.inactive"))
+                .unwrap_or_default();
+            if !focused {
+                surface.set_stringn(
+                    area.x,
+                    search_area.y,
+                    " Press <space>b to select",
+                    area.width as usize,
+                    muted,
+                );
+            } else {
+                let label = " Find: ";
+                let label_width = label.width() as u16;
+                surface.set_stringn(
+                    area.x,
+                    search_area.y,
+                    label,
+                    area.width as usize,
+                    text_style,
+                );
+                let query_width = (area.width as usize).saturating_sub(label_width as usize);
+                if query_width > 0 {
+                    if self.filter.is_empty() {
+                        surface.set_stringn(
+                            area.x + label_width,
+                            search_area.y,
+                            "type to filter",
+                            query_width,
+                            muted,
                         );
+                    } else {
+                        surface.set_stringn(
+                            area.x + label_width,
+                            search_area.y,
+                            &self.filter,
+                            query_width,
+                            text_style,
+                        );
+                    }
+                    if !self.command_mode {
+                        let cursor_x = label_width as usize + self.filter.width();
+                        if cursor_x < area.width as usize {
+                            surface.set_style(
+                                Rect::new(area.x + cursor_x as u16, search_area.y, 1, 1),
+                                theme.get("ui.cursor"),
+                            );
+                        }
                     }
                 }
             }
