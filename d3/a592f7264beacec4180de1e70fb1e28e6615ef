@@ -1,0 +1,21 @@
+helix-term/src/ui/sidebar.rs
+  s_c79ba96ad71296::t_6cdbb1f6258b2a 80-83
+helix-term/src/ui/sidebar/file_tree.rs
+  s_c79ba96ad71296::t_7ad1c466bed5ad 16,84,117,2027-2040
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d3a592f7264beacec4180de1e70fb1e28e6615ef",
+  "prompts": {},
+  "sessions": {
+    "s_c79ba96ad71296": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "18cfef36-4fc0-4a57-ade5-5bbb3842fcfa",
+        "model": "gemini-3.8-flash"
+      },
+      "human_author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
