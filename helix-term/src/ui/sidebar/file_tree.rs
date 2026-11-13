@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::{Duration, Instant};
 
 use helix_core::fuzzy::fuzzy_match;
 use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -59,6 +60,7 @@ pub struct FileTree {
     git_status: HashMap<PathBuf, GitFileStatus>,
     git_status_root: Option<PathBuf>,
     git_status_epoch: Option<u64>,
+    git_status_last_refresh: Option<Instant>,
     git_status_rx: Option<Receiver<HashMap<PathBuf, GitFileStatus>>>,
     clipboard: Option<FileClipboard>,
     labels: Option<Vec<(String, usize)>>,
@@ -80,6 +82,7 @@ impl FileTree {
             git_status: HashMap::new(),
             git_status_root: None,
             git_status_epoch: None,
+            git_status_last_refresh: None,
             git_status_rx: None,
             clipboard: None,
             labels: None,
@@ -173,14 +176,23 @@ impl FileTree {
     }
 
     pub fn git_status_needs_refresh(&self, editor: &Editor) -> bool {
+        let interval = if self.dirty_only {
+            Duration::from_secs(2)
+        } else {
+            Duration::from_secs(10)
+        };
         self.git_status_root.as_ref() != Some(&self.root)
             || self.git_status_epoch != Some(editor.sidebar.refresh_epoch)
+            || self
+                .git_status_last_refresh
+                .is_none_or(|last| last.elapsed() >= interval)
     }
 
     pub fn request_git_status(&mut self, editor: &Editor) {
         let root = self.root.clone();
         self.git_status_root = Some(root.clone());
         self.git_status_epoch = Some(editor.sidebar.refresh_epoch);
+        self.git_status_last_refresh = Some(Instant::now());
 
         if !editor.config().sidebar.git_status || self.git_status_rx.is_some() {
             return;
@@ -211,12 +223,15 @@ impl FileTree {
         };
         match receiver.try_recv() {
             Ok(statuses) => {
+                let changed = self.git_status != statuses;
                 self.git_status = statuses;
                 self.git_status_rx = None;
-                if self.dirty_only {
-                    self.rebuild_from_editor(editor);
+                if changed {
+                    if self.dirty_only {
+                        self.rebuild_from_editor(editor);
+                    }
+                    editor.needs_redraw = true;
                 }
-                editor.needs_redraw = true;
             }
             Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {

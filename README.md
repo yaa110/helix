@@ -127,7 +127,8 @@ Additional tree behavior:
   trees stay readable without competing with names or selection.
 - Git status colors: modified files use the `diff.delta` color, untracked files
   use `diff.plus`, conflicts use `diff.delta.conflict`, and directories inherit
-  the color of changed children. `<space>D` shows dirty files only.
+  the color of changed children. `<space>D` shows dirty files only; status is
+  refreshed in the background (every 2s in dirty-only mode, otherwise 10s).
 - Long names are clipped at the pane boundary; the statusline shows the full
   selected path, and `<space><` / `<space>>` scroll long rows.
 - Selection is shown with the row background only; tree names stay regular
@@ -216,7 +217,8 @@ Code lenses use the same peek-style picker:
 - **Startup panes**: opening a file, stdin, or a git commit message starts with
   the tree and tabs hidden; opening a folder restores the last global pane
   layout. `<space>T` toggles the tab bar, and pane visibility is saved globally
-  (not per workspace).
+  (not per workspace). Directory startup no longer opens the slow file picker,
+  and git status is collected in a background worker.
 - **Binary-file guard**: images and other binary files are detected before
   decoding and reported instead of rendering terminal garbage.
 - **Monokai Community (Filter Spectrum)** as the default theme.
