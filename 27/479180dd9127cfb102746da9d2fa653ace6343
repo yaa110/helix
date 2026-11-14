@@ -1,0 +1,22 @@
+helix-term/src/commands.rs
+  h_20fc4d483d1064 422,3137-3140,3862-3891
+helix-term/src/keymap/default.rs
+  h_20fc4d483d1064 237
+helix-term/src/ui/statusline.rs
+  h_20fc4d483d1064 174-178,180-188,201-211
+helix-vcs/src/lib.rs
+  h_20fc4d483d1064 24
+helix-view/src/editor.rs
+  h_20fc4d483d1064 1387-1388,1572
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "27479180dd9127cfb102746da9d2fa653ace6343",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
