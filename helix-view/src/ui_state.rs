@@ -91,7 +91,19 @@ impl UiState {
             .recent_workspaces
             .retain(|workspace| !is_ephemeral_workspace(workspace));
         let contents = serde_json::to_vec_pretty(&state)?;
-        std::fs::write(path, contents)
+        let temp_path = path.with_extension("json.tmp");
+        std::fs::write(&temp_path, contents)?;
+        if let Err(err) = std::fs::rename(&temp_path, &path) {
+            // Windows cannot replace an existing file with rename.
+            if path.exists() {
+                std::fs::remove_file(&path)?;
+                std::fs::rename(&temp_path, &path)
+            } else {
+                Err(err)
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 

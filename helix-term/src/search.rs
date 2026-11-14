@@ -179,17 +179,20 @@ pub fn spawn_search(
     let mut capped = false;
 
     for (path, text) in &open_docs {
-        for matched in matches_in_text(path, text, &regex) {
-            if emitted >= max_results {
-                capped = true;
-                break;
-            }
+        let remaining = max_results.saturating_sub(emitted);
+        if remaining == 0 {
+            capped = true;
+            break;
+        }
+        let (matches, truncated) = matches_in_text_limited(path, text, &regex, remaining);
+        for matched in matches {
             emitted += 1;
             if tx.send(SearchEvent::Match(matched)).is_err() {
                 return;
             }
         }
-        if capped {
+        if truncated {
+            capped = true;
             break;
         }
     }
@@ -212,11 +215,14 @@ pub fn spawn_search(
             let Ok(text) = std::fs::read_to_string(entry.path()) else {
                 continue;
             };
-            for matched in matches_in_text(entry.path(), &text, &regex) {
-                if emitted >= max_results {
-                    capped = true;
-                    break;
-                }
+            let remaining = max_results.saturating_sub(emitted);
+            if remaining == 0 {
+                capped = true;
+                break;
+            }
+            let (matches, truncated) =
+                matches_in_text_limited(entry.path(), &text, &regex, remaining);
+            for matched in matches {
                 emitted += 1;
                 if tx.send(SearchEvent::Match(matched)).is_err() {
                     let _ = tx.send(SearchEvent::Done { capped });
@@ -224,7 +230,8 @@ pub fn spawn_search(
                 }
             }
             helix_event::request_redraw();
-            if capped {
+            if truncated {
+                capped = true;
                 break;
             }
         }
@@ -234,31 +241,92 @@ pub fn spawn_search(
     helix_event::request_redraw();
 }
 
+#[cfg(test)]
 fn matches_in_text(path: &Path, text: &str, regex: &Regex) -> Vec<Match> {
+    matches_in_text_limited(path, text, regex, usize::MAX).0
+}
+
+fn matches_in_text_limited(
+    path: &Path,
+    text: &str,
+    regex: &Regex,
+    limit: usize,
+) -> (Vec<Match>, bool) {
+    const MAX_PREVIEW_BYTES: usize = 400;
+    const MAX_MATCHED_BYTES: usize = 400;
+
     let mut results = Vec::new();
     let mut line = 0usize;
     let mut line_start = 0usize;
-    for (start, end, matched_text) in find_matches(text, regex) {
+    let mut line_end = None;
+    let mut truncated = false;
+    for match_ in regex.find_iter(text) {
+        if results.len() >= limit {
+            truncated = true;
+            break;
+        }
+        let start = match_.start();
+        let end = match_.end();
         while let Some(newline) = text[line_start..start].find('\n') {
             line_start += newline + 1;
             line += 1;
+            line_end = None;
         }
-        let line_end = text[line_start..]
-            .find('\n')
-            .map(|offset| line_start + offset)
-            .unwrap_or(text.len());
-        let preview = text[line_start..line_end].trim_end().to_string();
+        let line_end = *line_end.get_or_insert_with(|| {
+            text[line_start..]
+                .find('\n')
+                .map(|offset| line_start + offset)
+                .unwrap_or(text.len())
+        });
+        let col = start - line_start;
+        let line_text = text[line_start..line_end].trim_end();
+        let preview = clip_search_preview(line_text, col, MAX_PREVIEW_BYTES);
+        let matched_text = clip_text(match_.as_str(), MAX_MATCHED_BYTES);
         results.push(Match {
             path: path.to_path_buf(),
             line,
-            col: start - line_start,
+            col,
             start,
             end,
             text: matched_text,
             preview,
         });
     }
-    results
+    (results, truncated)
+}
+
+fn clip_text(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &text[..end])
+}
+
+fn clip_search_preview(line: &str, col: usize, max_bytes: usize) -> String {
+    if line.len() <= max_bytes {
+        return line.to_string();
+    }
+    let mut start = col.saturating_sub(max_bytes / 2);
+    while start > 0 && !line.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = (start + max_bytes).min(line.len());
+    while end > start && !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut preview = String::new();
+    if start > 0 {
+        preview.push('…');
+    }
+    preview.push_str(&line[start..end]);
+    if end < line.len() {
+        preview.push('…');
+    }
+    preview
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -395,6 +463,19 @@ mod tests {
         assert_eq!(matches[0].line, 0);
         assert_eq!(matches[1].line, 1);
         assert_eq!(&"αβ\nβ\n"[matches[1].start..matches[1].end], "β");
+    }
+
+    #[test]
+    fn match_collection_is_limited_and_previews_are_clipped() {
+        let re = build_regex("x", opts(true, false, false)).unwrap();
+        let (matches, truncated) = matches_in_text_limited(Path::new("u.txt"), "x\nx\nx\n", &re, 2);
+        assert_eq!(matches.len(), 2);
+        assert!(truncated);
+
+        let long = format!("{}x{}", "a".repeat(1000), "b".repeat(1000));
+        let (matches, _) = matches_in_text_limited(Path::new("u.txt"), &long, &re, 1);
+        assert!(matches[0].preview.chars().count() <= 402);
+        assert!(matches[0].preview.contains('x'));
     }
 
     #[test]

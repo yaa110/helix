@@ -785,11 +785,18 @@ impl Application {
         let should_render = self.compositor.handle_event(&Event::IdleTimeout, &mut cx);
 
         if self.editor.session_dirty && self.last_session_save.elapsed().as_secs() >= 5 {
-            if let Err(err) = self.editor.save_session_if_active() {
-                log::warn!("failed to save session: {err}");
+            match self.editor.save_session_if_active() {
+                Ok(()) => {
+                    self.editor.session_dirty = false;
+                    self.last_session_save = std::time::Instant::now();
+                }
+                Err(err) => {
+                    log::warn!("failed to save session: {err}");
+                    // Retry on the next idle tick instead of silently waiting
+                    // for another document open/close event.
+                    self.last_session_save = std::time::Instant::now();
+                }
             }
-            self.editor.session_dirty = false;
-            self.last_session_save = std::time::Instant::now();
         }
 
         if should_render || self.editor.needs_redraw {

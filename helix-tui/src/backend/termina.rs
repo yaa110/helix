@@ -79,6 +79,7 @@ pub struct TerminaBackend {
     capabilities: Capabilities,
     reset_cursor_command: String,
     is_synchronized_output_set: bool,
+    mouse_capture_enabled: bool,
     /// The requested terminal background color, set in `Self::set_background_color`.
     background_color: Option<RgbColor>,
     /// The terminal emulator's background color. This is queried when claiming the terminal so
@@ -253,6 +254,7 @@ impl TerminaBackend {
             capabilities,
             reset_cursor_command,
             is_synchronized_output_set: false,
+            mouse_capture_enabled: false,
             background_color: None,
             original_background_color,
         })
@@ -273,12 +275,13 @@ impl TerminaBackend {
                 decset!(RXVTMouse),
                 decset!(SGRMouse),
             )?;
+            self.mouse_capture_enabled = true;
         }
         Ok(())
     }
 
     fn disable_mouse_capture(&mut self) -> io::Result<()> {
-        if self.config.enable_mouse_capture {
+        if self.mouse_capture_enabled {
             write!(
                 self.terminal,
                 "{}{}{}{}{}",
@@ -288,6 +291,7 @@ impl TerminaBackend {
                 decreset!(RXVTMouse),
                 decreset!(SGRMouse),
             )?;
+            self.mouse_capture_enabled = false;
         }
         Ok(())
     }

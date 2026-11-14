@@ -269,7 +269,15 @@ impl<T: Component> Component for Popup<T> {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
                     )
                 {
-                    return EventResult::Consumed(None);
+                    let within = event.column >= self.area.left()
+                        && event.column < self.area.right()
+                        && event.row >= self.area.top()
+                        && event.row < self.area.bottom();
+                    return if within {
+                        EventResult::Consumed(None)
+                    } else {
+                        EventResult::Ignored(None)
+                    };
                 }
                 return self.handle_mouse_event(event);
             }

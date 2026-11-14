@@ -352,6 +352,18 @@ pub fn collect(editor: &Editor) -> Session {
         });
     }
 
+    let focused_view = editor
+        .tree
+        .views()
+        .filter(|(view, _)| {
+            editor
+                .documents
+                .get(&view.doc)
+                .and_then(|doc| doc.path())
+                .is_some()
+        })
+        .position(|(view, _)| view.id == editor.tree.focus)
+        .unwrap_or(0);
     let views = editor
         .tree
         .views()
@@ -409,12 +421,6 @@ pub fn collect(editor: &Editor) -> Session {
             })
         })
         .collect();
-    let focused_view = editor
-        .tree
-        .views()
-        .position(|(view, _)| view.id == editor.tree.focus)
-        .unwrap_or(0);
-
     Session {
         version: SESSION_VERSION,
         workspace,

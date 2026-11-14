@@ -66,9 +66,13 @@ impl Sidebar {
         self.search.handle_event(event, cx)
     }
 
+    pub fn clear_area(&mut self) {
+        self.last_area = Rect::new(0, 0, 0, 0);
+    }
+
     pub fn handle_mouse_focus(&mut self, event: &MouseEvent, editor: &mut Editor) -> bool {
         if editor.sidebar.search_modal
-            || editor.sidebar.mode == SidebarMode::Hidden
+            || editor.sidebar.mode != SidebarMode::Files
             || !super::scroll::contains(self.last_area, event.column, event.row)
         {
             return false;
@@ -94,7 +98,7 @@ impl Sidebar {
             return self.search.handle_mouse_scroll(event, editor);
         }
 
-        if editor.sidebar.mode == SidebarMode::Hidden
+        if editor.sidebar.mode != SidebarMode::Files
             || !super::scroll::contains(self.last_area, event.column, event.row)
         {
             return false;
@@ -139,9 +143,13 @@ impl Sidebar {
     }
 
     pub fn ensure_init(&mut self, editor: &mut Editor) {
+        if !editor.sidebar.search_modal {
+            self.search.cancel_worker();
+        }
         if self.tree.root != editor.workspace_root {
             self.tree = FileTree::new(editor.workspace_root.clone());
             self.tree.rebuild(editor, &editor.sidebar);
+            self.search.reset_results();
             self.last_refresh_epoch = editor.sidebar.refresh_epoch;
         } else if self.last_refresh_epoch != editor.sidebar.refresh_epoch {
             let state = editor.sidebar.clone();
@@ -181,7 +189,15 @@ impl Sidebar {
             };
             if let Some(path) = current {
                 let mut expanded = editor.sidebar.expanded.clone();
-                if self.tree.reveal(editor, &mut expanded, &path) {
+                let mut revealed = self.tree.reveal(editor, &mut expanded, &path);
+                if !revealed && !self.tree.filter.is_empty() {
+                    editor.sidebar.tree_filter.clear();
+                    editor.sidebar.tree_search_active = false;
+                    self.tree.filter.clear();
+                    self.tree.search_mode = false;
+                    revealed = self.tree.reveal(editor, &mut expanded, &path);
+                }
+                if revealed {
                     editor.sidebar.expanded = expanded;
                     editor.sidebar.selected = Some(path);
                 }

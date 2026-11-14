@@ -165,7 +165,7 @@ impl Compositor {
     }
     pub fn handle_event(&mut self, event: &Event, cx: &mut Context) -> bool {
         if should_ignore_mouse_event(&cx.editor.config(), event) {
-            return true;
+            return false;
         }
 
         // If it is a key event, a macro is being recorded, and a macro isn't being replayed,

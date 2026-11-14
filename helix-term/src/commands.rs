@@ -3854,12 +3854,35 @@ fn toggle_file_tree(cx: &mut Context) {
     cx.editor.save_ui_state();
 }
 
-pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) {
-    let _ = editor.save_session_if_active();
+pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) -> anyhow::Result<()> {
+    let workspace = std::fs::canonicalize(workspace)
+        .with_context(|| format!("cannot access workspace {}", workspace.display()))?;
+    if !workspace.is_dir() {
+        bail!("not a directory: {}", workspace.display());
+    }
+    if editor.documents().any(|doc| doc.is_modified()) {
+        bail!("save or close modified buffers before switching workspaces");
+    }
+
+    let config = editor.config();
+    let restore_enabled = config.restore_session;
+    let crash_recovery = config.crash_recovery;
+    drop(config);
+
+    let crashed = editor.session_active && editor.session_store.was_running(&workspace);
+    let restore_session = restore_enabled && (!crashed || crash_recovery);
+
+    editor.save_session_if_active()?;
     let old_workspace = editor.workspace_root.clone();
     if editor.session_active {
         let _ = editor.session_store.clear_running(&old_workspace);
     }
+    // Integration tests run in parallel in one process; changing the global
+    // cwd would leak between tests. Real workspace switches follow `hx .`.
+    #[cfg(not(feature = "integration"))]
+    editor
+        .set_cwd(&workspace)
+        .with_context(|| format!("cannot change directory to {}", workspace.display()))?;
     editor.ui_state_persist = !cfg!(feature = "integration");
     let docs: Vec<_> = editor.documents().map(|doc| doc.id()).collect();
     for doc_id in docs {
@@ -3867,18 +3890,27 @@ pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     }
 
     let sidebar_width = editor.sidebar.width;
-    editor.workspace_root = workspace.to_path_buf();
+    editor.workspace_root = workspace.clone();
     editor.refresh_workspace_branch();
     editor.session_active = true;
-    let _ = editor.session_store.mark_running(&editor.workspace_root);
+    let _ = editor.session_store.mark_running(&workspace);
     editor.sidebar = helix_view::sidebar::SidebarState::default();
     editor.sidebar.width = sidebar_width;
     editor.sidebar.mode = SidebarMode::Files;
     editor.bufferline_visible = true;
     editor.new_file(Action::Replace);
 
-    if let Some(session) = editor.session_store.load(workspace) {
-        helix_view::session::restore(editor, &session);
+    if restore_session {
+        if let Some(session) = editor.session_store.load(&workspace) {
+            let outcome = helix_view::session::restore(editor, &session);
+            if !outcome.skipped.is_empty() {
+                editor.set_status(format!(
+                    "restored {} buffers ({} missing files skipped)",
+                    outcome.restored,
+                    outcome.skipped.len()
+                ));
+            }
+        }
     }
     editor.session_dirty = true;
     editor.needs_redraw = true;
@@ -3886,8 +3918,11 @@ pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) {
     if editor.ui_state_persist {
         let mut state = helix_view::ui_state::UiState::load();
         state.record_workspace(workspace);
-        let _ = state.save();
+        if let Err(err) = state.save() {
+            editor.set_error(format!("failed to save recent workspaces: {err}"));
+        }
     }
+    Ok(())
 }
 
 fn diagnostics(cx: &mut Context) {
@@ -4038,8 +4073,10 @@ fn recent_workspaces(cx: &mut Context) {
         cx.editor.needs_redraw = true;
         // Let the status line render before the synchronous workspace switch.
         crate::job::dispatch_blocking(move |editor, _compositor| {
-            switch_workspace(editor, &path);
-            editor.set_status(format!("Opened {name}"));
+            match switch_workspace(editor, &path) {
+                Ok(()) => editor.set_status(format!("Opened {name}")),
+                Err(err) => editor.set_error(err.to_string()),
+            }
         });
     });
     cx.push_layer(Box::new(overlaid(picker)));

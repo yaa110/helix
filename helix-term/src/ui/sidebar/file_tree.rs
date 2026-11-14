@@ -392,7 +392,10 @@ impl FileTree {
         let mut paths: Vec<PathBuf> = editor.sidebar.refresh_dirs.drain().collect();
         paths.retain(|path| path.starts_with(&root));
         paths.sort();
-        let full = paths.is_empty();
+        let full = paths.is_empty() || paths.iter().any(|path| path == &root);
+        if full {
+            paths.clear();
+        }
 
         let (tx, rx) = std::sync::mpsc::channel();
         // `request_redraw` uses runtime-local state. Carry the runtime handle
@@ -876,8 +879,7 @@ impl FileTree {
             ..SidebarState::default()
         };
         self.rebuild(editor, &state);
-        self.select_path(path);
-        true
+        self.select_path(path)
     }
 
     fn start_jump_labels(&mut self, cx: &mut commands::Context) {
@@ -1304,9 +1306,12 @@ impl FileTree {
         }
     }
 
-    pub fn select_path(&mut self, path: &Path) {
+    pub fn select_path(&mut self, path: &Path) -> bool {
         if let Some(index) = self.rows.iter().position(|row| row.path == path) {
             self.cursor = index;
+            true
+        } else {
+            false
         }
     }
 
@@ -2084,7 +2089,12 @@ fn load_git_status(root: &Path, paths: &[PathBuf]) -> HashMap<PathBuf, GitFileSt
     if !paths.is_empty() {
         command.arg("--");
         for path in paths {
-            command.arg(path.strip_prefix(root).unwrap_or(path));
+            let relative = path.strip_prefix(root).unwrap_or(path);
+            command.arg(if relative.as_os_str().is_empty() {
+                Path::new(".")
+            } else {
+                relative
+            });
         }
     }
     let output = command.output();
@@ -2156,7 +2166,30 @@ fn trash_dir() -> PathBuf {
 }
 
 fn copy_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
-    if source.is_dir() {
+    if destination.starts_with(source) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "destination is inside source",
+        ));
+    }
+    let metadata = std::fs::symlink_metadata(source)?;
+    if metadata.file_type().is_symlink() {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(std::fs::read_link(source)?, destination)?;
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            if source.is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "cannot copy a directory symlink on this platform",
+                ));
+            }
+            std::fs::copy(source, destination).map(|_| ())
+        }
+    } else if metadata.is_dir() {
         std::fs::create_dir_all(destination)?;
         for entry in std::fs::read_dir(source)? {
             let entry = entry?;
@@ -2175,7 +2208,8 @@ fn move_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
         Ok(()) => Ok(()),
         Err(_) => {
             copy_recursively(source, destination)?;
-            if source.is_dir() {
+            let metadata = std::fs::symlink_metadata(source)?;
+            if metadata.is_dir() && !metadata.file_type().is_symlink() {
                 std::fs::remove_dir_all(source)
             } else {
                 std::fs::remove_file(source)
@@ -2199,6 +2233,10 @@ fn paste_paths(
         };
         let destination = target_dir.join(name);
         if destination == *source {
+            continue;
+        }
+        if destination.starts_with(source) {
+            editor.set_error(format!("cannot paste {} inside itself", source.display()));
             continue;
         }
         if destination.exists() {
@@ -2394,6 +2432,18 @@ mod tree_tests {
         tree.scroll_view(4);
         assert_eq!(tree.scroll, 7);
         assert_eq!(tree.cursor, 7);
+    }
+
+    #[test]
+    fn copy_recursively_rejects_destinations_inside_the_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        std::fs::create_dir_all(source.join("child")).unwrap();
+        std::fs::write(source.join("file.txt"), "x").unwrap();
+
+        let destination = source.join("nested");
+        assert!(copy_recursively(&source, &destination).is_err());
+        assert!(!destination.exists());
     }
 
     #[test]

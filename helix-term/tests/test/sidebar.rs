@@ -112,6 +112,40 @@ async fn open_folder_command_and_alias_open_the_picker() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn workspace_switch_refuses_to_discard_modified_buffers() -> anyhow::Result<()> {
+    let root = tempfile::tempdir()?;
+    let current = root.path().join("current");
+    let target_parent = root.path().join("target");
+    let target = target_parent.join("child");
+    std::fs::create_dir_all(&target)?;
+    std::fs::create_dir_all(&current)?;
+    let store = SessionStore::new(root.path().join("state"));
+
+    let mut app = helpers::AppBuilder::new()
+        .with_session_store(store)
+        .with_workspace_dir(&current)
+        .build()?;
+    helpers::send_keys(&mut app, "iX<esc>").await?;
+    assert!(doc!(app.editor).is_modified());
+
+    helpers::send_keys(&mut app, ":open-folder<ret>").await?;
+    let path = target_parent.display().to_string();
+    helpers::send_keys(&mut app, &format!("p<A-backspace>{path}<ret>")).await?;
+    helpers::send_keys(&mut app, "<ret>").await?;
+
+    assert_eq!(
+        std::fs::canonicalize(&app.editor.workspace_root)?,
+        std::fs::canonicalize(&current)?
+    );
+    assert!(doc!(app.editor).is_modified());
+    assert!(app
+        .editor
+        .get_status()
+        .is_some_and(|(status, _)| status.contains("modified buffers")));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn folder_picker_opens_the_selected_folder_as_a_workspace() -> anyhow::Result<()> {
     let root = tempfile::tempdir()?;
     let home = root.path().join("home");
@@ -326,6 +360,42 @@ async fn navigation_click_outside_tree_returns_focus_to_editor() -> anyhow::Resu
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 60,
             row: 5,
+            modifiers: Modifiers::NONE,
+        },
+    )
+    .await?;
+
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Editor);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tokio::test(flavor = "multi_thread")]
+async fn navigation_click_empty_editor_space_clears_tree_focus() -> anyhow::Result<()> {
+    use termina::event::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    let root = tempfile::tempdir()?;
+    let text = format!(
+        "#[|]#{}",
+        (0..5)
+            .map(|line| format!("line {line}\n"))
+            .collect::<String>()
+    );
+    let mut app = helpers::AppBuilder::new()
+        .with_workspace_dir(root.path())
+        .with_input_text(text)
+        .build()?;
+    app.editor.sidebar.mode = SidebarMode::Files;
+    app.editor.sidebar.focus = SidebarFocus::Sidebar;
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+
+    helpers::send_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 60,
+            row: 120,
             modifiers: Modifiers::NONE,
         },
     )
@@ -621,8 +691,11 @@ async fn navigating_buffers_reveals_each_file_in_the_tree() -> anyhow::Result<()
     app.handle_idle_timeout().await;
     assert_eq!(app.editor.sidebar.selected.as_deref(), Some(a.as_path()));
 
+    app.editor.sidebar.tree_filter = "zzz".to_string();
+    app.editor.sidebar.tree_search_active = true;
     helpers::send_keys(&mut app, "gn").await?;
     assert_eq!(app.editor.sidebar.selected.as_deref(), Some(b.as_path()));
+    assert!(app.editor.sidebar.tree_filter.is_empty());
 
     helpers::send_keys(&mut app, "gp").await?;
     assert_eq!(app.editor.sidebar.selected.as_deref(), Some(a.as_path()));

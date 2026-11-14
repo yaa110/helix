@@ -1412,6 +1412,16 @@ impl EditorView {
             })
         };
 
+        let view_at_screen = |editor: &Editor, row, column| {
+            editor.tree.views().find_map(|(view, _focus)| {
+                (column >= view.area.x
+                    && column < view.area.right()
+                    && row >= view.area.y
+                    && row < view.area.bottom())
+                .then_some(view.id)
+            })
+        };
+
         let gutter_coords_and_view = |editor: &Editor, row, column| {
             editor.tree.views().find_map(|(view, _focus)| {
                 view.gutter_coords_at_screen_coords(row, column)
@@ -1427,9 +1437,13 @@ impl EditorView {
             if cxt.editor.sidebar.search_modal {
                 return EventResult::Consumed(None);
             }
+
+            cxt.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
+            if let Some(view_id) = view_at_screen(cxt.editor, row, column) {
+                cxt.editor.focus(view_id);
+            }
             if let Some((pos, view_id)) = pos_and_view(cxt.editor, row, column, true) {
                 cxt.editor.focus(view_id);
-                cxt.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
                 let doc_id = view!(cxt.editor, view_id).doc;
                 let doc = doc_mut!(cxt.editor, &doc_id);
                 doc.set_selection(view_id, Selection::point(pos));
@@ -1458,6 +1472,7 @@ impl EditorView {
         match kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let editor = &mut cxt.editor;
+                editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
 
                 if let Some((pos, view_id)) = pos_and_view(editor, row, column, true) {
                     editor.focus(view_id);
@@ -1944,6 +1959,7 @@ impl Component for EditorView {
             self.sidebar.render(sidebar_area, surface, cx);
             page_area.clip_left(sidebar_width)
         } else {
+            self.sidebar.clear_area();
             if cx.editor.sidebar.focus == helix_view::sidebar::SidebarFocus::Sidebar {
                 cx.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             }

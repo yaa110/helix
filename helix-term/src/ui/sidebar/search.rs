@@ -99,6 +99,25 @@ impl SearchPane {
         }
     }
 
+    pub fn cancel_worker(&mut self) {
+        self.receiver = None;
+        self.pending = false;
+    }
+
+    pub fn reset_results(&mut self) {
+        self.results.clear();
+        self.rows.clear();
+        self.cursor = 0;
+        self.scroll = 0;
+        self.receiver = None;
+        self.pending = false;
+        self.options_mode = false;
+        self.replace_preview = None;
+        self.cursor_pos = None;
+        self.capped = false;
+        self.error = None;
+    }
+
     pub fn sync_from_inputs(&mut self, inputs: &SearchInputs) {
         if self.query.value() != inputs.query {
             self.query.set_value(inputs.query.clone());
@@ -871,6 +890,12 @@ impl SearchPane {
         let Some(matched) = self.selected_match() else {
             return Ok(0);
         };
+        if !matched.path.starts_with(&cx.editor.workspace_root) {
+            anyhow::bail!(
+                "search result is outside the current workspace: {}",
+                matched.path.display()
+            );
+        }
         let options = Self::replace_options(cx.editor);
         let inputs = cx.editor.sidebar.search.clone();
         let regex = search::build_regex(&inputs.query, options)?;
@@ -881,27 +906,13 @@ impl SearchPane {
         let doc = helix_view::doc_mut!(cx.editor, &doc_id);
         let text = doc.text().to_string();
 
-        // The result list is a snapshot. Revalidate the exact range and, if it
-        // no longer matches, fall back to the first current match. Never write
-        // a replacement over text that no longer matches the query.
-        let (start, end, caps) = if matched.start <= matched.end
-            && matched.end <= text.len()
-            && regex
-                .find(&text[matched.start..matched.end])
-                .is_some_and(|found| {
-                    found.start() == 0 && found.end() == matched.end - matched.start
-                }) {
-            (
-                matched.start,
-                matched.end,
-                regex.captures(&text[matched.start..matched.end]),
-            )
-        } else if let Some(caps) = regex.captures(&text) {
-            let found = caps.get(0).unwrap();
-            (found.start(), found.end(), Some(caps))
-        } else {
+        // The result list is a snapshot. Revalidate the exact range and never
+        // apply a replacement to a different match after the buffer changes.
+        let Some(slice) = exact_match_slice(&text, matched.start, matched.end, &regex) else {
+            self.error = Some("selected search result is stale; run the search again".to_string());
             return Ok(0);
         };
+        let (start, end, caps) = (matched.start, matched.end, regex.captures(slice));
 
         let slice = &text[start..end];
         let mut replacement =
@@ -923,6 +934,12 @@ impl SearchPane {
     }
 
     fn replace_file(&mut self, cx: &mut commands::Context, path: &Path) -> anyhow::Result<usize> {
+        if !path.starts_with(&cx.editor.workspace_root) {
+            anyhow::bail!(
+                "search result is outside the current workspace: {}",
+                path.display()
+            );
+        }
         let options = Self::replace_options(cx.editor);
         let inputs = cx.editor.sidebar.search.clone();
         let regex = search::build_regex(&inputs.query, options)?;
@@ -1538,9 +1555,32 @@ fn open_match_with_action(
     Ok(())
 }
 
+fn exact_match_slice<'a>(
+    text: &'a str,
+    start: usize,
+    end: usize,
+    regex: &helix_core::regex::Regex,
+) -> Option<&'a str> {
+    if start > end {
+        return None;
+    }
+    let slice = text.get(start..end)?;
+    regex
+        .find(slice)
+        .is_some_and(|found| found.start() == 0 && found.end() == slice.len())
+        .then_some(slice)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::replace_context;
+    use super::{exact_match_slice, replace_context};
+
+    #[test]
+    fn stale_match_offsets_do_not_slice_inside_utf8() {
+        let regex = helix_core::regex::Regex::new("é").unwrap();
+        assert!(exact_match_slice("xé", 0, 2, &regex).is_none());
+        assert_eq!(exact_match_slice("xé", 1, 3, &regex), Some("é"));
+    }
 
     #[test]
     fn replace_preview_keeps_surrounding_text() {
