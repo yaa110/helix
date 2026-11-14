@@ -232,6 +232,14 @@ mod tests {
     }
 
     #[test]
+    fn diff_gutter_is_enabled_by_default() {
+        use helix_view::editor::GutterType;
+
+        let config = Config::load_test("");
+        assert!(config.editor.gutters.layout.contains(&GutterType::Diff));
+    }
+
+    #[test]
     fn end_of_line_diagnostics_are_disabled_by_default() {
         use helix_view::annotations::diagnostics::DiagnosticFilter;
 

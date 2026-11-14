@@ -88,6 +88,9 @@
 "diff.plus" = "green"
 "diff.delta" = "orange"
 "diff.minus" = "red"
+"diff.plus.gutter" = "green"
+"diff.delta.gutter" = "orange"
+"diff.minus.gutter" = "red"
 
 # make diagnostic underlined, to distinguish with selection text.
 "diagnostic.warning" = { underline = { color = "orange", style = "curl" } }

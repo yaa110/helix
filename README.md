@@ -343,6 +343,9 @@ Code lenses use the same peek-style picker:
   enabled, but text selection, drags, and full click actions are not.
   `"disable"` turns mouse interaction off; `"inherit"` enables full mouse
   support. Middle-click paste remains disabled (`middle-click-paste = false`).
+- The `diff` gutter is enabled by default, so added, modified, and deleted
+  lines are marked in the gutter for Git-tracked files. The default gutter
+  layout is `["diagnostics", "spacer", "line-numbers", "spacer", "diff"]`.
 - End-of-line diagnostic text is disabled by default
   (`[editor] end-of-line-diagnostics = "disable"`). Cursor-line inline
   diagnostics remain enabled (`[editor.inline-diagnostics] cursor-line =
