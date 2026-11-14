@@ -1,0 +1,16 @@
+README.md
+  h_20fc4d483d1064 6-7,10-11,13-14,18,27-28,37-39,41-42,44-45,49,51-64
+runtime/tutor
+  h_20fc4d483d1064 1549-1636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "46733c2ee94f187909587440120312ba6ca99274",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
