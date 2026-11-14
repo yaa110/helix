@@ -541,6 +541,64 @@ impl FileTree {
         self.clamp_scroll();
     }
 
+    fn row_text(&self, row: &Row, index: usize) -> (String, Option<String>, String, String) {
+        let marker = match row.kind {
+            EntryKind::Dir if row.expanded => "▾",
+            EntryKind::Dir => "▸",
+            EntryKind::File => " ",
+        };
+        let indent = "│ ".repeat(row.depth);
+        let name = row
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| row.path.display().to_string());
+        let label = self.labels.as_ref().and_then(|labels| {
+            labels
+                .iter()
+                .find(|(_, label_index)| *label_index == index)
+                .map(|(label, _)| {
+                    if self
+                        .label_prefix
+                        .is_some_and(|prefix| !label.starts_with(prefix))
+                    {
+                        "  "
+                    } else {
+                        label.as_str()
+                    }
+                })
+        });
+        let label_prefix = label.map(|label| format!("{label} "));
+        let mark = if self.marked.contains(&row.path) {
+            "● "
+        } else {
+            "  "
+        };
+        let rest = format!("{mark}{marker} {name}");
+        let text = match &label_prefix {
+            Some(label) => format!("{label}{indent}{rest}"),
+            None => format!("{indent}{rest}"),
+        };
+        (text, label_prefix, indent, rest)
+    }
+
+    fn max_visible_width(&self, height: usize) -> usize {
+        self.rows
+            .iter()
+            .skip(self.scroll)
+            .take(height)
+            .enumerate()
+            .map(|(offset, row)| self.row_text(row, self.scroll + offset).0.width())
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn clamp_horizontal_scroll(&mut self, content_width: usize, height: usize) {
+        self.horizontal_scroll = self
+            .horizontal_scroll
+            .min(self.max_visible_width(height).saturating_sub(content_width));
+    }
+
     pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
         self.cursor_pos = None;
         self.poll_search_index();
@@ -752,44 +810,11 @@ impl FileTree {
         }
 
         self.overflow_hint = None;
+        let content_width = area.width as usize;
+        self.clamp_horizontal_scroll(content_width, height);
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
-            let marker = match row.kind {
-                EntryKind::Dir if row.expanded => "▾",
-                EntryKind::Dir => "▸",
-                EntryKind::File => " ",
-            };
-            let indent = "│ ".repeat(row.depth);
-            let name = row
-                .path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| row.path.display().to_string());
-            let label = self.labels.as_ref().and_then(|labels| {
-                labels
-                    .iter()
-                    .find(|(_, label_index)| *label_index == index)
-                    .map(|(label, _)| {
-                        if self
-                            .label_prefix
-                            .is_some_and(|prefix| !label.starts_with(prefix))
-                        {
-                            "  "
-                        } else {
-                            label.as_str()
-                        }
-                    })
-            });
-            let label_prefix = label.map(|label| format!("{label} "));
-            let mark = if self.marked.contains(&row.path) {
-                "● "
-            } else {
-                "  "
-            };
-            let text = match &label_prefix {
-                Some(label) => format!("{label}{indent}{mark}{marker} {name}"),
-                None => format!("{indent}{mark}{marker} {name}"),
-            };
+            let (text, label_prefix, indent, rest) = self.row_text(row, index);
             // Keep the selected row visible even when the editor owns focus,
             // so it is clear which file is currently open.
             let mut style = if index == self.cursor {
@@ -817,19 +842,14 @@ impl FileTree {
 
             let selected_row = index == self.cursor;
             let content_x = area.x;
-            let content_width = area.width as usize;
             let full_width = text.width();
-            if selected_row {
-                let max_scroll = full_width.saturating_sub(content_width);
-                self.horizontal_scroll = self.horizontal_scroll.min(max_scroll);
-                if full_width > content_width {
-                    self.overflow_hint = Some(
-                        row.path
-                            .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| row.path.display().to_string()),
-                    );
-                }
+            if selected_row && full_width > content_width {
+                self.overflow_hint = Some(
+                    row.path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| row.path.display().to_string()),
+                );
             }
             let y = area.y + 2 + offset as u16;
             if self.horizontal_scroll == 0 && !indent.is_empty() {
@@ -855,7 +875,6 @@ impl FileTree {
                         guide_style,
                     )
                     .0;
-                let rest = format!("{mark}{marker} {name}");
                 surface.set_stringn(
                     x,
                     y,
@@ -2479,6 +2498,54 @@ mod tree_tests {
         assert_eq!(skip_columns("abcdef", 4), "ef");
         assert_eq!(skip_columns("abcdef", 99), "");
         assert_eq!(skip_columns("a世b", 2), "b");
+    }
+
+    #[test]
+    fn horizontal_scroll_uses_the_widest_visible_row() {
+        let mut tree = FileTree::new(PathBuf::from("/repo"));
+        tree.rows = vec![
+            Row {
+                path: PathBuf::from("/repo/short"),
+                depth: 0,
+                kind: EntryKind::File,
+                expanded: false,
+            },
+            Row {
+                path: PathBuf::from("/repo/a-very-long-file-name.rs"),
+                depth: 0,
+                kind: EntryKind::File,
+                expanded: false,
+            },
+        ];
+
+        let selected_width = tree.row_text(&tree.rows[0], 0).0.width();
+        let max_width = tree.max_visible_width(2);
+        assert!(max_width > selected_width);
+        assert_eq!(max_width, tree.row_text(&tree.rows[1], 1).0.width());
+    }
+
+    #[test]
+    fn horizontal_scroll_does_not_clamp_to_a_short_selected_row() {
+        let mut tree = FileTree::new(PathBuf::from("/repo"));
+        tree.rows = vec![
+            Row {
+                path: PathBuf::from("/repo/short"),
+                depth: 0,
+                kind: EntryKind::File,
+                expanded: false,
+            },
+            Row {
+                path: PathBuf::from("/repo/a-very-long-file-name.rs"),
+                depth: 0,
+                kind: EntryKind::File,
+                expanded: false,
+            },
+        ];
+        tree.horizontal_scroll = 4;
+
+        tree.clamp_horizontal_scroll(10, 2);
+
+        assert_eq!(tree.horizontal_scroll, 4);
     }
 
     #[test]
