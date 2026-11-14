@@ -21,7 +21,7 @@ mod status;
 pub use status::FileChange;
 
 #[cfg(feature = "git")]
-pub use git::{for_each_changed_file_in, get_diff_base, unified_diff};
+pub use git::for_each_changed_file_in;
 
 /// Contains all active diff providers. Diff providers are compiled in via features. Currently
 /// only `git` is supported.
