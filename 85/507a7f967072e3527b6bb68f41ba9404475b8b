@@ -1,0 +1,14 @@
+helix-term/src/ui/statusline.rs
+  h_20fc4d483d1064 201-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "85507a7f967072e3527b6bb68f41ba9404475b8b",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
