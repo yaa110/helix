@@ -1,0 +1,14 @@
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 322-327,383-388,642-644,2681,2708-2712,2714,2716-2717
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aaf60032390167f948dc1b288cdc03e3cf614ed8",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
