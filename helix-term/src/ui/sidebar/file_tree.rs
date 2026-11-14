@@ -319,7 +319,12 @@ impl FileTree {
             .collect();
         rows.sort_by(|a, b| a.path.cmp(&b.path));
         if self.dirty_only {
-            rows.retain(|row| self.git_status.contains_key(&row.path));
+            rows.retain(|row| {
+                row.kind == EntryKind::File && self.git_status.contains_key(&row.path)
+            });
+            for row in &mut rows {
+                row.depth = 0;
+            }
         }
         self.rows = rows;
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
@@ -375,7 +380,12 @@ impl FileTree {
             rows.retain(|row| !self.ignored_paths.contains(&row.path));
         }
         if self.dirty_only {
-            rows.retain(|row| self.git_status.contains_key(&row.path));
+            rows.retain(|row| {
+                row.kind == EntryKind::File && self.git_status.contains_key(&row.path)
+            });
+            for row in &mut rows {
+                row.depth = 0;
+            }
         }
         if self.filter.is_empty() {
             self.rows = rows;
@@ -629,11 +639,9 @@ impl FileTree {
             .or_else(|| theme.try_get_exact("ui.tree.selected"))
             .or_else(|| theme.try_get_exact("ui.selection"))
             .unwrap_or_default();
-        let menu = if focused {
-            selected
-        } else {
-            selected.add_modifier(Modifier::DIM)
-        };
+        // Keep the selected row's text color stable when the tree loses focus:
+        // only its background (from the unfocused selection style) changes.
+        let menu = selected;
 
         if area.height == 0 {
             return;
@@ -2670,7 +2678,7 @@ mod tree_tests {
     }
 
     #[test]
-    fn dirty_only_view_keeps_changed_rows_and_parents() {
+    fn dirty_only_view_shows_flat_file_list() {
         let root = PathBuf::from("/repo");
         let mut tree = FileTree::new(root.clone());
         tree.dirty_only = true;
@@ -2697,13 +2705,16 @@ mod tree_tests {
             })
         });
 
-        let paths: Vec<_> = tree.rows.iter().map(|row| row.path.as_path()).collect();
+        let rows: Vec<_> = tree
+            .rows
+            .iter()
+            .map(|row| (row.depth, row.path.as_path()))
+            .collect();
         assert_eq!(
-            paths,
+            rows,
             vec![
-                Path::new("/repo/src"),
-                Path::new("/repo/src/main.rs"),
-                Path::new("/repo/untracked.txt")
+                (0, Path::new("/repo/src/main.rs")),
+                (0, Path::new("/repo/untracked.txt"))
             ]
         );
     }
