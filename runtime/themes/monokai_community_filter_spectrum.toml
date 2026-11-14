@@ -156,6 +156,8 @@
 "ui.linenr" = { fg = "base4" }
 "ui.linenr.selected" = { fg = "base7", bg = "base3" }
 "ui.virtual.inline" = { fg = "base5" }
+
+rainbow = ["#FFD700", "#DA70D6", "#179FFF"]
 "ui.selection" = { bg = "base3" }
 "ui.cursor.match" = { bg = "base3" }
 "ui.cursorline" = { bg = "base1" }

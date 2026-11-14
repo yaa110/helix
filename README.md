@@ -369,6 +369,9 @@ Code lenses use the same peek-style picker:
   enabled, but text selection, drags, and full click actions are not.
   `"disable"` turns mouse interaction off; `"inherit"` enables full mouse
   support. Middle-click paste remains disabled (`middle-click-paste = false`).
+- Rainbow brackets are enabled by default. Brackets cycle through VSCode Dark+
+  colors (`#FFD700`, `#DA70D6`, `#179FFF`) by nesting depth; themes can override
+  the palette with `rainbow = [...]`.
 - The `diff` gutter is enabled by default, so added, modified, and deleted
   lines are marked in the gutter for Git-tracked files. The default gutter
   layout is `["diagnostics", "spacer", "line-numbers", "spacer", "diff"]`.

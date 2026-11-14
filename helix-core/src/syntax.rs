@@ -640,6 +640,12 @@ impl Syntax {
             highlight: Highlight,
         }
 
+        if rainbow_length == 0 {
+            return OverlayHighlights::Heterogenous {
+                highlights: Vec::new(),
+            };
+        }
+
         let mut scope_stack = Vec::<RainbowScope>::new();
         let mut highlights = Vec::new();
         let mut query_iter = self.query_iter::<_, (), _>(
@@ -1329,6 +1335,23 @@ mod test {
         pretty_print_tree(&mut output, root).unwrap();
 
         assert_eq!(expected, output);
+    }
+
+    #[test]
+    fn rainbow_highlights_cycle_by_nesting_depth() {
+        let source = Rope::from_str("fn main() { let x = (1 + [2]); }");
+        let language = LOADER.language_for_name("rust").unwrap();
+        let syntax = Syntax::new(source.slice(..), language, &LOADER).unwrap();
+        let OverlayHighlights::Heterogenous { highlights } =
+            syntax.rainbow_highlights(source.slice(..), 3, &LOADER, ..)
+        else {
+            panic!("expected heterogenous rainbow highlights")
+        };
+        let colors: std::collections::HashSet<u32> =
+            highlights.iter().map(|(style, _)| style.get()).collect();
+        assert!(colors.contains(&0));
+        assert!(colors.contains(&1));
+        assert!(colors.contains(&2));
     }
 
     #[test]

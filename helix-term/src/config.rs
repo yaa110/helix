@@ -232,6 +232,18 @@ mod tests {
     }
 
     #[test]
+    fn rainbow_brackets_are_enabled_by_default() {
+        assert!(Config::load_test("").editor.rainbow_brackets);
+        let config = Config::load_test(
+            r#"
+            [editor]
+            rainbow-brackets = false
+            "#,
+        );
+        assert!(!config.editor.rainbow_brackets);
+    }
+
+    #[test]
     fn inline_completion_defaults_and_parses_snippets() {
         let config = Config::load_test("");
         assert!(config.editor.inline_completion.enable);
