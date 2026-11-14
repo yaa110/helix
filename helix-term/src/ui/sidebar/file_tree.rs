@@ -593,10 +593,11 @@ impl FileTree {
             .unwrap_or(0)
     }
 
-    fn clamp_horizontal_scroll(&mut self, content_width: usize, height: usize) {
-        self.horizontal_scroll = self
-            .horizontal_scroll
-            .min(self.max_visible_width(height).saturating_sub(content_width));
+    fn clamp_horizontal_scroll(&mut self, height: usize) {
+        // Allow panning up to the full width of the widest visible row. This
+        // keeps `<`/`>` useful even when every visible row fits inside the
+        // sidebar, while still preventing scrolling past the content.
+        self.horizontal_scroll = self.horizontal_scroll.min(self.max_visible_width(height));
     }
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
@@ -811,7 +812,7 @@ impl FileTree {
 
         self.overflow_hint = None;
         let content_width = area.width as usize;
-        self.clamp_horizontal_scroll(content_width, height);
+        self.clamp_horizontal_scroll(height);
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
             let (text, label_prefix, indent, rest) = self.row_text(row, index);
@@ -2543,9 +2544,26 @@ mod tree_tests {
         ];
         tree.horizontal_scroll = 4;
 
-        tree.clamp_horizontal_scroll(10, 2);
+        tree.clamp_horizontal_scroll(2);
 
         assert_eq!(tree.horizontal_scroll, 4);
+    }
+
+    #[test]
+    fn horizontal_scroll_never_exceeds_the_widest_visible_row() {
+        let mut tree = FileTree::new(PathBuf::from("/repo"));
+        tree.rows = vec![Row {
+            path: PathBuf::from("/repo/a-very-long-file-name.rs"),
+            depth: 0,
+            kind: EntryKind::File,
+            expanded: false,
+        }];
+        let max_width = tree.max_visible_width(1);
+        tree.horizontal_scroll = max_width + 100;
+
+        tree.clamp_horizontal_scroll(1);
+
+        assert_eq!(tree.horizontal_scroll, max_width);
     }
 
     #[test]
