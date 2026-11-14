@@ -234,6 +234,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "E" => file_explorer_in_current_directory,
             "." => file_explorer_in_current_buffer_directory,
             "b" => toggle_file_tree,
+            "m" => diff,
             "x" => close_buffer,
             "X" => close_other_buffers,
             "T" => toggle_bufferline,

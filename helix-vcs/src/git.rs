@@ -19,6 +19,8 @@ use gix::status::{
 };
 use gix::{Commit, ObjectId, Repository, ThreadSafeRepository};
 
+use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
+
 use crate::FileChange;
 
 #[cfg(test)]
@@ -282,6 +284,21 @@ fn status(
     }
 
     Ok(())
+}
+
+/// Produce a unified diff between `base` and `current`.
+pub fn unified_diff(base: &[u8], current: &str) -> String {
+    let base = String::from_utf8_lossy(base);
+    let base: &str = &base;
+    let input = InternedInput::new(base, current);
+    let mut diff = Diff::compute(Algorithm::Histogram, &input);
+    diff.postprocess_lines(&input);
+    diff.unified_diff(
+        &BasicLineDiffPrinter(&input.interner),
+        UnifiedDiffConfig::default(),
+        &input,
+    )
+    .to_string()
 }
 
 /// Finds the object that contains the contents of a file at a specific commit.

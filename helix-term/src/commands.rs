@@ -418,6 +418,7 @@ impl MappableCommand {
         close_buffer, "Close the current buffer (same as :buffer-close)",
         close_other_buffers, "Close all other buffers and their splits",
         toggle_file_tree, "Toggle/focus the file tree sidebar",
+        diff, "Open a diff view for the current buffer",
         toggle_bufferline, "Toggle the buffer tab bar",
         recent_workspaces, "Open a recently used workspace",
         focus_search, "Open/focus the global search window",
@@ -3852,6 +3853,52 @@ fn toggle_file_tree(cx: &mut Context) {
     }
     cx.editor.needs_redraw = true;
     cx.editor.save_ui_state();
+}
+
+fn diff(cx: &mut Context) {
+    let current_doc = view!(cx.editor).doc;
+    let Some(doc) = cx.editor.document(current_doc) else {
+        return;
+    };
+    let Some(path) = doc.path().map(PathBuf::from) else {
+        cx.editor.set_error("Diff requires a saved file");
+        return;
+    };
+
+    let trust_full = cx
+        .editor
+        .workspace_trust
+        .query(
+            &helix_loader::find_workspace_in(&path).0,
+            helix_loader::workspace_trust::TrustQuery::Git,
+        )
+        .is_trusted();
+
+    let base = match helix_vcs::get_diff_base(&path, trust_full) {
+        Ok(base) => base,
+        Err(_) => {
+            cx.editor.set_error("No committed version available for diff");
+            return;
+        }
+    };
+
+    let current_text = doc.text().to_string();
+    let diff_text = helix_vcs::unified_diff(&base, &current_text);
+
+    let doc_id = cx.editor.new_file(Action::VerticalSplit);
+    let doc = doc_mut!(cx.editor, &doc_id);
+    let view = view_mut!(cx.editor);
+    doc.ensure_view_init(view.id);
+    let transaction = helix_core::Transaction::insert(
+        doc.text(),
+        doc.selection(view.id),
+        diff_text.into(),
+    )
+    .with_selection(helix_core::Selection::point(0));
+    doc.apply(&transaction, view.id);
+    doc.append_changes_to_history(view);
+    doc.readonly = true;
+    cx.editor.needs_redraw = true;
 }
 
 struct WorkspaceSwitchPlan {
