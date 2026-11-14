@@ -1,0 +1,38 @@
+README.md
+  h_20fc4d483d1064 210,212,216,219-237,342-345
+book/src/configuration.md
+  h_20fc4d483d1064 17
+book/src/editor.md
+  h_20fc4d483d1064 33
+helix-term/src/compositor.rs
+  h_20fc4d483d1064 20-23,34-43,342,344,346,350-353,356,358,360,362,364,369,371,377-384,388,390,392,396-399
+helix-term/src/config.rs
+  h_20fc4d483d1064 213-233
+helix-term/src/ui/editor.rs
+  h_20fc4d483d1064 1422-1456
+helix-term/src/ui/popup.rs
+  h_20fc4d483d1064 265-275
+helix-term/src/ui/sidebar.rs
+  h_20fc4d483d1064 5,69-91
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 1313-1325
+helix-term/tests/test/sidebar.rs
+  h_20fc4d483d1064 145-146,176-191,193-228,233,235,250-254,259,266-348,351-352,357-361,366,374
+helix-tui/src/terminal.rs
+  h_20fc4d483d1064 34,46-48,52,55-58
+helix-view/src/editor.rs
+  h_20fc4d483d1064 297-324,332-333,1253
+runtime/tutor
+  h_20fc4d483d1064 1606
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ad1268c218b986b9f51e19df07bdf8d216bb7b91",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
