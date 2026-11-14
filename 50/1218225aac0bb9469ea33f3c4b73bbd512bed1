@@ -1,0 +1,40 @@
+helix-term/src/application.rs
+  h_20fc4d483d1064 788-798
+helix-term/src/commands.rs
+  h_20fc4d483d1064 3857-3875,3880-3885,3893,3896,3903-3913,3921-3923,3925,4076-4079
+helix-term/src/compositor.rs
+  h_20fc4d483d1064 168
+helix-term/src/search.rs
+  h_20fc4d483d1064 182-188,194-195,218-225,233-234,244,246-257,261-269,273,275-284,288,295-329,468-480
+helix-term/src/ui/editor.rs
+  h_20fc4d483d1064 1415-1424,1440-1444,1475,1962
+helix-term/src/ui/folder_picker.rs
+  h_20fc4d483d1064 696-699
+helix-term/src/ui/popup.rs
+  h_20fc4d483d1064 272-280
+helix-term/src/ui/sidebar.rs
+  h_20fc4d483d1064 69-72,75,101,146-148,152,192-200
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 395-398,882,1309,1312-1314,2092-2097,2169-2192,2211-2212,2238-2241,2437-2448
+helix-term/src/ui/sidebar/search.rs
+  h_20fc4d483d1064 102-120,893-898,909-912,915,937-942,1558-1573,1576-1583
+helix-term/tests/test/sidebar.rs
+  h_20fc4d483d1064 114-147,372-407,694-695,698
+helix-tui/src/backend/termina.rs
+  h_20fc4d483d1064 82,257,278,284,294
+helix-view/src/session.rs
+  h_20fc4d483d1064 355-366
+helix-view/src/ui_state.rs
+  h_20fc4d483d1064 94-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "501218225aac0bb9469ea33f3c4b73bbd512bed1",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
