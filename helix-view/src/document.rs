@@ -2437,9 +2437,19 @@ impl Document {
     }
 
     pub fn snippet_ctx(&self) -> SnippetRenderCtx {
+        let path = self.path.clone();
         SnippetRenderCtx {
-            // TODO snippet variable resolution
-            resolve_var: Box::new(|_| None),
+            resolve_var: Box::new(move |name| {
+                let path = path.as_deref()?;
+                let value = match name {
+                    "TM_FILEPATH" => path.display().to_string(),
+                    "TM_DIRECTORY" => path.parent()?.display().to_string(),
+                    "TM_FILENAME" => path.file_name()?.to_string_lossy().into_owned(),
+                    "TM_FILENAME_BASE" => path.file_stem()?.to_string_lossy().into_owned(),
+                    _ => return None,
+                };
+                Some(std::borrow::Cow::Owned(value))
+            }),
             tab_width: self.tab_width(),
             indent_style: self.indent_style,
             line_ending: self.line_ending.as_str(),

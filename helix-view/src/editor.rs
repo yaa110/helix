@@ -324,6 +324,29 @@ impl MouseConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
+pub struct InlineCompletionConfig {
+    pub enable: bool,
+    pub snippets: Vec<InlineCompletionSnippet>,
+}
+
+impl Default for InlineCompletionConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            snippets: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct InlineCompletionSnippet {
+    pub prefix: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct Config {
     /// Padding to keep between the edge of the screen and the cursor when scrolling. Defaults to 5.
     pub scrolloff: usize,
@@ -387,6 +410,8 @@ pub struct Config {
     /// Whether to insert the completion suggestion on hover. Defaults to true.
     pub preview_completion_insert: bool,
     pub completion_trigger_len: u8,
+    /// Inline completion / ghost text configuration.
+    pub inline_completion: InlineCompletionConfig,
     /// Whether to instruct the LSP to replace the entire word when applying a completion
     /// or to only insert new text
     pub completion_replace: bool,
@@ -1273,6 +1298,7 @@ impl Default for Config {
             completion_timeout: Duration::from_millis(250),
             preview_completion_insert: true,
             completion_trigger_len: 2,
+            inline_completion: InlineCompletionConfig::default(),
             auto_info: true,
             file_picker: FilePickerConfig::default(),
             file_explorer: FileExplorerConfig::default(),

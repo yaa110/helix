@@ -235,6 +235,32 @@ Because terminals have no focus-only or scroll-only mouse protocol,
 therefore blocked while `hx` is running. Use `"disable"` for fully mouse-free
 behavior or `"inherit"` for full mouse support.
 
+### Inline completions
+
+LSP 3.18 inline completions and user-defined snippets are rendered as faint
+ghost text at the cursor. Nothing is inserted until accepted.
+
+```toml
+[editor.inline-completion]
+enable = true
+snippets = [
+  { prefix = "fn", body = "fn ${1:name}(${2:arg}) {\n\t$0\n}" },
+]
+```
+
+- `Tab` accepts the current ghost completion.
+- Any other key dismisses it; typing a different prefix requests a new one.
+- LSP plain-text and snippet insert formats are supported.
+- Snippet placeholders and `TM_FILENAME`, `TM_FILENAME_BASE`, `TM_DIRECTORY`,
+  and `TM_FILEPATH` variables are expanded on acceptance.
+- Requests run asynchronously and are discarded when the document version or
+  cursor moves.
+
+Full workspace pull diagnostics are intentionally not enabled by default:
+the existing workspace diagnostic picker already aggregates every diagnostic
+published by language servers, and forcing pull requests across every file
+would add unbounded workspace I/O.
+
 ### Folder picker
 
 `:open-folder` (alias `:folder`) opens a two-pane folder picker and switches

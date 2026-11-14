@@ -155,6 +155,7 @@
 "ui.bufferline.active" = { fg = "base8", bg = "base2" }
 "ui.linenr" = { fg = "base4" }
 "ui.linenr.selected" = { fg = "base7", bg = "base3" }
+"ui.virtual.inline" = { fg = "base5" }
 "ui.selection" = { bg = "base3" }
 "ui.cursor.match" = { bg = "base3" }
 "ui.cursorline" = { bg = "base1" }

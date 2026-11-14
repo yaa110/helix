@@ -232,6 +232,24 @@ mod tests {
     }
 
     #[test]
+    fn inline_completion_defaults_and_parses_snippets() {
+        let config = Config::load_test("");
+        assert!(config.editor.inline_completion.enable);
+        assert!(config.editor.inline_completion.snippets.is_empty());
+
+        let config = Config::load_test(
+            r#"
+            [editor.inline-completion]
+            enable = false
+            snippets = [{ prefix = "fn", body = "fn ${1:name}() {\n\t$0\n}" }]
+            "#,
+        );
+        assert!(!config.editor.inline_completion.enable);
+        assert_eq!(config.editor.inline_completion.snippets.len(), 1);
+        assert_eq!(config.editor.inline_completion.snippets[0].prefix, "fn");
+    }
+
+    #[test]
     fn diff_gutter_is_enabled_by_default() {
         use helix_view::editor::GutterType;
 

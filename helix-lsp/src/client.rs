@@ -363,6 +363,9 @@ impl Client {
                 Some(OneOf::Left(true) | OneOf::Right(_))
             ),
             LanguageServerFeature::Completion => capabilities.completion_provider.is_some(),
+            LanguageServerFeature::InlineCompletion => {
+                capabilities.inline_completion_provider.is_some()
+            }
             LanguageServerFeature::CodeAction => matches!(
                 capabilities.code_action_provider,
                 Some(
@@ -635,6 +638,7 @@ impl Client {
                     ..Default::default()
                 }),
                 text_document: Some(lsp::TextDocumentClientCapabilities {
+                    inline_completion: Some(lsp::InlineCompletionClientCapabilities::default()),
                     completion: Some(lsp::CompletionClientCapabilities {
                         completion_item: Some(lsp::CompletionItemCapability {
                             snippet_support: Some(enable_snippets),
@@ -1162,6 +1166,30 @@ impl Client {
             text: include_text.then_some(text.into()),
         });
         Some(())
+    }
+
+    pub fn inline_completion(
+        &self,
+        text_document: lsp::TextDocumentIdentifier,
+        position: lsp::Position,
+        trigger_kind: lsp::InlineCompletionTriggerKind,
+    ) -> Option<impl Future<Output = Result<Option<lsp::InlineCompletionResponse>>>> {
+        self.capabilities
+            .get()?
+            .inline_completion_provider
+            .as_ref()?;
+        let params = lsp::InlineCompletionParams {
+            work_done_progress_params: lsp::WorkDoneProgressParams::default(),
+            text_document_position: lsp::TextDocumentPositionParams {
+                text_document,
+                position,
+            },
+            context: lsp::InlineCompletionContext {
+                trigger_kind,
+                selected_completion_info: None,
+            },
+        };
+        Some(self.call::<lsp::request::InlineCompletionRequest>(params))
     }
 
     pub fn completion(

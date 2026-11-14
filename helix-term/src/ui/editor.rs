@@ -17,11 +17,13 @@ use helix_core::{
     diagnostic::NumberOrString,
     graphemes::{next_grapheme_boundary, prev_grapheme_boundary},
     movement::Direction,
+    snippets::{ActiveSnippet, Snippet},
     syntax::{self, OverlayHighlights},
     text_annotations::TextAnnotations,
     unicode::width::UnicodeWidthStr,
     visual_offset_from_block, Change, Position, Range, Selection, Transaction,
 };
+use helix_lsp::lsp;
 use helix_view::{
     annotations::diagnostics::DiagnosticFilter,
     document::{Mode, SCRATCH_BUFFER_NAME},
@@ -29,11 +31,24 @@ use helix_view::{
     graphics::{Color, CursorKind, Modifier, Rect, Style},
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
-    Document, Editor, Theme, View,
+    Document, DocumentId, Editor, Theme, View, ViewId,
 };
 use std::{mem::take, num::NonZeroUsize, ops, path::PathBuf, rc::Rc};
 
 use tui::{buffer::Buffer as Surface, text::Span};
+
+#[derive(Clone)]
+struct InlineCompletionState {
+    doc_id: DocumentId,
+    view_id: ViewId,
+    version: i32,
+    cursor: usize,
+    start: usize,
+    end: usize,
+    text: String,
+    display: String,
+    snippet: bool,
+}
 
 pub struct EditorView {
     pub keymaps: Keymaps,
@@ -41,6 +56,9 @@ pub struct EditorView {
     pseudo_pending: Vec<KeyEvent>,
     pub(crate) last_insert: (commands::MappableCommand, Vec<InsertEvent>),
     pub(crate) completion: Option<Completion>,
+    inline_completion: Option<InlineCompletionState>,
+    inline_completion_generation: u64,
+    inline_completion_last_request: Option<(DocumentId, i32, usize)>,
     spinners: ProgressSpinners,
     pub(crate) sidebar: Sidebar,
     scroll_accel: super::scroll::ScrollAccelerator,
@@ -67,6 +85,9 @@ impl EditorView {
             pseudo_pending: Vec::new(),
             last_insert: (commands::MappableCommand::normal_mode, Vec::new()),
             completion: None,
+            inline_completion: None,
+            inline_completion_generation: 0,
+            inline_completion_last_request: None,
             spinners: ProgressSpinners::default(),
             sidebar: Sidebar::new(),
             scroll_accel: Default::default(),
@@ -228,6 +249,29 @@ impl EditorView {
             theme,
             decorations,
         );
+
+        if is_focused
+            && self.inline_completion.as_ref().is_some_and(|state| {
+                state.doc_id == doc.id()
+                    && state.view_id == view.id
+                    && state.version == doc.version()
+            })
+        {
+            if let Some(state) = self.inline_completion.as_ref() {
+                let text = doc.text().slice(..);
+                if let Some(pos) = view.screen_coords_at_pos(doc, text, state.cursor) {
+                    let x = inner.x + pos.col as u16;
+                    let y = inner.y + pos.row as u16;
+                    let width = inner.right().saturating_sub(x) as usize;
+                    let style = theme
+                        .try_get("ui.virtual.inline")
+                        .or_else(|| theme.try_get("ui.text.inactive"))
+                        .or_else(|| theme.try_get("ui.linenr"))
+                        .unwrap_or_default();
+                    surface.set_stringn(x, y, &state.display, width, style);
+                }
+            }
+        }
 
         // if we're not at the edge of the screen, draw a right border
         if viewport.right() != view.area.right() {
@@ -1145,6 +1189,12 @@ impl EditorView {
     }
 
     fn insert_mode(&mut self, cx: &mut commands::Context, event: KeyEvent) {
+        if self.inline_completion.is_some() {
+            if event == key!(Tab) && self.accept_inline_completion(cx) {
+                return;
+            }
+            self.clear_inline_completion();
+        }
         if let Some(keyresult) = self.handle_keymap_event(Mode::Insert, cx, event) {
             match keyresult {
                 KeymapResult::NotFound => {
@@ -1320,6 +1370,291 @@ impl EditorView {
         on_next_key
     }
 
+    fn clear_inline_completion(&mut self) {
+        self.inline_completion = None;
+    }
+
+    fn accept_inline_completion(&mut self, cx: &mut commands::Context) -> bool {
+        let Some(state) = self.inline_completion.take() else {
+            return false;
+        };
+        let (view, doc) = helix_view::current!(cx.editor);
+        if state.doc_id != doc.id()
+            || state.view_id != view.id
+            || state.version != doc.version()
+            || state.start > state.end
+            || state.end > doc.text().len_chars()
+        {
+            return false;
+        }
+
+        if state.snippet {
+            let Ok(snippet) = Snippet::parse(&state.text) else {
+                return false;
+            };
+            let start = state.start;
+            let end = state.end;
+            let selection = Selection::single(start, end);
+            let (transaction, selection, rendered) = snippet.render(
+                doc.text(),
+                &selection,
+                |_| (start, end),
+                &mut doc.snippet_ctx(),
+            );
+            doc.apply(&transaction, view.id);
+            doc.set_selection(view.id, selection);
+            doc.active_snippet = ActiveSnippet::new(rendered);
+        } else {
+            let start = state.start;
+            let end = state.end;
+            let inserted = state.text.chars().count();
+            let transaction = Transaction::change(
+                doc.text(),
+                std::iter::once((start, end, Some(state.text.into()))),
+            );
+            doc.apply(&transaction, view.id);
+            doc.set_selection(view.id, Selection::point(start + inserted));
+        }
+        doc.append_changes_to_history(view);
+        let view_id = view.id;
+        cx.editor.ensure_cursor_in_view(view_id);
+        cx.editor.needs_redraw = true;
+        true
+    }
+
+    fn font_preview(text: &str) -> String {
+        text.lines().next().unwrap_or_default().to_string()
+    }
+
+    fn snippet_preview(text: &str) -> String {
+        let mut out = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '\\' {
+                if let Some(next) = chars.next() {
+                    out.push(next);
+                }
+                continue;
+            }
+            if ch != '$' {
+                out.push(ch);
+                continue;
+            }
+            match chars.peek().copied() {
+                Some('{') => {
+                    chars.next();
+                    let mut body = String::new();
+                    for inner in chars.by_ref() {
+                        if inner == '}' {
+                            break;
+                        }
+                        body.push(inner);
+                    }
+                    if let Some((_, default)) = body.split_once(':') {
+                        out.push_str(default);
+                    }
+                }
+                Some(next) if next.is_ascii_digit() => {
+                    while matches!(chars.peek(), Some(next) if next.is_ascii_digit()) {
+                        chars.next();
+                    }
+                }
+                Some(next) if next.is_alphabetic() || next == '_' => {
+                    while matches!(chars.peek(), Some(next) if next.is_alphanumeric() || *next == '_')
+                    {
+                        chars.next();
+                    }
+                }
+                _ => out.push('$'),
+            }
+        }
+        out
+    }
+
+    fn request_inline_completion(&mut self, cx: &mut commands::Context) {
+        let config = cx.editor.config();
+        if !config.inline_completion.enable || cx.editor.mode != Mode::Insert {
+            self.clear_inline_completion();
+            return;
+        }
+        if self.completion.is_some() {
+            self.clear_inline_completion();
+            return;
+        }
+
+        let (view, doc) = helix_view::current_ref!(cx.editor);
+        if doc.active_snippet.is_some() {
+            self.clear_inline_completion();
+            return;
+        }
+        let doc_id = doc.id();
+        let view_id = view.id;
+        let version = doc.version();
+        let text = doc.text().slice(..);
+        let cursor = doc.selection(view.id).primary().cursor(text);
+        if self.inline_completion_last_request == Some((doc_id, version, cursor)) {
+            return;
+        }
+        self.inline_completion_last_request = Some((doc_id, version, cursor));
+        if self.inline_completion.as_ref().is_some_and(|state| {
+            state.doc_id != doc_id || state.version != version || state.cursor != cursor
+        }) {
+            self.clear_inline_completion();
+        }
+
+        // User-defined snippets take precedence over LSP suggestions.
+        let line = text.char_to_line(cursor);
+        let line_start = text.line_to_char(line);
+        let typed = text.slice(line_start..cursor).to_string();
+        if let Some(snippet) = config
+            .inline_completion
+            .snippets
+            .iter()
+            .find(|snippet| !snippet.prefix.is_empty() && typed.ends_with(&snippet.prefix))
+        {
+            let start = cursor.saturating_sub(snippet.prefix.chars().count());
+            let display = snippet
+                .body
+                .strip_prefix(&snippet.prefix)
+                .unwrap_or(&snippet.body);
+            self.inline_completion = Some(InlineCompletionState {
+                doc_id,
+                view_id,
+                version,
+                cursor,
+                start,
+                end: cursor,
+                text: snippet.body.clone(),
+                display: Self::font_preview(&Self::snippet_preview(display)),
+                snippet: true,
+            });
+            return;
+        }
+
+        let Some(url) = doc.url() else {
+            return;
+        };
+        let identifier = lsp::TextDocumentIdentifier::new(url);
+        let ids: Vec<_> = doc
+            .language_servers_with_feature(
+                helix_core::syntax::config::LanguageServerFeature::InlineCompletion,
+            )
+            .map(|client| client.id())
+            .collect();
+        for id in ids {
+            let Some(client) = cx.editor.language_servers.get_by_id(id).cloned() else {
+                continue;
+            };
+            let offset_encoding = client.offset_encoding();
+            let position = doc.position(view_id, offset_encoding);
+            let Some(request) = client.inline_completion(
+                identifier.clone(),
+                position,
+                lsp::InlineCompletionTriggerKind::Automatic,
+            ) else {
+                continue;
+            };
+            let generation = self.inline_completion_generation.wrapping_add(1);
+            self.inline_completion_generation = generation;
+            cx.jobs.spawn(async move {
+                let Ok(Some(response)) = request.await else {
+                    return Ok(());
+                };
+                let item = match response {
+                    lsp::InlineCompletionResponse::Array(items) => items.into_iter().next(),
+                    lsp::InlineCompletionResponse::List(list) => list.items.into_iter().next(),
+                };
+                let Some(item) = item else {
+                    return Ok(());
+                };
+                crate::job::dispatch(move |editor, compositor| {
+                    let Some(view) = compositor.find::<EditorView>() else {
+                        return;
+                    };
+                    view.apply_inline_completion_response(
+                        editor,
+                        generation,
+                        doc_id,
+                        view_id,
+                        version,
+                        cursor,
+                        item,
+                        offset_encoding,
+                    );
+                })
+                .await;
+                Ok(())
+            });
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn apply_inline_completion_response(
+        &mut self,
+        editor: &mut Editor,
+        generation: u64,
+        doc_id: DocumentId,
+        view_id: ViewId,
+        version: i32,
+        cursor: usize,
+        item: lsp::InlineCompletionItem,
+        offset_encoding: helix_lsp::OffsetEncoding,
+    ) {
+        if generation != self.inline_completion_generation || self.inline_completion.is_some() {
+            return;
+        }
+        let Some(doc) = editor.documents.get(&doc_id) else {
+            return;
+        };
+        if doc.version() != version || view_id != helix_view::view!(editor).id {
+            return;
+        }
+        let text = doc.text().slice(..);
+        let current_cursor = doc.selection(view_id).primary().cursor(text);
+        if current_cursor != cursor {
+            return;
+        }
+        let (start, end) = match item.range {
+            Some(range) => {
+                let (Some(start), Some(end)) = (
+                    helix_lsp::util::lsp_pos_to_pos(doc.text(), range.start, offset_encoding),
+                    helix_lsp::util::lsp_pos_to_pos(doc.text(), range.end, offset_encoding),
+                ) else {
+                    return;
+                };
+                (start, end)
+            }
+            None => (cursor, cursor),
+        };
+        if start > end || end > text.len_chars() {
+            return;
+        }
+        let typed = text.slice(start..cursor).to_string();
+        let snippet = item.insert_text_format == Some(lsp::InsertTextFormat::SNIPPET);
+        let display_source = item.filter_text.unwrap_or_else(|| {
+            if snippet {
+                Self::snippet_preview(&item.insert_text)
+            } else {
+                item.insert_text.clone()
+            }
+        });
+        let display = display_source
+            .strip_prefix(&typed)
+            .unwrap_or(&display_source);
+        self.inline_completion = Some(InlineCompletionState {
+            doc_id,
+            view_id,
+            version,
+            cursor,
+            start,
+            end,
+            text: item.insert_text,
+            display: Self::font_preview(&Self::snippet_preview(display)),
+            snippet,
+        });
+        editor.needs_redraw = true;
+    }
+
     pub fn handle_idle_timeout(&mut self, cx: &mut commands::Context) -> EventResult {
         self.sidebar.handle_idle_timeout(cx);
         commands::lsp::update_code_lenses(cx);
@@ -1341,6 +1676,7 @@ impl EditorView {
         }
 
         commands::compute_inlay_hints_for_all_views(cx.editor, cx.jobs);
+        self.request_inline_completion(cx);
 
         EventResult::Ignored(None)
     }
@@ -1384,6 +1720,7 @@ impl EditorView {
         if event.kind != MouseEventKind::Moved {
             self.handle_non_key_input(cxt)
         }
+        self.clear_inline_completion();
 
         let config = cxt.editor.config();
         let MouseEvent {
@@ -2146,5 +2483,20 @@ fn canonicalize_key(key: &mut KeyEvent) {
     } = key
     {
         key.modifiers.remove(KeyModifiers::SHIFT)
+    }
+}
+
+#[cfg(test)]
+mod inline_completion_tests {
+    use super::EditorView;
+
+    #[test]
+    fn snippet_preview_strips_tabstops_and_placeholders() {
+        assert_eq!(
+            EditorView::snippet_preview("fn ${1:name}(${2:arg}) { $0 }"),
+            "fn name(arg) {  }"
+        );
+        assert_eq!(EditorView::snippet_preview("$TM_FILENAME"), "");
+        assert_eq!(EditorView::snippet_preview(r"\$literal"), "$literal");
     }
 }

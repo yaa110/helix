@@ -21,6 +21,7 @@
   - [`[editor.gutters.code-action-hint]` Section](#editorgutterscode-action-hint-section)
 - [`[editor.soft-wrap]` Section](#editorsoft-wrap-section)
 - [`[editor.smart-tab]` Section](#editorsmart-tab-section)
+- [`[editor.inline-completion]` Section](#editorinline-completion-section)
 - [`[editor.inline-diagnostics]` Section](#editorinline-diagnostics-section)
 - [`[editor.word-completion]` Section](#editorword-completion-section)
 - [`[editor.workspace-trust]` Section](#editorworkspace-trust-section)
@@ -489,6 +490,24 @@ S-tab = "move_parent_node_start"
 [keys.select]
 tab = "extend_parent_node_end"
 S-tab = "extend_parent_node_start"
+```
+
+### `[editor.inline-completion]` Section
+
+Inline LSP completions and configured snippets are shown as faint ghost text
+after the cursor. `Tab` accepts; any other key dismisses.
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `enable` | Enable inline completion ghost text | `true` |
+| `snippets` | Array of `{ prefix, body }` user snippets | `[]` |
+
+```toml
+[editor.inline-completion]
+enable = true
+snippets = [
+  { prefix = "fn", body = "fn ${1:name}(${2:arg}) {\n\t$0\n}" },
+]
 ```
 
 ### `[editor.inline-diagnostics]` Section

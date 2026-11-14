@@ -84,6 +84,24 @@ async fn tree_navigation_opens_files_and_moves_focus() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn inline_completion_snippet_accepts_with_tab() -> anyhow::Result<()> {
+    let mut config = helpers::test_config();
+    config.editor.inline_completion.snippets = vec![helix_view::editor::InlineCompletionSnippet {
+        prefix: "fn".to_string(),
+        body: "fn ${1:name}() {\n\t$0\n}".to_string(),
+    }];
+    let mut app = helpers::AppBuilder::new().with_config(config).build()?;
+
+    helpers::send_keys(&mut app, "ifn").await?;
+    app.handle_idle_timeout().await;
+    helpers::send_keys(&mut app, "<tab>").await?;
+
+    let text = doc!(app.editor).text().to_string();
+    assert!(text.contains("fn name()"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn diagnostics_report_opens_in_a_buffer() -> anyhow::Result<()> {
     let mut app = helpers::AppBuilder::new().build()?;
     helpers::send_keys(&mut app, "<space>i").await?;
