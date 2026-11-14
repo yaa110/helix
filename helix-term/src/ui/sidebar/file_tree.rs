@@ -545,7 +545,7 @@ impl FileTree {
         self.clamp_scroll();
     }
 
-    fn row_text(&self, row: &Row, index: usize) -> (String, Option<String>, String, String) {
+    fn row_text(&self, row: &Row, index: usize) -> (String, Option<String>, String, String, String) {
         let marker = match row.kind {
             EntryKind::Dir if row.expanded => "▾",
             EntryKind::Dir => "▸",
@@ -578,12 +578,14 @@ impl FileTree {
         } else {
             "  "
         };
-        let rest = format!("{mark}{marker} {name}");
+        // Keep the selection marker before the indentation guides so the
+        // guides line up under the parent directory's arrow.
+        let rest = format!("{marker} {name}");
         let text = match &label_prefix {
-            Some(label) => format!("{label}{indent}{rest}"),
-            None => format!("{indent}{rest}"),
+            Some(label) => format!("{label}{mark}{indent}{rest}"),
+            None => format!("{mark}{indent}{rest}"),
         };
-        (text, label_prefix, indent, rest)
+        (text, label_prefix, mark.to_string(), indent, rest)
     }
 
     fn max_visible_width(&self, height: usize) -> usize {
@@ -817,7 +819,7 @@ impl FileTree {
         self.clamp_horizontal_scroll(height);
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
-            let (text, label_prefix, indent, rest) = self.row_text(row, index);
+            let (text, label_prefix, mark, indent, rest) = self.row_text(row, index);
             // Keep the selected row visible even when the editor owns focus,
             // so it is clear which file is currently open.
             let mut style = if index == self.cursor {
@@ -861,6 +863,9 @@ impl FileTree {
                 if let Some(label) = &label_prefix {
                     x = surface.set_stringn(x, y, label, content_width, style).0;
                 }
+                x = surface
+                    .set_stringn(x, y, &mark, content_width.saturating_sub((x - content_x) as usize), style)
+                    .0;
                 x = surface
                     .set_stringn(
                         x,
