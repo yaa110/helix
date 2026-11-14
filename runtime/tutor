@@ -1546,69 +1546,112 @@ letters! that is not good grammar. you can fix this.
 =                  CHAPTER 14 FORKED NEW FEATURES               =
 =================================================================
 
- This fork keeps Helix's modal editing while adding VSCode-style
- workspace, search, and session features.
+ This fork adds VSCode-style workspace features while keeping
+ Helix modal editing. This chapter is a quick tour of the main
+ additions.
 
- Tabs and buffers:
-   space T        toggle the buffer-tab bar
-   space B        search open buffers
-   space x        close the current buffer
-   space X        close all other buffers and splits
+ 14.1 FILE TREE AND SIDEBAR
 
- File tree:
-   space b        open/focus the tree
-   /              edit tree search; Enter finishes editing
-   / again        resume editing without clearing the query
-   Cmd/Alt-Del    clear the query while still editing
-   Space          open tree actions
-   t / V          mark an item / clear all marks
-   c / m / p      copy / cut / paste marks
-   d              move items to trash
-   u              undo the last filesystem operation
-   I              show or hide ignored files
-   gw             jump labels
-   Ctrl-w Left    focus the tree from the leftmost buffer
-   Ctrl-w Right   return to the editor without clearing search
+ Type space b to show and focus the file tree (press again from
+ the editor to hide it). Move with j / k , open with Enter , and
+ use Ctrl-w Left / Ctrl-w Right to move between the tree and code.
 
- Global search:
-   space /        open search-and-replace
-   /              edit Find (existing text is kept)
-   Enter          run the search from edit mode
-   Tab            cycle Find and Replace while editing
-   Enter          open the selected result
-   r              preview and replace the selected item
-   R              preview and replace all
-   Esc            cancel preview / leave edit mode / close
+ Type / to fuzzy-search files in the workspace. While editing the
+ query, Enter finishes editing but keeps the filtered rows; press
+ / again to resume editing the same query. Cmd/Alt-Backspace or
+ Cmd/Alt-Delete clears the query. Type gw for jump labels.
 
- Workspaces and sessions:
-   space W        recent workspaces
-   :session-save  save the current workspace session
-   :open-folder   open the two-pane folder picker (:folder)
-   space i        open the diagnostics report
-   :diff          show the git diff for the current file
+ Press Space in the tree for actions: open in splits (s / v),
+ create/rename (a / A / r), mark items (t, V clears), copy/cut/
+ paste (c / m / p), move to trash (d), undo filesystem changes (u),
+ toggle ignored files (I), copy paths (y / Y), show dirty files
+ only (D), or reveal the current buffer (.). Git status is shown by
+ color and refreshed in the background.
 
- Folder picker:
-   :open-folder   start at the current folder (inside HOME) or at HOME
-   /              fuzzy-search the current folder without recursing
-   p              edit the absolute path shown at the bottom
-   Enter          finish editing, navigate a path, or open the folder
-   Right/Space/o  enter the selected folder
-   Left/Del/Bksp   go to the parent folder
-   Esc            cancel editing, otherwise close the picker
+ 14.2 GLOBAL SEARCH AND REPLACE
 
- The picker shows only folders, including hidden and symlinked ones.
- The left pane lists the current folder; the right pane previews the
- selected folder's direct children. Opening a folder records it in
- space W and restores/saves its workspace session.
+ Type space / to open the floating search-and-replace window.
+ It opens in results mode: press / to edit Find (existing text is
+ kept), Tab to switch Find/Replace, and Enter to run the search.
 
- Other additions:
-   F1 or space t  text transforms, minify/beautify, format, create paths
-   Mouse mode defaults to navigation: focus and wheel scrolling only.
-   Inline completions show ghost text; Tab accepts.
-   Monokai Community (Filter Spectrum) is the default theme.
-   Sessions and crash recovery are enabled by default.
-   Large files skip syntax highlighting and LSP with a warning.
-   Tree search results are cached and git status refreshes incrementally.
+ Browse results with normal movement. Enter opens the selected
+ match, r replaces the selected result (with preview/confirm), and
+ R replaces all results. Press Esc to step back: cancel preview,
+ leave edit mode, close hints, then close the window. The query,
+ options, and results persist when you reopen it.
+
+ 14.3 WORKSPACES, SESSIONS, AND FOLDER PICKER
+
+ Sessions save and restore buffers, splits, selections, scroll,
+ sidebar state, and search inputs per workspace. Use :session-save
+ to save now, and space W to open a recently used workspace.
+
+ Type :open-folder (alias :folder) to pick a directory as a
+ workspace. It shows only folders in two panes: the left pane is
+ the current folder and the right pane previews its direct
+ children. Use / to fuzzy-filter the current folder, p to edit an
+ absolute path, arrows/Right/Left to navigate, and Enter to open.
+
+ 14.4 RELOAD, DIFF, AND DIAGNOSTICS
+
+ Files changed on disk reload automatically when the buffer is
+ clean. If you have local edits, Helix prompts to Keep, Reload, or
+ Overwrite so you can resolve conflicts safely.
+
+ Useful commands:
+   space i        open the diagnostics report (environment,
+                  session, and buffer/LSP details)
+   space x / X    close current buffer / close other buffers
+
+ For a read-only git diff of the current file (HEAD), run the
+ static command "Show git diff for the current file" from the
+ command palette.
+
+ 14.5 LSP PEEKS, LENSES, AND INLINE COMPLETIONS
+
+ Type gP to peek a definition and gR to peek references in a
+ searchable floating preview. Enter jumps to the selection; Esc
+ closes without moving the cursor.
+
+ Type space l for code lenses on the current line, or space L for
+ all lenses in the file. Select a lens and press Enter to run it.
+
+ Inline completions from LSP and configured snippets appear as
+ faint ghost text at the cursor. Press Tab to accept the current
+ suggestion; typing or moving dismisses it.
+
+ 14.6 LAYOUT, TABS, POWERLINE, AND BRACKETS
+
+ The layout is pane-aware: [panes][tabs], [panes][breadcrumbs],
+ [panes][code], a full-width command/error line, and a full-width
+ powerline at the bottom. Buffer tabs are always visible and
+ numbered with file-type icons and modified markers; space T
+ toggles the tab bar. Breadcrumbs show the file path relative to
+ the project, and the window title is "Hx | <buffer>".
+
+ The powerline spans the full width and shows mode, spinner,
+ branch, file state, diagnostics, selections, cursor position/total
+ lines, and file/format details. Folder launches restore the last
+ global pane layout, while file launches start focused on code.
+
+ Rainbow brackets are enabled by default and color nested pairs by
+ depth (VSCode Dark+ palette) for easier reading.
+
+ 14.7 F1 ACTIONS AND MOUSE
+
+ Press F1 (or space t) for actions such as text transforms,
+ encode/decode, case changes, sorting, minify/beautify, format, and
+ creating files or folders from a relative path.
+
+ Mouse defaults to navigation mode: left-click focuses and the
+ wheel scrolls viewports, but drags/text selection are disabled so
+ terminal selection can be managed by your mouse setting choice.
+ Configure [editor].mouse as "navigation", "inherit", or "disable".
+
+ Monokai Community (Filter Spectrum) is the default theme, with a
+ diff gutter, soft wrap, and visible whitespace guides enabled by
+ default. Large or binary files open with guards so the editor
+ stays responsive.
 
 
 
