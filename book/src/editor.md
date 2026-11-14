@@ -30,7 +30,7 @@
 | Key | Description | Default |
 |--|--|---------|
 | `scrolloff` | Number of lines of padding around the edge of the screen when scrolling | `0` |
-| `mouse` | Enable mouse mode | `false` |
+| `mouse` | Mouse behavior: `disable`, `inherit`, or `navigation` | `"navigation"` |
 | `mouse-yank-register` | Which register to use for mouse yanks. | `*` |
 | `middle-click-paste` | Middle click paste support | `false` |
 | `default-yank-register` | Default register used for yank/paste | `'"'` |

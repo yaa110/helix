@@ -17,7 +17,10 @@ pub enum EventResult {
 
 use crate::job::Jobs;
 use crate::ui::picker;
-use helix_view::{input::MouseEventKind, Editor};
+use helix_view::{
+    input::{MouseButton, MouseEventKind},
+    Editor,
+};
 
 pub use helix_view::input::Event;
 
@@ -25,16 +28,19 @@ pub(crate) fn should_ignore_mouse_event(
     config: &helix_view::editor::Config,
     event: &Event,
 ) -> bool {
-    if config.mouse || !config.mouse_native_scroll {
-        return false;
-    }
     let Event::Mouse(mouse) = event else {
         return false;
     };
-    !matches!(
-        mouse.kind,
-        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-    )
+    match config.mouse {
+        helix_view::editor::MouseConfig::Inherit => false,
+        helix_view::editor::MouseConfig::Disable => true,
+        helix_view::editor::MouseConfig::Navigation => !matches!(
+            mouse.kind,
+            MouseEventKind::ScrollUp
+                | MouseEventKind::ScrollDown
+                | MouseEventKind::Down(MouseButton::Left)
+        ),
+    }
 }
 
 pub struct Context<'a> {
@@ -333,22 +339,44 @@ mod tests {
     }
 
     #[test]
-    fn native_scroll_filters_clicks_but_not_wheel_events() {
+    fn navigation_mode_allows_only_left_press_and_scroll() {
         let mut config = helix_view::editor::Config::default();
-        config.mouse = false;
-        config.mouse_native_scroll = true;
+        config.mouse = helix_view::editor::MouseConfig::Navigation;
 
-        assert!(should_ignore_mouse_event(
+        assert!(!should_ignore_mouse_event(
             &config,
             &mouse(MouseEventKind::Down(MouseButton::Left))
+        ));
+        assert!(!should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::ScrollDown)
+        ));
+        assert!(should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Up(MouseButton::Left))
         ));
         assert!(should_ignore_mouse_event(
             &config,
             &mouse(MouseEventKind::Drag(MouseButton::Left))
         ));
+        assert!(should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Down(MouseButton::Right))
+        ));
+    }
+
+    #[test]
+    fn inherit_mode_keeps_all_mouse_events() {
+        let mut config = helix_view::editor::Config::default();
+        config.mouse = helix_view::editor::MouseConfig::Inherit;
+
         assert!(!should_ignore_mouse_event(
             &config,
-            &mouse(MouseEventKind::ScrollUp)
+            &mouse(MouseEventKind::Down(MouseButton::Left))
+        ));
+        assert!(!should_ignore_mouse_event(
+            &config,
+            &mouse(MouseEventKind::Up(MouseButton::Left))
         ));
         assert!(!should_ignore_mouse_event(
             &config,
@@ -357,25 +385,17 @@ mod tests {
     }
 
     #[test]
-    fn full_mouse_mode_keeps_clicks() {
+    fn disable_mode_ignores_all_mouse_events() {
         let mut config = helix_view::editor::Config::default();
-        config.mouse = true;
+        config.mouse = helix_view::editor::MouseConfig::Disable;
 
-        assert!(!should_ignore_mouse_event(
+        assert!(should_ignore_mouse_event(
             &config,
             &mouse(MouseEventKind::Down(MouseButton::Left))
         ));
-    }
-
-    #[test]
-    fn disabled_mouse_modes_pass_no_events_anyway() {
-        let mut config = helix_view::editor::Config::default();
-        config.mouse = false;
-        config.mouse_native_scroll = false;
-
-        assert!(!should_ignore_mouse_event(
+        assert!(should_ignore_mouse_event(
             &config,
-            &mouse(MouseEventKind::Down(MouseButton::Left))
+            &mouse(MouseEventKind::ScrollDown)
         ));
     }
 }

@@ -207,31 +207,33 @@ from search returns to the tree.
   cursor.
 - Empty search shows hints; no matches shows `No results found`.
 
-### Mouse scrolling
+### Mouse modes
 
-`mouse-native-scroll` is enabled by default while `mouse` remains disabled.
-This enables terminal mouse reporting for the wheel only: scrolling works in
-the code area, file tree, search results and previews, pickers, menus, folder
-picker panes, and scrollable popups. Clicks, drags, releases, middle-click
-paste, and clickable popup actions are ignored.
-
-Wheel acceleration starts at one line for the first tick, then ramps up toward
-`scroll-lines` (default 3) while ticks continue in the same direction. It resets
-after a 120 ms pause or a direction change. Scrolling moves the viewport
-without moving the selection; if the selection would leave the visible area, it
-is clamped to the nearest edge, matching the code editor's mouse scrolling.
-Changes apply immediately, without restarting `hx`.
-
-Because terminals have no scroll-only mouse protocol, enabling this option
-captures mouse reporting. Terminal-native text selection is therefore blocked
-while `hx` is running. Set `mouse-native-scroll = false` for fully mouse-free
-behavior, or enable `mouse = true` for full click and scroll support.
+`mouse` is a string setting with three modes. The default is `"navigation"`.
 
 ```toml
 [editor]
-mouse = false
-mouse-native-scroll = true
+mouse = "navigation"
 ```
+
+| Mode | Behavior |
+| --- | --- |
+| `"disable"` | No mouse interaction and no terminal mouse capture. |
+| `"inherit"` | Full mouse support: clicks, drags, selections, scrolling, and popup actions. |
+| `"navigation"` | Wheel scrolling plus left-click focus. Clicking code places the cursor at the clicked position; clicking a tree row focuses the tree and selects that row. Drags, releases, other buttons, middle-click paste, and popup click actions are ignored. |
+
+Navigation mode enables wheel scrolling in the code area, file tree, search
+results and previews, pickers, menus, folder picker panes, and scrollable
+popups. Wheel acceleration starts at one line for the first tick, then ramps up
+toward `scroll-lines` (default 3) while ticks continue in the same direction. It
+resets after a 120 ms pause or a direction change. Scrolling moves the viewport
+without moving the selection; if the selection would leave the visible area, it
+is clamped to the nearest edge.
+
+Because terminals have no focus-only or scroll-only mouse protocol,
+`"navigation"` captures mouse reporting. Terminal-native text selection is
+therefore blocked while `hx` is running. Use `"disable"` for fully mouse-free
+behavior or `"inherit"` for full mouse support.
 
 ### Folder picker
 
@@ -337,10 +339,10 @@ Code lenses use the same peek-style picker:
 
 ### Defaults
 
-- Mouse buttons and middle-click paste are disabled (`mouse = false`,
-  `middle-click-paste = false`), but native wheel scrolling is enabled by
-  default (`mouse-native-scroll = true`). Set it to `false` for fully mouse-free
-  behavior, or enable `mouse = true` for full mouse support.
+- Mouse mode defaults to `"navigation"`: focus clicks and wheel scrolling are
+  enabled, but text selection, drags, and full click actions are not.
+  `"disable"` turns mouse interaction off; `"inherit"` enables full mouse
+  support. Middle-click paste remains disabled (`middle-click-paste = false`).
 - End-of-line diagnostic text is disabled by default
   (`[editor] end-of-line-diagnostics = "disable"`). Cursor-line inline
   diagnostics remain enabled (`[editor.inline-diagnostics] cursor-line =

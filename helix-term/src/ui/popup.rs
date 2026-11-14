@@ -262,7 +262,17 @@ impl<T: Component> Component for Popup<T> {
     fn handle_event(&mut self, event: &Event, cx: &mut Context) -> EventResult {
         let key = match event {
             Event::Key(event) => *event,
-            Event::Mouse(event) => return self.handle_mouse_event(event),
+            Event::Mouse(event) => {
+                if !cx.editor.config().mouse.inherits_full_mouse()
+                    && !matches!(
+                        event.kind,
+                        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                    )
+                {
+                    return EventResult::Consumed(None);
+                }
+                return self.handle_mouse_event(event);
+            }
             Event::Resize(_, _) => {
                 // TODO: calculate inner area, call component's handle_event with that area
                 return EventResult::Ignored(None);

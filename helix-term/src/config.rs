@@ -211,6 +211,27 @@ mod tests {
     }
 
     #[test]
+    fn mouse_defaults_to_navigation_and_parses_modes() {
+        use helix_view::editor::MouseConfig;
+
+        assert_eq!(Config::load_test("").editor.mouse, MouseConfig::Navigation);
+
+        for (value, expected) in [
+            ("disable", MouseConfig::Disable),
+            ("inherit", MouseConfig::Inherit),
+            ("navigation", MouseConfig::Navigation),
+        ] {
+            let config = Config::load_test(&format!(
+                r#"
+                [editor]
+                mouse = "{value}"
+                "#
+            ));
+            assert_eq!(config.editor.mouse, expected);
+        }
+    }
+
+    #[test]
     fn end_of_line_diagnostics_are_disabled_by_default() {
         use helix_view::annotations::diagnostics::DiagnosticFilter;
 
@@ -219,21 +240,6 @@ mod tests {
             config.editor.end_of_line_diagnostics,
             DiagnosticFilter::Disable
         );
-    }
-
-    #[test]
-    fn mouse_native_scroll_defaults_true_and_parses() {
-        let config = Config::load_test("");
-        assert!(!config.editor.mouse);
-        assert!(config.editor.mouse_native_scroll);
-
-        let config = Config::load_test(
-            r#"
-            [editor]
-            mouse-native-scroll = false
-            "#,
-        );
-        assert!(!config.editor.mouse_native_scroll);
     }
 
     #[test]

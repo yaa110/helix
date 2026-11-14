@@ -14,7 +14,7 @@ theme = "onedark"
 
 [editor]
 line-number = "relative"
-mouse = false
+mouse = "navigation"
 
 [editor.cursor-shape]
 insert = "bar"

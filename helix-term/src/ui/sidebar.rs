@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use helix_core::Position;
 use helix_view::graphics::{CursorKind, Rect};
-use helix_view::input::{KeyCode, MouseEvent};
+use helix_view::input::{KeyCode, MouseButton, MouseEvent, MouseEventKind};
 use helix_view::sidebar::{SidebarFocus, SidebarMode};
 use helix_view::Editor;
 use tui::buffer::Buffer as Surface;
@@ -64,6 +64,29 @@ impl Sidebar {
         cx: &mut commands::Context,
     ) -> EventResult {
         self.search.handle_event(event, cx)
+    }
+
+    pub fn handle_mouse_focus(&mut self, event: &MouseEvent, editor: &mut Editor) -> bool {
+        if editor.sidebar.search_modal
+            || editor.sidebar.mode == SidebarMode::Hidden
+            || !super::scroll::contains(self.last_area, event.column, event.row)
+        {
+            return false;
+        }
+        if event.kind != MouseEventKind::Down(MouseButton::Left) {
+            return false;
+        }
+
+        editor.sidebar.focus = SidebarFocus::Sidebar;
+        if event.row >= self.last_area.y.saturating_add(2) {
+            let row = (event.row - self.last_area.y.saturating_add(2)) as usize;
+            if self.tree.select_screen_row(row) {
+                editor.sidebar.selected =
+                    self.tree.selected_path().map(std::path::Path::to_path_buf);
+            }
+        }
+        editor.needs_redraw = true;
+        true
     }
 
     pub fn handle_mouse_scroll(&mut self, event: &MouseEvent, editor: &mut Editor) -> bool {

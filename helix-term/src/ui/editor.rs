@@ -1400,23 +1400,6 @@ impl EditorView {
             return EventResult::Consumed(None);
         }
 
-        // Only the code area participates in mouse selection. Mouse activity
-        // over the tree/search sidebar is swallowed so drags cannot create a
-        // selection from the pane into the buffer.
-        let code_area = cxt
-            .editor
-            .tree
-            .views()
-            .find_map(|(view, focused)| focused.then_some(view.area))
-            .or_else(|| cxt.editor.tree.views().next().map(|(view, _)| view.area));
-        if let Some(area) = code_area {
-            let inside =
-                column >= area.x && column < area.right() && row >= area.y && row < area.bottom();
-            if !inside {
-                return EventResult::Consumed(None);
-            }
-        }
-
         let pos_and_view = |editor: &Editor, row, column, ignore_virtual_text| {
             editor.tree.views().find_map(|(view, _focus)| {
                 view.pos_at_screen_coords(
@@ -1435,6 +1418,41 @@ impl EditorView {
                     .map(|coords| (coords, view.id))
             })
         };
+
+        let focus_only = config.mouse.is_navigation();
+        if focus_only && matches!(kind, MouseEventKind::Down(MouseButton::Left)) {
+            if self.sidebar.handle_mouse_focus(event, cxt.editor) {
+                return EventResult::Consumed(None);
+            }
+            if cxt.editor.sidebar.search_modal {
+                return EventResult::Consumed(None);
+            }
+            if let Some((pos, view_id)) = pos_and_view(cxt.editor, row, column, true) {
+                cxt.editor.focus(view_id);
+                let doc_id = view!(cxt.editor, view_id).doc;
+                let doc = doc_mut!(cxt.editor, &doc_id);
+                doc.set_selection(view_id, Selection::point(pos));
+                cxt.editor.ensure_cursor_in_view(view_id);
+            }
+            return EventResult::Consumed(None);
+        }
+
+        // Only the code area participates in mouse selection. Mouse activity
+        // over the tree/search sidebar is swallowed so drags cannot create a
+        // selection from the pane into the buffer.
+        let code_area = cxt
+            .editor
+            .tree
+            .views()
+            .find_map(|(view, focused)| focused.then_some(view.area))
+            .or_else(|| cxt.editor.tree.views().next().map(|(view, _)| view.area));
+        if let Some(area) = code_area {
+            let inside =
+                column >= area.x && column < area.right() && row >= area.y && row < area.bottom();
+            if !inside {
+                return EventResult::Consumed(None);
+            }
+        }
 
         match kind {
             MouseEventKind::Down(MouseButton::Left) => {

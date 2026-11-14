@@ -294,6 +294,34 @@ where
     Ok(chars)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MouseConfig {
+    Disable,
+    Inherit,
+    Navigation,
+}
+
+impl Default for MouseConfig {
+    fn default() -> Self {
+        Self::Navigation
+    }
+}
+
+impl MouseConfig {
+    pub fn capture(self) -> bool {
+        !matches!(self, Self::Disable)
+    }
+
+    pub fn inherits_full_mouse(self) -> bool {
+        matches!(self, Self::Inherit)
+    }
+
+    pub fn is_navigation(self) -> bool {
+        matches!(self, Self::Navigation)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct Config {
@@ -301,10 +329,8 @@ pub struct Config {
     pub scrolloff: usize,
     /// Number of lines to scroll at once. Defaults to 3
     pub scroll_lines: isize,
-    /// Mouse support. Defaults to true.
-    pub mouse: bool,
-    /// Capture wheel events without handling mouse clicks. Defaults to true.
-    pub mouse_native_scroll: bool,
+    /// Mouse behavior: disable, inherit, or navigation. Defaults to navigation.
+    pub mouse: MouseConfig,
     /// Which register to use for mouse yank.
     pub mouse_yank_register: char,
     /// Shell to use for shell commands. Defaults to ["cmd", "/C"] on Windows and ["sh", "-c"] otherwise.
@@ -1224,8 +1250,7 @@ impl Default for Config {
         Self {
             scrolloff: 0,
             scroll_lines: 3,
-            mouse: false,
-            mouse_native_scroll: true,
+            mouse: MouseConfig::Navigation,
             mouse_yank_register: '*',
             shell: if cfg!(windows) {
                 vec!["cmd".to_owned(), "/C".to_owned()]

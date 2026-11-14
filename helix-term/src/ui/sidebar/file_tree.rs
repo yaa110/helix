@@ -1310,6 +1310,19 @@ impl FileTree {
         }
     }
 
+    pub fn select_screen_row(&mut self, row: usize) -> bool {
+        if row >= self.viewport_height {
+            return false;
+        }
+        let index = self.scroll.saturating_add(row);
+        if index < self.rows.len() {
+            self.cursor = index;
+            true
+        } else {
+            false
+        }
+    }
+
     fn rebuild_from_editor(&mut self, editor: &mut Editor) {
         let state = editor.sidebar.clone();
         self.rebuild(editor, &state);
