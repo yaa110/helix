@@ -1,0 +1,24 @@
+book/src/keymap.md
+  h_20fc4d483d1064 421-422
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 13,455-458,822-824,2180-2185,2187-2211,2213-2216,2218-2224,2226-2231,2233-2234,2627-2748
+helix-vcs/src/git.rs
+  h_20fc4d483d1064 4,6,9-10,16-18,95-112,167-171,177-183,199-200,203-210,213-252,255-260,262-270,273-278
+helix-vcs/src/git/test.rs
+  h_20fc4d483d1064 159-269
+helix-vcs/src/lib.rs
+  h_20fc4d483d1064 23-25
+runtime/tutor
+  h_20fc4d483d1064 1569-1570
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a479933ccc6b9a158addaa0891eca67264b11aeb",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
