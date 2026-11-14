@@ -198,7 +198,17 @@ where
     };
     let style = if visible && config.color_modes {
         if sidebar_label.is_some() {
-            context.editor.theme.get("ui.statusline.normal")
+            context
+                .editor
+                .theme
+                .try_get_exact("ui.statusline.tree")
+                .unwrap_or_else(|| {
+                    let mut style = context.editor.theme.get("ui.statusline.normal");
+                    if let Some(color) = context.editor.theme.get("special").fg {
+                        style = style.bg(color);
+                    }
+                    style
+                })
         } else {
             match context.editor.mode() {
                 Mode::Insert => context.editor.theme.get("ui.statusline.insert"),
