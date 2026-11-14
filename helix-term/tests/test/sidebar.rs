@@ -301,6 +301,42 @@ async fn navigation_click_places_the_cursor_without_a_selection_range() -> anyho
 
 #[cfg(not(windows))]
 #[tokio::test(flavor = "multi_thread")]
+async fn navigation_click_outside_tree_returns_focus_to_editor() -> anyhow::Result<()> {
+    use termina::event::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    let root = tempfile::tempdir()?;
+    let text = format!(
+        "#[|]#{}",
+        (0..20)
+            .map(|line| format!("line {line}\n"))
+            .collect::<String>()
+    );
+    let mut app = helpers::AppBuilder::new()
+        .with_workspace_dir(root.path())
+        .with_input_text(text)
+        .build()?;
+    app.editor.sidebar.mode = SidebarMode::Files;
+    app.editor.sidebar.focus = SidebarFocus::Sidebar;
+    app.editor.needs_redraw = true;
+    app.handle_idle_timeout().await;
+
+    helpers::send_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 60,
+            row: 5,
+            modifiers: Modifiers::NONE,
+        },
+    )
+    .await?;
+
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Editor);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tokio::test(flavor = "multi_thread")]
 async fn navigation_click_focuses_another_split() -> anyhow::Result<()> {
     use termina::event::{Modifiers, MouseButton, MouseEvent, MouseEventKind};
 

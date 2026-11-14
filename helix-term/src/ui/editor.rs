@@ -1429,6 +1429,7 @@ impl EditorView {
             }
             if let Some((pos, view_id)) = pos_and_view(cxt.editor, row, column, true) {
                 cxt.editor.focus(view_id);
+                cxt.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
                 let doc_id = view!(cxt.editor, view_id).doc;
                 let doc = doc_mut!(cxt.editor, &doc_id);
                 doc.set_selection(view_id, Selection::point(pos));
@@ -1460,6 +1461,7 @@ impl EditorView {
 
                 if let Some((pos, view_id)) = pos_and_view(editor, row, column, true) {
                     editor.focus(view_id);
+                    editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
 
                     let prev_view_id = view!(editor).id;
                     let doc = doc_mut!(editor, &view!(editor, view_id).doc);
