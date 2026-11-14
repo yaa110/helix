@@ -899,7 +899,7 @@ impl EditorView {
                     .set_stringn(
                         x,
                         viewport.y,
-                        " › ",
+                        " ❯ ",
                         right.saturating_sub(x) as usize,
                         separator,
                     )
