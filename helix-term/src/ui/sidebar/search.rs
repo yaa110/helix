@@ -15,6 +15,7 @@ use tui::widgets::{Block, BorderType, Widget};
 
 use crate::commands;
 use crate::compositor::{Event, EventResult};
+use crate::job;
 use crate::search::{self, Match, SearchEvent, SearchOptions};
 use crate::ui::text_input::TextInput;
 
@@ -1106,24 +1107,67 @@ impl SearchPane {
 
     fn replace_all(&mut self, cx: &mut commands::Context) -> anyhow::Result<()> {
         let paths: Vec<PathBuf> = self.results.keys().cloned().collect();
+        let root = cx.editor.workspace_root.clone();
         let mut replaced = 0;
         let mut files = 0;
         let mut skipped = 0;
+        let mut closed_paths = Vec::new();
+
         for path in paths {
-            match self.replace_file(cx, &path) {
-                Ok(0) => skipped += 1,
-                Ok(count) => {
-                    replaced += count;
-                    files += 1;
+            if !path.starts_with(&root) {
+                skipped += 1;
+                continue;
+            }
+            if cx.editor.document_id_by_path(&path).is_some() {
+                match self.replace_file(cx, &path) {
+                    Ok(0) => skipped += 1,
+                    Ok(count) => {
+                        replaced += count;
+                        files += 1;
+                    }
+                    Err(_) => skipped += 1,
                 }
-                Err(_) => skipped += 1,
+            } else {
+                closed_paths.push(path);
             }
         }
+
         self.pending = true;
-        cx.editor.set_status(format!(
-            "Replaced {replaced} occurrences in {files} files ({skipped} skipped)"
-        ));
         cx.editor.needs_redraw = true;
+        if closed_paths.is_empty() {
+            cx.editor.set_status(format!(
+                "Replaced {replaced} occurrences in {files} files ({skipped} skipped)"
+            ));
+            return Ok(());
+        }
+
+        let query = cx.editor.sidebar.search.query.clone();
+        let replacement = cx.editor.sidebar.search.replacement.clone();
+        let options = Self::replace_options(cx.editor);
+        let closed_count = closed_paths.len();
+        cx.editor
+            .set_status(format!("Replacing in {closed_count} closed files…"));
+        cx.jobs.callback(async move {
+            let regex = search::build_regex(&query, options)?;
+            for path in closed_paths {
+                match search::replace_in_file(&path, &regex, &replacement, options) {
+                    Ok(0) => skipped += 1,
+                    Ok(count) => {
+                        replaced += count;
+                        files += 1;
+                    }
+                    Err(_) => skipped += 1,
+                }
+            }
+            let callback: job::Callback =
+                job::Callback::EditorCompositor(Box::new(move |editor, _compositor| {
+                    editor.set_status(format!(
+                        "Replaced {replaced} occurrences in {files} files ({skipped} skipped)"
+                    ));
+                    editor.needs_redraw = true;
+                }));
+            Ok(callback)
+        });
         Ok(())
     }
 

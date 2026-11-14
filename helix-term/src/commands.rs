@@ -3854,11 +3854,33 @@ fn toggle_file_tree(cx: &mut Context) {
     cx.editor.save_ui_state();
 }
 
-pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) -> anyhow::Result<()> {
-    let workspace = std::fs::canonicalize(workspace)
+struct WorkspaceSwitchPlan {
+    target: PathBuf,
+    old_workspace: PathBuf,
+    old_cwd: Option<PathBuf>,
+    old_session_active: bool,
+    restore_session: bool,
+    old_session: Option<helix_view::session::Session>,
+    ui_state_persist: bool,
+}
+
+struct WorkspaceSwitchResult {
+    plan: WorkspaceSwitchPlan,
+    target_session: Option<helix_view::session::Session>,
+    branch: Option<String>,
+    lang_loader: Option<helix_core::syntax::Loader>,
+    error: Option<String>,
+    ui_state_error: Option<String>,
+}
+
+fn prepare_workspace_switch(
+    editor: &mut Editor,
+    workspace: &Path,
+) -> anyhow::Result<WorkspaceSwitchPlan> {
+    let target = std::fs::canonicalize(workspace)
         .with_context(|| format!("cannot access workspace {}", workspace.display()))?;
-    if !workspace.is_dir() {
-        bail!("not a directory: {}", workspace.display());
+    if !target.is_dir() {
+        bail!("not a directory: {}", target.display());
     }
     if editor.documents().any(|doc| doc.is_modified()) {
         bail!("save or close modified buffers before switching workspaces");
@@ -3869,60 +3891,148 @@ pub(crate) fn switch_workspace(editor: &mut Editor, workspace: &Path) -> anyhow:
     let crash_recovery = config.crash_recovery;
     drop(config);
 
-    let crashed = editor.session_active && editor.session_store.was_running(&workspace);
+    let crashed = editor.session_active && editor.session_store.was_running(&target);
     let restore_session = restore_enabled && (!crashed || crash_recovery);
-
-    editor.save_session_if_active()?;
-    let old_workspace = editor.workspace_root.clone();
-    if editor.session_active {
-        let _ = editor.session_store.clear_running(&old_workspace);
-    }
-    // Integration tests run in parallel in one process; changing the global
-    // cwd would leak between tests. Real workspace switches follow `hx .`.
+    let old_session =
+        (editor.session_active && restore_enabled).then(|| helix_view::session::collect(editor));
+    let old_cwd = std::env::current_dir().ok();
+    // Integration tests share one process cwd; only real sessions follow `hx .`.
     #[cfg(not(feature = "integration"))]
     editor
-        .set_cwd(&workspace)
-        .with_context(|| format!("cannot change directory to {}", workspace.display()))?;
-    editor.ui_state_persist = !cfg!(feature = "integration");
+        .set_cwd(&target)
+        .with_context(|| format!("cannot change directory to {}", target.display()))?;
+
+    Ok(WorkspaceSwitchPlan {
+        target,
+        old_workspace: editor.workspace_root.clone(),
+        old_cwd,
+        old_session_active: editor.session_active,
+        restore_session,
+        old_session,
+        ui_state_persist: !cfg!(feature = "integration"),
+    })
+}
+
+pub(crate) fn start_workspace_switch(editor: &mut Editor, jobs: &mut Jobs, workspace: &Path) {
+    editor.set_status(format!("Opening {}…", workspace.display()));
+    editor.needs_redraw = true;
+    let plan = match prepare_workspace_switch(editor, workspace) {
+        Ok(plan) => plan,
+        Err(err) => {
+            editor.set_error(err.to_string());
+            return;
+        }
+    };
+    let store = editor.session_store.clone();
+    let trust = editor.workspace_trust.clone();
+    jobs.callback(async move {
+        let mut result = WorkspaceSwitchResult {
+            plan,
+            target_session: None,
+            branch: None,
+            lang_loader: None,
+            error: None,
+            ui_state_error: None,
+        };
+
+        if let Some(session) = result.plan.old_session.as_ref() {
+            if let Err(err) = store.save(session) {
+                result.error = Some(format!("failed to save session: {err}"));
+            }
+        }
+        result.plan.old_session = None;
+        if result.plan.old_session_active && result.error.is_none() {
+            let _ = store.clear_running(&result.plan.old_workspace);
+        }
+        if result.error.is_none() && result.plan.restore_session {
+            result.target_session = store.load(&result.plan.target);
+        }
+        if result.error.is_none() {
+            if let Err(err) = store.mark_running(&result.plan.target) {
+                result.error = Some(format!("failed to mark session running: {err}"));
+            }
+        }
+        result.branch = helix_view::editor::workspace_branch(&result.plan.target);
+        result.lang_loader = match helix_core::config::user_lang_loader(&trust) {
+            Ok(loader) => Some(loader),
+            Err(err) => {
+                result
+                    .error
+                    .get_or_insert_with(|| format!("failed to load language config: {err}"));
+                None
+            }
+        };
+        if result.plan.ui_state_persist {
+            let mut state = helix_view::ui_state::UiState::load();
+            state.record_workspace(&result.plan.target);
+            if let Err(err) = state.save() {
+                result.ui_state_error = Some(format!("failed to save recent workspaces: {err}"));
+            }
+        }
+
+        let callback: job::Callback = job::Callback::EditorCompositor(Box::new(
+            move |editor: &mut Editor, _compositor: &mut Compositor| {
+                if let Some(err) = result.error {
+                    if let Some(cwd) = result.plan.old_cwd.as_deref() {
+                        let _ = editor.set_cwd(cwd);
+                    }
+                    editor.set_error(err);
+                    return;
+                }
+                apply_workspace_switch(editor, result);
+            },
+        ));
+        Ok(callback)
+    });
+}
+
+fn apply_workspace_switch(editor: &mut Editor, result: WorkspaceSwitchResult) {
+    let WorkspaceSwitchResult {
+        plan,
+        target_session,
+        branch,
+        lang_loader,
+        ui_state_error,
+        ..
+    } = result;
+
+    editor.ui_state_persist = plan.ui_state_persist;
+    editor.language_servers.stop_all();
     let docs: Vec<_> = editor.documents().map(|doc| doc.id()).collect();
     for doc_id in docs {
         let _ = editor.close_document(doc_id, true);
     }
 
     let sidebar_width = editor.sidebar.width;
-    editor.workspace_root = workspace.clone();
-    editor.refresh_workspace_branch();
+    editor.workspace_root = plan.target.clone();
+    editor.workspace_branch = branch;
+    if let Some(loader) = lang_loader {
+        editor.syn_loader.store(std::sync::Arc::new(loader));
+    }
     editor.session_active = true;
-    let _ = editor.session_store.mark_running(&workspace);
     editor.sidebar = helix_view::sidebar::SidebarState::default();
     editor.sidebar.width = sidebar_width;
     editor.sidebar.mode = SidebarMode::Files;
     editor.bufferline_visible = true;
     editor.new_file(Action::Replace);
 
-    if restore_session {
-        if let Some(session) = editor.session_store.load(&workspace) {
-            let outcome = helix_view::session::restore(editor, &session);
-            if !outcome.skipped.is_empty() {
-                editor.set_status(format!(
-                    "restored {} buffers ({} missing files skipped)",
-                    outcome.restored,
-                    outcome.skipped.len()
-                ));
-            }
+    if let Some(session) = target_session {
+        let outcome = helix_view::session::restore(editor, &session);
+        if !outcome.skipped.is_empty() {
+            editor.set_status(format!(
+                "restored {} buffers ({} missing files skipped)",
+                outcome.restored,
+                outcome.skipped.len()
+            ));
         }
     }
     editor.session_dirty = true;
     editor.needs_redraw = true;
-
-    if editor.ui_state_persist {
-        let mut state = helix_view::ui_state::UiState::load();
-        state.record_workspace(workspace);
-        if let Err(err) = state.save() {
-            editor.set_error(format!("failed to save recent workspaces: {err}"));
-        }
+    if let Some(err) = ui_state_error {
+        editor.set_error(err);
+    } else {
+        editor.set_status(format!("Opened {}", plan.target.display()));
     }
-    Ok(())
 }
 
 fn diagnostics(cx: &mut Context) {
@@ -4067,17 +4177,7 @@ fn recent_workspaces(cx: &mut Context) {
         path.display().to_string().into()
     })];
     let picker = Picker::new(columns, 0, workspaces, (), |cx, path, _| {
-        let path = path.clone();
-        let name = path.display().to_string();
-        cx.editor.set_status(format!("Opening {name}…"));
-        cx.editor.needs_redraw = true;
-        // Let the status line render before the synchronous workspace switch.
-        crate::job::dispatch_blocking(move |editor, _compositor| {
-            match switch_workspace(editor, &path) {
-                Ok(()) => editor.set_status(format!("Opened {name}")),
-                Err(err) => editor.set_error(err.to_string()),
-            }
-        });
+        start_workspace_switch(cx.editor, cx.jobs, path);
     });
     cx.push_layer(Box::new(overlaid(picker)));
 }

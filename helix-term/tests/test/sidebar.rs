@@ -161,11 +161,13 @@ async fn folder_picker_opens_the_selected_folder_as_a_workspace() -> anyhow::Res
     let path = home.display().to_string();
     helpers::send_keys(&mut app, &format!("p<A-backspace>{path}<ret>")).await?;
     helpers::send_keys(&mut app, "<ret>").await?;
+    let expected = std::fs::canonicalize(&child)?;
+    helpers::wait_until(&mut app, |app| {
+        std::fs::canonicalize(&app.editor.workspace_root).is_ok_and(|root| root == expected)
+    })
+    .await?;
 
-    assert_eq!(
-        std::fs::canonicalize(&app.editor.workspace_root)?,
-        std::fs::canonicalize(&child)?
-    );
+    assert_eq!(std::fs::canonicalize(&app.editor.workspace_root)?, expected);
     assert_eq!(app.compositor_layer_count(), 1);
     assert!(app
         .editor

@@ -61,6 +61,13 @@ struct SearchCache {
     entries: Vec<PathBuf>,
 }
 
+struct SearchIndexUpdate {
+    generation: u64,
+    root: PathBuf,
+    epoch: u64,
+    entries: Vec<PathBuf>,
+}
+
 struct GitStatusUpdate {
     paths: Vec<PathBuf>,
     full: bool,
@@ -94,6 +101,9 @@ pub struct FileTree {
     marked: HashSet<PathBuf>,
     undo_log: Arc<Mutex<Vec<FsUndo>>>,
     search_cache: Option<SearchCache>,
+    search_rx: Option<Receiver<SearchIndexUpdate>>,
+    search_generation: u64,
+    search_pending: bool,
     git_status: HashMap<PathBuf, GitFileStatus>,
     ignored_paths: HashSet<PathBuf>,
     git_status_root: Option<PathBuf>,
@@ -127,6 +137,9 @@ impl FileTree {
             marked: HashSet::new(),
             undo_log: Arc::new(Mutex::new(Vec::new())),
             search_cache: None,
+            search_rx: None,
+            search_generation: 0,
+            search_pending: false,
             git_status: HashMap::new(),
             ignored_paths: HashSet::new(),
             git_status_root: None,
@@ -145,6 +158,8 @@ impl FileTree {
             self.rebuild_search(editor.sidebar.refresh_epoch);
             return;
         }
+        self.search_rx = None;
+        self.search_pending = false;
         let root = self.root.clone();
         self.rebuild_with(&root, &state.expanded, |path| {
             ui::directory_entries(path, editor)
@@ -152,13 +167,37 @@ impl FileTree {
     }
 
     fn rebuild_search(&mut self, epoch: u64) {
+        let has_cache = self
+            .search_cache
+            .as_ref()
+            .is_some_and(|cache| cache.root == self.root);
+        if has_cache {
+            self.apply_search_filter();
+        } else {
+            self.rows.clear();
+            self.cursor = 0;
+            self.scroll = 0;
+        }
+        self.ensure_search_index(epoch);
+    }
+
+    fn ensure_search_index(&mut self, epoch: u64) {
         let root = self.root.clone();
         let cache_valid = self.search_cache.as_ref().is_some_and(|cache| {
             cache.root == root && cache.epoch == epoch && cache.built_at.elapsed().as_secs() < 10
         });
-        if !cache_valid {
+        if cache_valid || self.search_pending {
+            return;
+        }
+
+        self.search_generation = self.search_generation.wrapping_add(1);
+        let generation = self.search_generation;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let runtime = tokio::runtime::Handle::current();
+        let worker_root = root.clone();
+        std::thread::spawn(move || {
             let mut entries = Vec::new();
-            for entry in WalkBuilder::new(&root)
+            for entry in WalkBuilder::new(&worker_root)
                 .hidden(false)
                 .parents(true)
                 .ignore(true)
@@ -177,23 +216,60 @@ impl FileTree {
                 .take(50_000)
             {
                 let path = entry.path();
-                if path != root {
+                if path != worker_root {
                     entries.push(path.to_path_buf());
                 }
             }
-            self.search_cache = Some(SearchCache {
-                root: root.clone(),
+            let _ = tx.send(SearchIndexUpdate {
+                generation,
+                root: worker_root,
                 epoch,
-                built_at: Instant::now(),
                 entries,
             });
+            let _guard = runtime.enter();
+            helix_event::request_redraw();
+        });
+        self.search_rx = Some(rx);
+        self.search_pending = true;
+    }
+
+    fn poll_search_index(&mut self) {
+        let Some(receiver) = &self.search_rx else {
+            return;
+        };
+        match receiver.try_recv() {
+            Ok(update) if update.generation == self.search_generation => {
+                self.search_cache = Some(SearchCache {
+                    root: update.root,
+                    epoch: update.epoch,
+                    built_at: Instant::now(),
+                    entries: update.entries,
+                });
+                self.search_rx = None;
+                self.search_pending = false;
+                if !self.filter.is_empty() {
+                    self.apply_search_filter();
+                }
+            }
+            Ok(_) => {
+                self.search_rx = None;
+                self.search_pending = false;
+            }
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {
+                self.search_rx = None;
+                self.search_pending = false;
+            }
         }
+    }
+
+    fn apply_search_filter(&mut self) {
+        let root = self.root.clone();
         let candidates = self
             .search_cache
             .as_ref()
             .map(|cache| cache.entries.clone())
             .unwrap_or_default();
-
         let by_name: HashMap<String, PathBuf> = candidates
             .iter()
             .map(|path| {
@@ -467,6 +543,7 @@ impl FileTree {
 
     pub fn render(&mut self, area: Rect, surface: &mut Surface, editor: &Editor, focused: bool) {
         self.cursor_pos = None;
+        self.poll_search_index();
         let theme = &editor.theme;
         let title = if focused {
             theme
@@ -655,6 +732,19 @@ impl FileTree {
             return;
         }
         self.viewport_height = height;
+        if self.rows.is_empty() && self.search_pending && !self.filter.is_empty() {
+            surface.set_stringn(
+                area.x,
+                area.y + 2,
+                "Searching…",
+                area.width as usize,
+                theme
+                    .try_get_exact("ui.text.inactive")
+                    .or_else(|| theme.try_get_exact("ui.linenr"))
+                    .unwrap_or_default(),
+            );
+            return;
+        }
         if self.cursor < self.scroll {
             self.scroll = self.cursor;
         } else if self.cursor >= self.scroll + height {

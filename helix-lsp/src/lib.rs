@@ -601,6 +601,19 @@ impl Registry {
         self.inner.get(id)
     }
 
+    /// Force-shutdown every client and clear all event routing. Used when
+    /// leaving a workspace so no server survives into the next one.
+    pub fn stop_all(&mut self) {
+        let clients: Vec<Arc<Client>> = self.inner.values().cloned().collect();
+        for client in clients {
+            self.file_event_handler.remove_client(client.id());
+            client.force_shutdown();
+        }
+        self.inner.clear();
+        self.inner_by_name.clear();
+        self.incoming = SelectAll::new();
+    }
+
     pub fn remove_by_id(&mut self, id: LanguageServerId) {
         let Some(client) = self.inner.remove(id) else {
             log::debug!("client was already removed");

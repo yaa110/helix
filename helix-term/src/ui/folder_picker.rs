@@ -689,15 +689,7 @@ impl Component for FolderPicker {
                 },
             ))),
             PickerAction::Open(path) => {
-                let name = path.display().to_string();
-                cx.editor.set_status(format!("Opening {name}…"));
-                cx.editor.needs_redraw = true;
-                crate::job::dispatch_blocking(move |editor, _compositor| {
-                    match crate::commands::switch_workspace(editor, &path) {
-                        Ok(()) => editor.set_status(format!("Opened {name}")),
-                        Err(err) => editor.set_error(err.to_string()),
-                    }
-                });
+                crate::commands::start_workspace_switch(cx.editor, cx.jobs, &path);
                 EventResult::Consumed(Some(Box::new(
                     |compositor: &mut crate::compositor::Compositor, _cx| {
                         compositor.pop();

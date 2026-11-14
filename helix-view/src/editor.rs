@@ -1887,6 +1887,18 @@ impl Editor {
         self.launch_language_servers(doc_id)
     }
 
+    /// Reload workspace language configuration and re-detect all open documents.
+    pub fn reload_language_config(&mut self) -> anyhow::Result<()> {
+        let loader = helix_core::config::user_lang_loader(&self.workspace_trust)?;
+        self.syn_loader.store(Arc::new(loader));
+        let loader = self.syn_loader.load();
+        for doc in self.documents.values_mut() {
+            doc.detect_editor_config();
+            doc.detect_language(&loader);
+        }
+        Ok(())
+    }
+
     /// moves/renames a path, invoking any event handlers (currently only lsp)
     /// and calling `set_doc_path` if the file is open in the editor
     pub fn move_path(&mut self, old_path: &Path, new_path: &Path) -> io::Result<()> {
@@ -2358,32 +2370,7 @@ impl Editor {
     /// Refresh the cached workspace branch used when the focused buffer has no
     /// path (for example, an empty workspace launch).
     pub fn refresh_workspace_branch(&mut self) {
-        if self.workspace_root.as_os_str().is_empty() {
-            self.workspace_branch = None;
-            return;
-        }
-        let output = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&self.workspace_root)
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .output();
-        self.workspace_branch = output
-            .ok()
-            .filter(|output| output.status.success())
-            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-            .filter(|branch| !branch.is_empty() && branch != "HEAD");
-        if self.workspace_branch.is_none() {
-            let output = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&self.workspace_root)
-                .args(["rev-parse", "--short", "HEAD"])
-                .output();
-            self.workspace_branch = output
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-                .filter(|head| !head.is_empty());
-        }
+        self.workspace_branch = workspace_branch(&self.workspace_root);
     }
 
     // ??? possible use for integration tests
@@ -2972,4 +2959,34 @@ impl CursorCache {
     pub fn reset(&self) {
         self.0.set(None)
     }
+}
+
+/// Resolve the current git branch (or detached short hash) for a workspace.
+pub fn workspace_branch(root: &Path) -> Option<String> {
+    if root.as_os_str().is_empty() {
+        return None;
+    }
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output();
+    let branch = output
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|branch| !branch.is_empty() && branch != "HEAD");
+    if branch.is_some() {
+        return branch;
+    }
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--short", "HEAD"])
+        .output();
+    output
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|head| !head.is_empty())
 }

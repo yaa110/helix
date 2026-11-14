@@ -508,6 +508,23 @@ pub async fn run_event_loop_until_idle(app: &mut Application) {
     app.event_loop_until_idle(&mut rx_stream).await;
 }
 
+pub async fn wait_until(
+    app: &mut Application,
+    predicate: impl Fn(&Application) -> bool,
+) -> anyhow::Result<()> {
+    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    loop {
+        if predicate(app) {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            bail!("condition not met before timeout");
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        run_event_loop_until_idle(app).await;
+    }
+}
+
 pub fn assert_file_has_content(file: &mut NamedTempFile, content: &str) -> anyhow::Result<()> {
     reload_file(file)?;
 

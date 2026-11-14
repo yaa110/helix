@@ -131,10 +131,31 @@ fn disk_content_matches(doc: &helix_view::Document) -> bool {
     let Some(path) = doc.path() else {
         return false;
     };
-    match std::fs::read_to_string(path) {
-        Ok(contents) => contents == doc.text().to_string(),
-        Err(_) => false,
-    }
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok((contents, _, _)) =
+        helix_view::document::read_to_string(&mut file, Some(doc.encoding()))
+    else {
+        return false;
+    };
+    doc.text().chars().eq(contents.chars())
+}
+
+#[cfg(test)]
+fn decoded_text_matches(
+    path: &PathBuf,
+    encoding: &'static helix_core::encoding::Encoding,
+    existing: &str,
+) -> bool {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok((contents, _, _)) = helix_view::document::read_to_string(&mut file, Some(encoding))
+    else {
+        return false;
+    };
+    existing.chars().eq(contents.chars())
 }
 
 /// Apply debounced filesystem paths to the editor: reload clean buffers,
@@ -184,6 +205,30 @@ pub fn apply_events(editor: &mut Editor, paths: &[PathBuf]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decoded_text_matches_bom_and_non_utf8_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let utf8 = dir.path().join("utf8.txt");
+        std::fs::write(&utf8, b"\xEF\xBB\xBFhello").unwrap();
+        assert!(decoded_text_matches(
+            &utf8,
+            helix_core::encoding::UTF_8,
+            "hello"
+        ));
+
+        let utf16 = dir.path().join("utf16.txt");
+        let mut bytes = vec![0xFF, 0xFE];
+        for ch in "hello".encode_utf16() {
+            bytes.extend_from_slice(&ch.to_le_bytes());
+        }
+        std::fs::write(&utf16, bytes).unwrap();
+        assert!(decoded_text_matches(
+            &utf16,
+            helix_core::encoding::UTF_16LE,
+            "hello"
+        ));
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn reports_writes_in_a_watched_directory() {
