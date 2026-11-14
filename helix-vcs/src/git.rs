@@ -1,19 +1,21 @@
 use anyhow::{bail, Context, Result};
 use arc_swap::ArcSwap;
 use gix::filter::plumbing::driver::apply::Delay;
+use std::collections::HashSet;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use gix::bstr::ByteSlice;
+use gix::bstr::{BString, ByteSlice};
+use gix::diff::index::Change as IndexChange;
 use gix::diff::Rewrites;
 use gix::dir::entry::Status;
 use gix::objs::tree::EntryKind;
 use gix::sec::trust::DefaultForLevel;
 use gix::status::{
-    index_worktree::Item,
-    plumbing::index_as_worktree::{Change, EntryStatus},
-    UntrackedFiles,
+    index_worktree,
+    plumbing::index_as_worktree::{Change as WorktreeChange, EntryStatus},
+    Item, UntrackedFiles,
 };
 use gix::{Commit, ObjectId, Repository, ThreadSafeRepository};
 
@@ -90,7 +92,24 @@ pub fn for_each_changed_file(
     trust_full: bool,
     f: impl Fn(Result<FileChange>) -> bool,
 ) -> Result<()> {
-    status(&open_repo(cwd, trust_full)?.to_thread_local(), f)
+    for_each_changed_file_in(cwd, trust_full, &[], f)
+}
+
+/// Like [`for_each_changed_file`], but only considers the given paths.
+///
+/// Paths are matched relative to the repository work tree; absolute paths are
+/// expected to be inside it. An empty slice scans the whole work tree.
+pub fn for_each_changed_file_in(
+    cwd: &Path,
+    trust_full: bool,
+    paths: &[PathBuf],
+    mut f: impl FnMut(Result<FileChange>) -> bool,
+) -> Result<()> {
+    status(
+        &open_repo(cwd, trust_full)?.to_thread_local(),
+        paths,
+        &mut f,
+    )
 }
 
 fn open_repo(path: &Path, trust_full: bool) -> Result<ThreadSafeRepository> {
@@ -145,11 +164,22 @@ fn open_repo(path: &Path, trust_full: bool) -> Result<ThreadSafeRepository> {
 }
 
 /// Emulates the result of running `git status` from the command line.
-fn status(repo: &Repository, f: impl Fn(Result<FileChange>) -> bool) -> Result<()> {
+fn status(
+    repo: &Repository,
+    paths: &[PathBuf],
+    f: &mut impl FnMut(Result<FileChange>) -> bool,
+) -> Result<()> {
     let work_dir = repo
         .workdir()
         .ok_or_else(|| anyhow::anyhow!("working tree not found"))?
         .to_path_buf();
+
+    let patterns: Vec<BString> = paths
+        .iter()
+        .filter_map(|path| path.strip_prefix(&work_dir).ok())
+        .filter(|path| !path.as_os_str().is_empty())
+        .map(|path| gix::path::try_into_bstr(path).map(|path| path.into_owned()))
+        .collect::<Result<_, _>>()?;
 
     let status_platform = repo
         .status(gix::progress::Discard)?
@@ -166,51 +196,86 @@ fn status(repo: &Repository, f: impl Fn(Result<FileChange>) -> bool) -> Result<(
             ..Default::default()
         }));
 
-    // No filtering based on path
-    let empty_patterns = vec![];
-
-    let status_iter = status_platform.into_index_worktree_iter(empty_patterns)?;
+    let status_iter = status_platform.into_iter(patterns)?;
+    let mut seen = HashSet::new();
 
     for item in status_iter {
-        let Ok(item) = item.map_err(|err| f(Err(err.into()))) else {
-            continue;
+        let item = match item {
+            Ok(item) => item,
+            Err(err) => {
+                if !f(Err(err.into())) {
+                    break;
+                }
+                continue;
+            }
         };
         let change = match item {
-            Item::Modification {
-                rela_path, status, ..
-            } => {
-                let path = work_dir.join(rela_path.to_path()?);
-                match status {
-                    EntryStatus::Conflict { .. } => FileChange::Conflict { path },
-                    EntryStatus::Change(Change::Removed) => FileChange::Deleted { path },
-                    EntryStatus::Change(Change::Modification { .. }) => {
-                        FileChange::Modified { path }
-                    }
-                    // Files marked with `git add --intent-to-add`. Such files
-                    // still show up as new in `git status`, so it's appropriate
-                    // to show them the same way as untracked files in the
-                    // "changed file" picker. One example of this being used
-                    // is Jujutsu, a Git-compatible VCS. It marks all new files
-                    // with `--intent-to-add` automatically.
-                    EntryStatus::IntentToAdd => FileChange::Untracked { path },
-                    _ => continue,
-                }
-            }
-            Item::DirectoryContents { entry, .. } if entry.status == Status::Untracked => {
-                FileChange::Untracked {
-                    path: work_dir.join(entry.rela_path.to_path()?),
-                }
-            }
-            Item::Rewrite {
-                source,
-                dirwalk_entry,
-                ..
-            } => FileChange::Renamed {
-                from_path: work_dir.join(source.rela_path().to_path()?),
-                to_path: work_dir.join(dirwalk_entry.rela_path.to_path()?),
+            Item::TreeIndex(change) => match change {
+                IndexChange::Addition { location, .. } => FileChange::Untracked {
+                    path: work_dir.join(location.to_path()?),
+                },
+                IndexChange::Deletion { location, .. } => FileChange::Deleted {
+                    path: work_dir.join(location.to_path()?),
+                },
+                IndexChange::Modification { location, .. } => FileChange::Modified {
+                    path: work_dir.join(location.to_path()?),
+                },
+                IndexChange::Rewrite {
+                    source_location,
+                    location,
+                    ..
+                } => FileChange::Renamed {
+                    from_path: work_dir.join(source_location.to_path()?),
+                    to_path: work_dir.join(location.to_path()?),
+                },
             },
-            _ => continue,
+            Item::IndexWorktree(change) => match change {
+                index_worktree::Item::Modification {
+                    rela_path, status, ..
+                } => {
+                    let path = work_dir.join(rela_path.to_path()?);
+                    match status {
+                        EntryStatus::Conflict { .. } => FileChange::Conflict { path },
+                        EntryStatus::Change(WorktreeChange::Removed) => {
+                            FileChange::Deleted { path }
+                        }
+                        EntryStatus::Change(WorktreeChange::Modification { .. }) => {
+                            FileChange::Modified { path }
+                        }
+                        // Files marked with `git add --intent-to-add`. Such files
+                        // still show up as new in `git status`, so it's appropriate
+                        // to show them the same way as untracked files in the
+                        // "changed file" picker. One example of this being used
+                        // is Jujutsu, a Git-compatible VCS. It marks all new files
+                        // with `--intent-to-add` automatically.
+                        EntryStatus::IntentToAdd => FileChange::Untracked { path },
+                        _ => continue,
+                    }
+                }
+                index_worktree::Item::DirectoryContents { entry, .. }
+                    if entry.status == Status::Untracked =>
+                {
+                    FileChange::Untracked {
+                        path: work_dir.join(entry.rela_path.to_path()?),
+                    }
+                }
+                index_worktree::Item::Rewrite {
+                    source,
+                    dirwalk_entry,
+                    ..
+                } => FileChange::Renamed {
+                    from_path: work_dir.join(source.rela_path().to_path()?),
+                    to_path: work_dir.join(dirwalk_entry.rela_path.to_path()?),
+                },
+                _ => continue,
+            },
         };
+        // A file can appear in both the index and the worktree diff (for
+        // example after staging a change and then editing it again). Report it
+        // once, matching `git status`.
+        if !seen.insert(change.path().to_path_buf()) {
+            continue;
+        }
         if !f(Ok(change)) {
             break;
         }

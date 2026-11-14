@@ -156,3 +156,114 @@ fn symlink_to_git_repo() {
     assert_eq!(git::get_diff_base(&file_link, true).unwrap(), contents);
     assert_eq!(git::get_diff_base(&file, true).unwrap(), contents);
 }
+
+#[test]
+fn changed_files_reports_modified_and_untracked() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let tracked = repo.join("tracked.txt");
+    let nested = repo.join("sub/nested.txt");
+    let untracked = repo.join("untracked.txt");
+
+    std::fs::create_dir_all(repo.join("sub")).unwrap();
+    File::create(&tracked).unwrap().write_all(b"one\n").unwrap();
+    File::create(&nested).unwrap().write_all(b"one\n").unwrap();
+    create_commit(&repo, true);
+
+    File::create(&tracked).unwrap().write_all(b"two\n").unwrap();
+    File::create(&nested).unwrap().write_all(b"two\n").unwrap();
+    File::create(&untracked)
+        .unwrap()
+        .write_all(b"new\n")
+        .unwrap();
+
+    let mut changes = Vec::new();
+    git::for_each_changed_file_in(&repo, false, &[], |change| {
+        changes.push(change.unwrap().path().to_path_buf());
+        true
+    })
+    .unwrap();
+    changes.sort();
+
+    assert_eq!(changes, vec![nested.clone(), tracked, untracked]);
+}
+
+#[test]
+fn changed_files_can_be_limited_to_paths() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let tracked = repo.join("tracked.txt");
+    let nested = repo.join("sub/nested.txt");
+    let untracked = repo.join("untracked.txt");
+
+    std::fs::create_dir_all(repo.join("sub")).unwrap();
+    File::create(&tracked).unwrap().write_all(b"one\n").unwrap();
+    File::create(&nested).unwrap().write_all(b"one\n").unwrap();
+    create_commit(&repo, true);
+
+    File::create(&tracked).unwrap().write_all(b"two\n").unwrap();
+    File::create(&nested).unwrap().write_all(b"two\n").unwrap();
+    File::create(&untracked)
+        .unwrap()
+        .write_all(b"new\n")
+        .unwrap();
+
+    let mut changes = Vec::new();
+    git::for_each_changed_file_in(&repo, false, &[repo.join("sub")], |change| {
+        changes.push(change.unwrap().path().to_path_buf());
+        true
+    })
+    .unwrap();
+
+    assert_eq!(changes, vec![nested]);
+}
+
+#[test]
+fn changed_files_reports_staged_changes() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let tracked = repo.join("tracked.txt");
+
+    File::create(&tracked).unwrap().write_all(b"one\n").unwrap();
+    create_commit(&repo, true);
+
+    File::create(&tracked).unwrap().write_all(b"two\n").unwrap();
+    exec_git_cmd("add tracked.txt", &repo);
+    // Leave the worktree matching the index so the change is staged only.
+    File::create(&tracked).unwrap().write_all(b"two\n").unwrap();
+
+    let mut changes = Vec::new();
+    git::for_each_changed_file_in(&repo, false, &[], |change| {
+        changes.push(change.unwrap().path().to_path_buf());
+        true
+    })
+    .unwrap();
+
+    assert_eq!(changes, vec![tracked]);
+}
+
+#[test]
+fn changed_files_reports_staged_and_unstaged_changes_once() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let tracked = repo.join("tracked.txt");
+
+    File::create(&tracked).unwrap().write_all(b"one\n").unwrap();
+    create_commit(&repo, true);
+
+    File::create(&tracked).unwrap().write_all(b"two\n").unwrap();
+    exec_git_cmd("add tracked.txt", &repo);
+    File::create(&tracked)
+        .unwrap()
+        .write_all(b"three\n")
+        .unwrap();
+
+    let mut changes = Vec::new();
+    git::for_each_changed_file_in(&repo, false, &[], |change| {
+        changes.push(change.unwrap().path().to_path_buf());
+        true
+    })
+    .unwrap();
+
+    assert_eq!(changes, vec![tracked]);
+}

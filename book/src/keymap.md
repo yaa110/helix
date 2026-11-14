@@ -418,7 +418,8 @@ selected row is too long; use `Space` `<` / `Space` `>` to scroll.
 Selection is shown with the row background only; tree names stay regular (not
 bold), and the sidebar border keeps its normal color when focused. Themes can
 override the selection with `ui.tree.selected.focused` and
-`ui.tree.selected.unfocused`.
+`ui.tree.selected.unfocused`. Git-changed files and their parent directories use
+the theme's `special` accent; set `ui.tree.dirty` to override just the tree.
 
 ##### Popup
 

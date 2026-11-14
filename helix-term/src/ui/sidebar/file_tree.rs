@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -11,7 +10,7 @@ use helix_core::unicode::width::{UnicodeWidthChar, UnicodeWidthStr};
 use helix_core::Position;
 use helix_view::document::Mode;
 use helix_view::editor::Action;
-use helix_view::graphics::{CursorKind, Modifier, Rect};
+use helix_view::graphics::{CursorKind, Modifier, Rect, Style};
 use helix_view::info::Info;
 use helix_view::input::{KeyEvent, MouseEventKind};
 use helix_view::keyboard::{KeyCode, KeyModifiers};
@@ -453,15 +452,10 @@ impl FileTree {
             return;
         }
 
-        let workspace = helix_loader::find_workspace_in(&root).0;
-        let trusted = editor
-            .workspace_trust
-            .query(&workspace, helix_loader::workspace_trust::TrustQuery::Git)
-            .is_trusted();
-        if !trusted {
-            self.git_status.clear();
-            return;
-        }
+        // The status scan runs through `helix-vcs`, which opens the repository
+        // in reduced-trust mode. Repository-local filter drivers and hooks are
+        // not executed, so tree coloring does not need an explicit Git trust
+        // grant (unlike diff providers, which may honor local git config).
 
         // When the watcher told us what changed, refresh only those paths.
         // Otherwise fall back to a full workspace status scan.
@@ -825,17 +819,9 @@ impl FileTree {
             } else {
                 text_style
             };
-            let mut dirty = false;
-            if let Some(status) = self.git_status.get(&row.path) {
-                dirty = true;
-                let dirty = match status {
-                    GitFileStatus::Untracked => theme.get("diff.plus"),
-                    GitFileStatus::Modified => theme.get("diff.delta"),
-                    GitFileStatus::Conflict => theme.get("diff.delta.conflict"),
-                    GitFileStatus::Renamed => theme.get("diff.delta.moved"),
-                    GitFileStatus::Deleted => theme.get("diff.minus"),
-                };
-                style = style.patch(dirty);
+            let dirty = self.git_status.contains_key(&row.path);
+            if dirty {
+                style = style.patch(dirty_style(theme));
             }
             if !dirty && self.ignored_paths.contains(&row.path) {
                 style = style.patch(theme.get("ui.tree.ignored"));
@@ -2191,68 +2177,62 @@ impl FileTree {
     }
 }
 
+fn dirty_style(theme: &helix_view::theme::Theme) -> Style {
+    theme
+        .try_get_exact("ui.tree.dirty")
+        .unwrap_or_else(|| theme.get("special"))
+}
+
 fn load_git_status(root: &Path, paths: &[PathBuf]) -> HashMap<PathBuf, GitFileStatus> {
-    let mut command = Command::new("git");
-    command
-        .arg("-C")
-        .arg(root)
-        .args(["status", "--porcelain=v1", "--untracked-files=all"]);
-    if !paths.is_empty() {
-        command.arg("--");
-        for path in paths {
-            let relative = path.strip_prefix(root).unwrap_or(path);
-            command.arg(if relative.as_os_str().is_empty() {
-                Path::new(".")
-            } else {
-                relative
-            });
-        }
-    }
-    let output = command.output();
-    let Ok(output) = output else {
-        return HashMap::new();
-    };
-    if !output.status.success() {
-        return HashMap::new();
-    }
-
     let mut statuses = HashMap::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        if line.len() < 4 {
-            continue;
-        }
-        let code = &line[..2];
-        let rest = &line[3..];
-        let path = if code.starts_with('R') || code.starts_with('C') {
-            rest.rsplit(" -> ").next().unwrap_or(rest)
-        } else {
-            rest
-        };
-        let path = path.trim_matches('"');
-        let path = root.join(path);
-        let status = if code.contains('U') || matches!(code, "AA" | "DD") {
-            GitFileStatus::Conflict
-        } else if code == "??" || code.starts_with('A') {
-            GitFileStatus::Untracked
-        } else if code.starts_with('R') {
-            GitFileStatus::Renamed
-        } else if code.contains('D') {
-            GitFileStatus::Deleted
-        } else {
-            GitFileStatus::Modified
-        };
-        statuses.insert(path.clone(), status);
-
-        let mut parent = path.parent();
-        while let Some(dir) = parent {
-            if dir == root || !dir.starts_with(root) {
-                break;
+    #[cfg(feature = "git")]
+    {
+        // `helix-vcs` opens the repository with reduced trust, so local
+        // filter drivers and other executable git configuration are ignored.
+        // Tree status is therefore safe in workspaces that have not been
+        // granted the full Git trust required by diff providers.
+        let _ = helix_vcs::for_each_changed_file_in(root, false, paths, |change| {
+            let Ok(change) = change else {
+                return true;
+            };
+            let path = change.path().to_path_buf();
+            if !path.starts_with(root) {
+                return true;
             }
-            statuses.entry(dir.to_path_buf()).or_insert(status);
-            parent = dir.parent();
-        }
+            let status = match change {
+                helix_vcs::FileChange::Untracked { .. } => GitFileStatus::Untracked,
+                helix_vcs::FileChange::Modified { .. } => GitFileStatus::Modified,
+                helix_vcs::FileChange::Conflict { .. } => GitFileStatus::Conflict,
+                helix_vcs::FileChange::Deleted { .. } => GitFileStatus::Deleted,
+                helix_vcs::FileChange::Renamed { .. } => GitFileStatus::Renamed,
+            };
+            insert_git_status(&mut statuses, root, path, status);
+            true
+        });
     }
+    #[cfg(not(feature = "git"))]
+    let _ = (root, paths);
     statuses
+}
+
+fn insert_git_status(
+    statuses: &mut HashMap<PathBuf, GitFileStatus>,
+    root: &Path,
+    path: PathBuf,
+    status: GitFileStatus,
+) {
+    statuses.insert(path.clone(), status);
+
+    // Keep parent directories visible in the dirty-only view. Their style
+    // uses the same accent as the dirty files they contain.
+    let mut parent = path.parent();
+    while let Some(dir) = parent {
+        if dir == root || !dir.starts_with(root) {
+            break;
+        }
+        statuses.entry(dir.to_path_buf()).or_insert(status);
+        parent = dir.parent();
+    }
 }
 
 fn is_search_word_sep(c: char) -> bool {
@@ -2643,5 +2623,127 @@ mod tree_tests {
         assert!(paths.contains(&Path::new("/repo/src")));
         assert!(paths.contains(&Path::new("/repo/src/needle.rs")));
         assert!(!paths.contains(&Path::new("/repo/README.md")));
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn git_status_includes_parent_directories() {
+        fn git(dir: &Path, args: &[&str]) {
+            let status = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(args)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?} failed");
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git(root, &["init", "-q"]);
+        git(root, &["config", "user.email", "test@example.com"]);
+        git(root, &["config", "user.name", "Test"]);
+        std::fs::create_dir(root.join("sub")).unwrap();
+        std::fs::write(root.join("modified.txt"), "one\n").unwrap();
+        std::fs::write(root.join("sub/nested.txt"), "one\n").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-qm", "init"]);
+
+        std::fs::write(root.join("modified.txt"), "two\n").unwrap();
+        std::fs::write(root.join("sub/nested.txt"), "two\n").unwrap();
+        std::fs::write(root.join("untracked.txt"), "new\n").unwrap();
+
+        let statuses = load_git_status(root, &[]);
+
+        assert_eq!(
+            statuses.get(&root.join("modified.txt")),
+            Some(&GitFileStatus::Modified)
+        );
+        assert_eq!(
+            statuses.get(&root.join("sub")),
+            Some(&GitFileStatus::Modified)
+        );
+        assert_eq!(
+            statuses.get(&root.join("untracked.txt")),
+            Some(&GitFileStatus::Untracked)
+        );
+    }
+
+    #[test]
+    fn dirty_only_view_keeps_changed_rows_and_parents() {
+        let root = PathBuf::from("/repo");
+        let mut tree = FileTree::new(root.clone());
+        tree.dirty_only = true;
+        tree.git_status
+            .insert(PathBuf::from("/repo/src"), GitFileStatus::Modified);
+        tree.git_status
+            .insert(PathBuf::from("/repo/src/main.rs"), GitFileStatus::Modified);
+        tree.git_status.insert(
+            PathBuf::from("/repo/untracked.txt"),
+            GitFileStatus::Untracked,
+        );
+
+        tree.rebuild_with(&root, &HashSet::from([PathBuf::from("/repo/src")]), |dir| {
+            Ok(match dir {
+                _ if dir == Path::new("/repo") => vec![
+                    (PathBuf::from("/repo/src"), true),
+                    (PathBuf::from("/repo/clean.txt"), false),
+                    (PathBuf::from("/repo/untracked.txt"), false),
+                ],
+                _ if dir == Path::new("/repo/src") => {
+                    vec![(PathBuf::from("/repo/src/main.rs"), false)]
+                }
+                _ => Vec::new(),
+            })
+        });
+
+        let paths: Vec<_> = tree.rows.iter().map(|row| row.path.as_path()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                Path::new("/repo/src"),
+                Path::new("/repo/src/main.rs"),
+                Path::new("/repo/untracked.txt")
+            ]
+        );
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn git_status_reports_staged_dirty_files() {
+        fn git(dir: &Path, args: &[&str]) {
+            let status = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(args)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?} failed");
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git(root, &["init", "-q"]);
+        git(root, &["config", "user.email", "test@example.com"]);
+        git(root, &["config", "user.name", "Test"]);
+        std::fs::write(root.join("staged.txt"), "one\n").unwrap();
+        git(root, &["add", "staged.txt"]);
+        git(root, &["commit", "-qm", "init"]);
+        std::fs::write(root.join("staged.txt"), "two\n").unwrap();
+        git(root, &["add", "staged.txt"]);
+        std::fs::write(root.join("staged.txt"), "two\n").unwrap();
+
+        let statuses = load_git_status(root, &[]);
+        assert_eq!(
+            statuses.get(&root.join("staged.txt")),
+            Some(&GitFileStatus::Modified)
+        );
+    }
+
+    #[test]
+    fn dirty_rows_fall_back_to_the_accent_style() {
+        let theme = &*helix_view::theme::DEFAULT_THEME;
+        assert_eq!(dirty_style(theme).fg, theme.get("special").fg);
+        assert!(dirty_style(theme).fg.is_some());
     }
 }

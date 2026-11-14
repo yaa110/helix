@@ -1566,8 +1566,8 @@ letters! that is not good grammar. you can fix this.
  create/rename (a / A / r), mark items (t, V clears), copy/cut/
  paste (c / m / p), move to trash (d), undo filesystem changes (u),
  toggle ignored files (I), copy paths (y / Y), show dirty files
- only (D), or reveal the current buffer (.). Git status is shown by
- color and refreshed in the background.
+ only (D), or reveal the current buffer (.). Git status is shown
+ in the theme's accent color and refreshed in the background.
 
  14.2 GLOBAL SEARCH AND REPLACE
 
