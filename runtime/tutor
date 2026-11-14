@@ -1559,7 +1559,8 @@ letters! that is not good grammar. you can fix this.
  Type / to fuzzy-search files in the workspace. While editing the
  query, Enter finishes editing but keeps the filtered rows; press
  / again to resume editing the same query. Cmd/Alt-Backspace or
- Cmd/Alt-Delete clears the query. Type gw for jump labels.
+ Cmd/Alt-Delete clears the query. Type gw for jump labels. Press
+ < / > to scroll long tree rows left / right.
 
  Press Space in the tree for actions: open in splits (s / v),
  create/rename (a / A / r), mark items (t, V clears), copy/cut/

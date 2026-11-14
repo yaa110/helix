@@ -1636,6 +1636,14 @@ impl FileTree {
                 self.sync_selection(cx);
                 true
             }
+            KeyCode::Char('<') => {
+                self.horizontal_scroll = self.horizontal_scroll.saturating_sub(4);
+                true
+            }
+            KeyCode::Char('>') => {
+                self.horizontal_scroll = self.horizontal_scroll.saturating_add(4);
+                true
+            }
             KeyCode::Enter => {
                 self.open_selected(cx, Action::Replace);
                 self.sync_selection(cx);
@@ -1946,7 +1954,6 @@ impl FileTree {
             (".", "Reveal current buffer"),
             ("H / R", "Collapse all / refresh"),
             ("[ / ]", "Shrink / grow sidebar"),
-            ("< / >", "Scroll tree left / right"),
             ("/", "Open global search"),
             ("b", "Hide sidebar"),
             (":", "Open command line"),
@@ -2112,12 +2119,6 @@ impl FileTree {
                 let config = cx.editor.config().sidebar;
                 cx.editor.sidebar.width = (cx.editor.sidebar.width + 2).min(config.max_width);
                 cx.editor.save_ui_state();
-            }
-            KeyCode::Char('<') => {
-                self.horizontal_scroll = self.horizontal_scroll.saturating_sub(4);
-            }
-            KeyCode::Char('>') => {
-                self.horizontal_scroll = self.horizontal_scroll.saturating_add(4);
             }
             _ => {}
         }
