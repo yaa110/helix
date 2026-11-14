@@ -370,11 +370,43 @@ impl FileTree {
             }
         }
 
-        let mut rows = Vec::new();
-        // Only filter rows that are already loaded. Recursively walking the
-        // whole workspace on every keystroke can include `.git`, `target`, and
-        // huge grammar caches and makes the UI unresponsive.
-        push_dir(&mut rows, root, 0, expanded, &list);
+        // Dirty-only mode is a flat list of every dirty file, including files
+        // that live in collapsed directories. Build it from the status map
+        // instead of the expanded tree so nothing is hidden.
+        let mut rows = if self.dirty_only {
+            // Only report paths that are not ancestors of another dirty path.
+            // Those ancestors are directories added for normal tree coloring;
+            // the dirty-only view is a flat list of files.
+            let dirty_files: Vec<PathBuf> = self
+                .git_status
+                .keys()
+                .filter(|path| {
+                    !self
+                        .git_status
+                        .keys()
+                        .any(|other| other != *path && other.starts_with(*path))
+                })
+                .cloned()
+                .collect();
+            let mut rows: Vec<Row> = dirty_files
+                .into_iter()
+                .map(|path| Row {
+                    path,
+                    depth: 0,
+                    kind: EntryKind::File,
+                    expanded: false,
+                })
+                .collect();
+            rows.sort_by(|a, b| a.path.cmp(&b.path));
+            rows
+        } else {
+            let mut rows = Vec::new();
+            // Only filter rows that are already loaded. Recursively walking the
+            // whole workspace on every keystroke can include `.git`, `target`, and
+            // huge grammar caches and makes the UI unresponsive.
+            push_dir(&mut rows, root, 0, expanded, &list);
+            rows
+        };
         self.mark_ignored(&rows);
         if !self.filter.is_empty() || !self.show_ignored {
             rows.retain(|row| !self.ignored_paths.contains(&row.path));
@@ -545,7 +577,7 @@ impl FileTree {
         self.clamp_scroll();
     }
 
-    fn row_text(&self, row: &Row, index: usize) -> (String, Option<String>, String, String, String) {
+    fn row_text(&self, row: &Row, index: usize) -> (String, Option<String>, String, String) {
         let marker = match row.kind {
             EntryKind::Dir if row.expanded => "▾",
             EntryKind::Dir => "▸",
@@ -576,16 +608,14 @@ impl FileTree {
         let mark = if self.marked.contains(&row.path) {
             "● "
         } else {
-            "  "
+            ""
         };
-        // Keep the selection marker before the indentation guides so the
-        // guides line up under the parent directory's arrow.
-        let rest = format!("{marker} {name}");
+        let rest = format!("{mark}{marker} {name}");
         let text = match &label_prefix {
-            Some(label) => format!("{label}{mark}{indent}{rest}"),
-            None => format!("{mark}{indent}{rest}"),
+            Some(label) => format!("{label}{indent}{rest}"),
+            None => format!("{indent}{rest}"),
         };
-        (text, label_prefix, mark.to_string(), indent, rest)
+        (text, label_prefix, indent, rest)
     }
 
     fn max_visible_width(&self, height: usize) -> usize {
@@ -819,7 +849,7 @@ impl FileTree {
         self.clamp_horizontal_scroll(height);
         for (offset, row) in self.rows.iter().skip(self.scroll).take(height).enumerate() {
             let index = self.scroll + offset;
-            let (text, label_prefix, mark, indent, rest) = self.row_text(row, index);
+            let (text, label_prefix, indent, rest) = self.row_text(row, index);
             // Keep the selected row visible even when the editor owns focus,
             // so it is clear which file is currently open.
             let mut style = if index == self.cursor {
@@ -863,9 +893,6 @@ impl FileTree {
                 if let Some(label) = &label_prefix {
                     x = surface.set_stringn(x, y, label, content_width, style).0;
                 }
-                x = surface
-                    .set_stringn(x, y, &mark, content_width.saturating_sub((x - content_x) as usize), style)
-                    .0;
                 x = surface
                     .set_stringn(
                         x,
