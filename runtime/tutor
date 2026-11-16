@@ -1604,9 +1604,15 @@ letters! that is not good grammar. you can fix this.
                   session, and buffer/LSP details)
    space x / X    close current buffer / close other buffers
 
- For a read-only git diff of the current file (HEAD), run the
- static command "Show git diff for the current file" from the
- command palette.
+ Type space m to open a side-by-side diff of the current file with
+ unchanged context lines. It uses diff colors only, without syntax
+ highlighting. Press t to toggle between uncommitted changes (vs
+ HEAD) and branch changes (vs the merge-base with the default
+ branch). Use j / k to scroll, h / l to scroll horizontally, and q
+ or Esc to close.
+
+ The command palette's "Show git diff for the current file" opens
+ the older read-only unified diff.
 
  14.5 LSP PEEKS, LENSES, AND INLINE COMPLETIONS
 
