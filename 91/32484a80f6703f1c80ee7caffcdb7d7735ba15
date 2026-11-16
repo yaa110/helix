@@ -1,0 +1,34 @@
+README.md
+  h_20fc4d483d1064 51-52
+helix-term/src/commands.rs
+  h_20fc4d483d1064 420-421,3831-3836,3838
+helix-term/src/keymap.rs
+  h_20fc4d483d1064 632-639
+helix-term/src/keymap/default.rs
+  h_20fc4d483d1064 237
+helix-term/src/search.rs
+  h_20fc4d483d1064 202-220,550-573
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 734
+helix-view/src/editor.rs
+  h_20fc4d483d1064 253,267,3019-3028
+helix-view/src/sidebar.rs
+  h_20fc4d483d1064 115-134,177-215
+helix-view/src/theme.rs
+  h_20fc4d483d1064 687-709
+runtime/themes/monokai_community_filter_spectrum.toml
+  h_20fc4d483d1064 141-142
+runtime/tutor
+  h_20fc4d483d1064 1555-1556,1559-1562,1581-1582
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9132484a80f6703f1c80ee7caffcdb7d7735ba15",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
