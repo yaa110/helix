@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use helix_core::Rope;
 use helix_event::RenderLockGuard;
-use imara_diff::Algorithm;
+use imara_diff::{Algorithm, InternedInput};
 use parking_lot::{RwLock, RwLockReadGuard};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -15,6 +15,16 @@ pub use imara_diff::Hunk;
 
 mod line_cache;
 mod worker;
+
+/// Compute the line-level hunks needed to transform `before` into `after`.
+///
+/// The returned hunks are in ascending order and use zero-based line offsets.
+pub fn line_hunks(before: &str, after: &str) -> Vec<Hunk> {
+    let input = InternedInput::new(before, after);
+    let mut diff = imara_diff::Diff::compute(Algorithm::Histogram, &input);
+    diff.postprocess_lines(&input);
+    diff.hunks().collect()
+}
 
 /// A rendering lock passed to the differ the prevents redraws from occurring
 struct RenderLock {

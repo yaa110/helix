@@ -91,6 +91,8 @@
 "diff.plus.gutter" = "green"
 "diff.delta.gutter" = "orange"
 "diff.minus.gutter" = "red"
+"diff.plus.line" = { bg = "#1e3a2a" }
+"diff.minus.line" = { bg = "#3d1c2e" }
 
 # make diagnostic underlined, to distinguish with selection text.
 "diagnostic.warning" = { underline = { color = "orange", style = "curl" } }

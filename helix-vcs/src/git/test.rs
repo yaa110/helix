@@ -267,3 +267,118 @@ fn changed_files_reports_staged_and_unstaged_changes_once() {
 
     assert_eq!(changes, vec![tracked]);
 }
+
+#[test]
+fn diff_base_for_untracked_file_is_empty() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let tracked = repo.join("tracked.txt");
+    File::create(&tracked)
+        .unwrap()
+        .write_all(b"base\n")
+        .unwrap();
+    create_commit(&repo, true);
+
+    let untracked = repo.join("new.txt");
+    File::create(&untracked)
+        .unwrap()
+        .write_all(b"new\n")
+        .unwrap();
+
+    let base = git::get_diff_base_for(&untracked, crate::DiffTarget::Head, true).unwrap();
+    assert!(base.contents.is_empty());
+}
+
+#[test]
+fn diff_base_for_default_branch_uses_merge_base() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let file = repo.join("file.txt");
+    File::create(&file).unwrap().write_all(b"base\n").unwrap();
+    create_commit(&repo, true);
+
+    exec_git_cmd("checkout -b feature", &repo);
+    File::create(&file)
+        .unwrap()
+        .write_all(b"feature\n")
+        .unwrap();
+    create_commit(&repo, true);
+    File::create(&file)
+        .unwrap()
+        .write_all(b"worktree\n")
+        .unwrap();
+
+    let head = git::get_diff_base_for(&file, crate::DiffTarget::Head, true).unwrap();
+    assert_eq!(head.contents, b"feature\n");
+    assert_eq!(head.label, "HEAD");
+
+    let branch = git::get_diff_base_for(&file, crate::DiffTarget::DefaultBranch, true).unwrap();
+    assert_eq!(branch.contents, b"base\n");
+    assert!(
+        branch.label.starts_with("main @ merge-base "),
+        "{}",
+        branch.label
+    );
+}
+
+#[test]
+fn diff_base_prefers_remote_head() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let file = repo.join("file.txt");
+    File::create(&file).unwrap().write_all(b"base\n").unwrap();
+    create_commit(&repo, true);
+
+    exec_git_cmd("remote add origin https://example.invalid/repo.git", &repo);
+    exec_git_cmd("update-ref refs/remotes/origin/main main", &repo);
+    exec_git_cmd(
+        "symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main",
+        &repo,
+    );
+
+    exec_git_cmd("checkout -b feature", &repo);
+    File::create(&file)
+        .unwrap()
+        .write_all(b"feature\n")
+        .unwrap();
+    create_commit(&repo, true);
+
+    let branch = git::get_diff_base_for(&file, crate::DiffTarget::DefaultBranch, true).unwrap();
+    assert_eq!(branch.contents, b"base\n");
+    assert!(
+        branch.label.starts_with("origin/main @ merge-base "),
+        "{}",
+        branch.label
+    );
+}
+
+#[test]
+fn diff_base_falls_back_when_remote_head_is_stale() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path().canonicalize().unwrap();
+    let file = repo.join("file.txt");
+    File::create(&file).unwrap().write_all(b"base\n").unwrap();
+    create_commit(&repo, true);
+
+    exec_git_cmd("remote add origin https://example.invalid/repo.git", &repo);
+    exec_git_cmd("update-ref refs/remotes/origin/main main", &repo);
+    exec_git_cmd(
+        "symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/deleted",
+        &repo,
+    );
+
+    exec_git_cmd("checkout -b feature", &repo);
+    File::create(&file)
+        .unwrap()
+        .write_all(b"feature\n")
+        .unwrap();
+    create_commit(&repo, true);
+
+    let branch = git::get_diff_base_for(&file, crate::DiffTarget::DefaultBranch, true).unwrap();
+    assert_eq!(branch.contents, b"base\n");
+    assert!(
+        branch.label.starts_with("origin/main @ merge-base "),
+        "{}",
+        branch.label
+    );
+}

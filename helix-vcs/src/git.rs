@@ -19,7 +19,7 @@ use gix::status::{
 };
 use gix::{Commit, ObjectId, Repository, ThreadSafeRepository};
 
-use crate::FileChange;
+use crate::{DiffBase, DiffTarget, FileChange};
 
 #[cfg(test)]
 mod test;
@@ -41,7 +41,50 @@ pub fn get_diff_base(file: &Path, trust_full: bool) -> Result<Vec<u8>> {
         .context("failed to open git repo")?
         .to_thread_local();
     let head = repo.head_commit()?;
-    let file_oid = find_file_in_commit(&repo, &head, &file)?;
+    read_file_content(&repo, &head, &file)?.context("file is untracked")
+}
+
+/// Read the left-hand side of a diff for `file`.
+///
+/// `DiffTarget::DefaultBranch` compares against the merge-base of `HEAD` and
+/// the repository's default branch. Files that do not exist in the selected
+/// revision produce an empty base so that new and untracked files render as
+/// pure additions.
+pub fn get_diff_base_for(file: &Path, target: DiffTarget, trust_full: bool) -> Result<DiffBase> {
+    debug_assert!(!file.exists() || file.is_file());
+    debug_assert!(file.is_absolute());
+    let file = gix::path::realpath(file).context("resolve symlinks")?;
+
+    let repo_dir = get_repo_dir(&file)?;
+    let repo = open_repo(repo_dir, trust_full)
+        .context("failed to open git repo")?
+        .to_thread_local();
+
+    let (commit, label) = match target {
+        DiffTarget::Head => (repo.head_commit()?, "HEAD".to_string()),
+        DiffTarget::DefaultBranch => {
+            let (branch, branch_id) = resolve_default_branch(&repo)?;
+            let head = repo.head_commit()?;
+            let merge_base = repo.merge_base(head.id, branch_id)?;
+            let merge_base_id = merge_base.detach();
+            let label = format!(
+                "{} @ merge-base {}",
+                branch,
+                merge_base_id.to_hex_with_len(8)
+            );
+            (repo.find_commit(merge_base_id)?, label)
+        }
+    };
+
+    let contents = read_file_content(&repo, &commit, &file)?.unwrap_or_default();
+
+    Ok(DiffBase { contents, label })
+}
+
+fn read_file_content(repo: &Repository, commit: &Commit, file: &Path) -> Result<Option<Vec<u8>>> {
+    let Some(file_oid) = find_file_in_commit(repo, commit, file)? else {
+        return Ok(None);
+    };
 
     let file_object = repo.find_object(file_oid)?;
     let data = file_object.detach().data;
@@ -61,10 +104,70 @@ pub fn get_diff_base(file: &Path, trust_full: bool) -> Result<Vec<u8>> {
             pipeline.convert_to_worktree(&data, rela_path.as_ref(), Delay::Forbid)?;
         let mut buf = Vec::with_capacity(data.len());
         worktree_outcome.read_to_end(&mut buf)?;
-        Ok(buf)
+        Ok(Some(buf))
     } else {
-        Ok(data)
+        Ok(Some(data))
     }
+}
+
+/// Resolve the repository's default branch, preferring the remote-tracking
+/// `HEAD` ref and falling back to common branch names.
+fn resolve_default_branch(repo: &Repository) -> Result<(String, ObjectId)> {
+    let mut remotes: Vec<String> = repo
+        .remote_names()
+        .into_iter()
+        .map(|name| name.to_string())
+        .collect();
+    remotes.sort();
+    if let Some(idx) = remotes.iter().position(|name| name == "origin") {
+        let origin = remotes.remove(idx);
+        remotes.insert(0, origin);
+    }
+
+    for remote in &remotes {
+        if let Some(found) = try_resolve_reference(repo, &format!("refs/remotes/{remote}/HEAD"))? {
+            return Ok(found);
+        }
+        for branch in ["main", "master"] {
+            if let Some(found) =
+                try_resolve_reference(repo, &format!("refs/remotes/{remote}/{branch}"))?
+            {
+                return Ok(found);
+            }
+        }
+    }
+
+    for branch in ["main", "master"] {
+        if let Some(found) = try_resolve_reference(repo, &format!("refs/heads/{branch}"))? {
+            return Ok(found);
+        }
+    }
+
+    bail!("could not determine the default branch (no origin/HEAD, main, or master)")
+}
+
+fn try_resolve_reference(repo: &Repository, name: &str) -> Result<Option<(String, ObjectId)>> {
+    let Some(mut reference) = repo.try_find_reference(name)? else {
+        return Ok(None);
+    };
+
+    // Follow symbolic refs, but bound the loop so a malformed reference cycle
+    // cannot hang the editor.
+    for _ in 0..16 {
+        let Some(next) = reference.follow() else {
+            break;
+        };
+        reference = match next {
+            Ok(next) => next,
+            Err(_) => return Ok(None),
+        };
+    }
+
+    let short_name = reference.name().shorten().to_string();
+    let Ok(commit) = reference.peel_to_commit() else {
+        return Ok(None);
+    };
+    Ok(Some((short_name, commit.id)))
 }
 
 pub fn get_current_head_name(file: &Path, trust_full: bool) -> Result<Arc<ArcSwap<Box<str>>>> {
@@ -285,19 +388,25 @@ fn status(
 }
 
 /// Finds the object that contains the contents of a file at a specific commit.
-fn find_file_in_commit(repo: &Repository, commit: &Commit, file: &Path) -> Result<ObjectId> {
+///
+/// Returns `None` if the path does not exist in the commit's tree.
+fn find_file_in_commit(
+    repo: &Repository,
+    commit: &Commit,
+    file: &Path,
+) -> Result<Option<ObjectId>> {
     let repo_dir = repo.workdir().context("repo has no worktree")?;
     let rel_path = file.strip_prefix(repo_dir)?;
     let tree = commit.tree()?;
-    let tree_entry = tree
-        .lookup_entry_by_path(rel_path)?
-        .context("file is untracked")?;
+    let Some(tree_entry) = tree.lookup_entry_by_path(rel_path)? else {
+        return Ok(None);
+    };
     match tree_entry.mode().kind() {
         // not a file, everything is new, do not show diff
         mode @ (EntryKind::Tree | EntryKind::Commit | EntryKind::Link) => {
             bail!("entry at {} is not a file but a {mode:?}", file.display())
         }
         // found a file
-        EntryKind::Blob | EntryKind::BlobExecutable => Ok(tree_entry.object_id()),
+        EntryKind::Blob | EntryKind::BlobExecutable => Ok(Some(tree_entry.object_id())),
     }
 }

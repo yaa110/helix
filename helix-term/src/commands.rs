@@ -10,7 +10,7 @@ use helix_stdx::{
     path::{self, find_paths},
     rope::{self, RopeSliceExt},
 };
-use helix_vcs::{FileChange, Hunk};
+use helix_vcs::{DiffTarget, FileChange, Hunk};
 pub use lsp::*;
 pub use syntax::*;
 use tui::{
@@ -435,6 +435,7 @@ impl MappableCommand {
         workspace_diagnostics_picker, "Open workspace diagnostic picker",
         diagnostics, "Show editor/config/session/LSP diagnostics",
         diff_current_file, "Show git diff for the current file",
+        diff_view, "Open a side-by-side diff view for the current file",
         last_picker, "Open last picker",
         insert_at_line_start, "Insert at start of line",
         insert_at_line_end, "Insert at end of line",
@@ -4163,6 +4164,63 @@ fn diff_current_file(cx: &mut Context) {
     doc.append_changes_to_history(view);
     doc.readonly = true;
     cx.editor.set_status(format!("diff {}", pathspec.display()));
+}
+
+fn diff_view(cx: &mut Context) {
+    let current = {
+        let (_, doc) = current_ref!(cx.editor);
+        doc.path().map(|path| {
+            (
+                path.to_path_buf(),
+                doc.text().to_string(),
+                doc.workspace_root().to_path_buf(),
+                doc.tab_width(),
+            )
+        })
+    };
+    let Some((path, new_text, workspace_root, tab_width)) = current else {
+        cx.editor.set_error("current buffer has no file on disk");
+        return;
+    };
+
+    let target = DiffTarget::Head;
+    let trust_full = cx
+        .editor
+        .workspace_trust
+        .query(
+            &workspace_root,
+            helix_loader::workspace_trust::TrustQuery::Git,
+        )
+        .is_trusted();
+
+    let base = match cx
+        .editor
+        .diff_providers
+        .get_diff_base_for(&path, target, trust_full)
+    {
+        Ok(base) => base,
+        Err(err) => {
+            cx.editor.set_error(format!("diff: {err}"));
+            return;
+        }
+    };
+
+    let display_path = path
+        .strip_prefix(&workspace_root)
+        .unwrap_or(&path)
+        .display()
+        .to_string();
+    let view = ui::diff_view::DiffView::new(
+        path,
+        display_path,
+        new_text,
+        target,
+        base,
+        trust_full,
+        tab_width,
+    );
+
+    cx.push_layer(Box::new(overlaid(view)));
 }
 
 fn recent_workspaces(cx: &mut Context) {

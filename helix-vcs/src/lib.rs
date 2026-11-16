@@ -14,7 +14,7 @@ mod git;
 
 mod diff;
 
-pub use diff::{DiffHandle, Hunk};
+pub use diff::{line_hunks, DiffHandle, Hunk};
 
 mod status;
 
@@ -22,6 +22,23 @@ pub use status::FileChange;
 
 #[cfg(feature = "git")]
 pub use git::for_each_changed_file_in;
+
+/// Which revision the left-hand side of the diff should be read from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiffTarget {
+    /// The repository's `HEAD` commit.
+    Head,
+    /// The merge-base between `HEAD` and the repository's default branch.
+    DefaultBranch,
+}
+
+/// The left-hand side of a diff, together with a human-readable description
+/// of the revision it was read from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiffBase {
+    pub contents: Vec<u8>,
+    pub label: String,
+}
 
 /// Contains all active diff providers. Diff providers are compiled in via features. Currently
 /// only `git` is supported.
@@ -44,6 +61,28 @@ impl DiffProviderRegistry {
                     None
                 }
             })
+    }
+
+    /// Get the left-hand side of a diff for `file`.
+    ///
+    /// Unlike [`get_diff_base`](Self::get_diff_base), a file that does not
+    /// exist in the requested revision produces an empty base instead of an
+    /// error. This lets the diff viewer show new and untracked files as pure
+    /// additions.
+    pub fn get_diff_base_for(
+        &self,
+        file: &Path,
+        target: DiffTarget,
+        trust_full: bool,
+    ) -> Result<DiffBase> {
+        let mut error = None;
+        for provider in &self.providers {
+            match provider.get_diff_base_for(file, target, trust_full) {
+                Ok(base) => return Ok(base),
+                Err(err) => error = Some(err),
+            }
+        }
+        Err(error.unwrap_or_else(|| anyhow!("no diff provider available")))
     }
 
     /// Get the current name of the current [HEAD](https://stackoverflow.com/questions/2304087/what-is-head-in-git).
@@ -114,6 +153,19 @@ impl DiffProvider {
         match self {
             #[cfg(feature = "git")]
             Self::Git => git::get_diff_base(file, trust_full),
+            Self::None => bail!("No diff support compiled in"),
+        }
+    }
+
+    fn get_diff_base_for(
+        &self,
+        file: &Path,
+        target: DiffTarget,
+        trust_full: bool,
+    ) -> Result<DiffBase> {
+        match self {
+            #[cfg(feature = "git")]
+            Self::Git => git::get_diff_base_for(file, target, trust_full),
             Self::None => bail!("No diff support compiled in"),
         }
     }

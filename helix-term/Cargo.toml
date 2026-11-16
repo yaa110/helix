@@ -61,6 +61,7 @@ futures-util = { version = "0.3", features = ["std", "async-await"], default-fea
 arc-swap.workspace = true
 termini = "1"
 indexmap = { version = "2.14", features = ["serde"] }
+unicode-segmentation.workspace = true
 
 # Logging
 log = { version = "0.4", features = ["std"] }
