@@ -1,0 +1,38 @@
+Cargo.lock
+  h_20fc4d483d1064 1205,1211,1214,1732
+helix-term/Cargo.toml
+  h_20fc4d483d1064 64
+helix-term/src/commands.rs
+  h_20fc4d483d1064 13,438,4169-4225
+helix-term/src/keymap/default.rs
+  h_20fc4d483d1064 248
+helix-term/src/ui/diff_view.rs
+  h_20fc4d483d1064 1-820
+helix-term/src/ui/mod.rs
+  h_20fc4d483d1064 2,29
+helix-vcs/Cargo.toml
+  h_20fc4d483d1064 20
+helix-vcs/src/diff.rs
+  h_20fc4d483d1064 6,19-28
+helix-vcs/src/git.rs
+  h_20fc4d483d1064 22,44-87,107,109-124,126-170,391-397,401-403,410
+helix-vcs/src/git/test.rs
+  h_20fc4d483d1064 270-384
+helix-vcs/src/lib.rs
+  h_20fc4d483d1064 17,26-42,66-87,160-172
+runtime/themes/monokai_community_filter_spectrum.toml
+  h_20fc4d483d1064 94-95
+theme.toml
+  h_20fc4d483d1064 43-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "139e16363ba8a182abbe552cce0ff8817cf6cb71",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
