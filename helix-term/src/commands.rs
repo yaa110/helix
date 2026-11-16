@@ -417,7 +417,8 @@ impl MappableCommand {
         transform_picker, "Open the searchable text-transform picker",
         close_buffer, "Close the current buffer (same as :buffer-close)",
         close_other_buffers, "Close all other buffers and their splits",
-        toggle_file_tree, "Toggle/focus the file tree sidebar",
+        focus_file_tree, "Focus the file tree sidebar",
+        toggle_file_tree, "Toggle the file tree sidebar",
         toggle_bufferline, "Toggle the buffer tab bar",
         recent_workspaces, "Open a recently used workspace",
         focus_search, "Open/focus the global search window",
@@ -3827,30 +3828,14 @@ fn close_other_buffers(cx: &mut Context) {
     cx.editor.needs_redraw = true;
 }
 
+fn focus_file_tree(cx: &mut Context) {
+    cx.editor.sidebar.focus_file_tree();
+    cx.editor.needs_redraw = true;
+    cx.editor.save_ui_state();
+}
+
 fn toggle_file_tree(cx: &mut Context) {
-    let sidebar = &mut cx.editor.sidebar;
-    match (sidebar.mode, sidebar.focus) {
-        (SidebarMode::Hidden, _) => {
-            sidebar.mode = SidebarMode::Files;
-            sidebar.focus = SidebarFocus::Sidebar;
-            sidebar.tree_search_active = false;
-        }
-        (_, SidebarFocus::Editor) => {
-            sidebar.mode = SidebarMode::Files;
-            sidebar.focus = SidebarFocus::Sidebar;
-            sidebar.tree_search_active = false;
-        }
-        (SidebarMode::Files, SidebarFocus::Sidebar) => {
-            sidebar.mode = SidebarMode::Hidden;
-            sidebar.focus = SidebarFocus::Editor;
-            sidebar.tree_search_active = false;
-        }
-        (SidebarMode::Search, SidebarFocus::Sidebar) => {
-            sidebar.mode = SidebarMode::Files;
-            sidebar.focus = SidebarFocus::Sidebar;
-            sidebar.tree_search_active = false;
-        }
-    }
+    cx.editor.sidebar.toggle_file_tree();
     cx.editor.needs_redraw = true;
     cx.editor.save_ui_state();
 }

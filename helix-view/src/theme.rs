@@ -685,6 +685,29 @@ mod tests {
     }
 
     #[test]
+    fn monokai_tree_selection_changes_when_focused() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("runtime");
+        let loader = Loader::new(&[root]);
+        let theme = loader
+            .load("monokai_community_filter_spectrum")
+            .expect("default fork theme should parse");
+
+        let focused = theme
+            .try_get_exact("ui.tree.selected.focused")
+            .expect("focused tree selection style should exist");
+        let unfocused = theme
+            .try_get_exact("ui.tree.selected.unfocused")
+            .expect("unfocused tree selection style should exist");
+        assert_ne!(
+            focused.bg, unfocused.bg,
+            "focused tree selection must be visually distinct"
+        );
+    }
+
+    #[test]
     fn monokai_community_filter_spectrum_matches_vscode_markdown() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

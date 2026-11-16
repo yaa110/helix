@@ -731,7 +731,7 @@ impl FileTree {
                 surface.set_stringn(
                     area.x,
                     search_area.y,
-                    " Press <space>b to select",
+                    " Press <space> Left to select",
                     area.width as usize,
                     muted,
                 );

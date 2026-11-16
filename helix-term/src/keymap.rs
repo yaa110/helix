@@ -629,6 +629,14 @@ is_sticky = false
             leaf(&[key!(' '), key!('x')]),
             KeyTrie::MappableCommand(MappableCommand::close_buffer)
         );
+        assert_eq!(
+            leaf(&[key!(' '), key!('b')]),
+            KeyTrie::MappableCommand(MappableCommand::toggle_file_tree)
+        );
+        assert_eq!(
+            leaf(&[key!(' '), key!(Left)]),
+            KeyTrie::MappableCommand(MappableCommand::focus_file_tree)
+        );
         let ctrl_up = KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::CONTROL,

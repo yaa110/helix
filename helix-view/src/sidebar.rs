@@ -112,6 +112,26 @@ impl SidebarState {
         self.mode != SidebarMode::Hidden
     }
 
+    /// Show the file tree and give it keyboard focus.
+    pub fn focus_file_tree(&mut self) {
+        self.mode = SidebarMode::Files;
+        self.focus = SidebarFocus::Sidebar;
+        self.tree_search_active = false;
+    }
+
+    /// Toggle file-tree visibility without moving focus into the tree.
+    /// Focusing the tree is a separate action (`<space><left>`).
+    pub fn toggle_file_tree(&mut self) {
+        if self.mode == SidebarMode::Files {
+            self.mode = SidebarMode::Hidden;
+            self.focus = SidebarFocus::Editor;
+        } else {
+            self.mode = SidebarMode::Files;
+            self.focus = SidebarFocus::Editor;
+        }
+        self.tree_search_active = false;
+    }
+
     /// Resolve the sidebar width for the current terminal, leaving at least 40
     /// columns for the editor. Returns 0 when hidden or too narrow.
     pub fn visible_width(&self, area_width: u16, config: &SidebarConfig) -> u16 {
@@ -153,5 +173,44 @@ mod tests {
         assert_eq!(state.visible_width(200, &cfg), 50);
         state.width = 1;
         assert_eq!(state.visible_width(200, &cfg), 20);
+    }
+
+    #[test]
+    fn toggling_file_tree_only_changes_visibility() {
+        let mut state = SidebarState::default();
+        assert_eq!(state.mode, SidebarMode::Hidden);
+
+        state.toggle_file_tree();
+        assert_eq!(state.mode, SidebarMode::Files);
+        assert_eq!(state.focus, SidebarFocus::Editor);
+
+        state.focus_file_tree();
+        assert_eq!(state.focus, SidebarFocus::Sidebar);
+
+        state.toggle_file_tree();
+        assert_eq!(state.mode, SidebarMode::Hidden);
+        assert_eq!(state.focus, SidebarFocus::Editor);
+    }
+
+    #[test]
+    fn toggling_visible_tree_hides_it_even_when_editor_has_focus() {
+        let mut state = SidebarState::default();
+        state.mode = SidebarMode::Files;
+        state.focus = SidebarFocus::Editor;
+
+        state.toggle_file_tree();
+        assert_eq!(state.mode, SidebarMode::Hidden);
+        assert_eq!(state.focus, SidebarFocus::Editor);
+    }
+
+    #[test]
+    fn focusing_file_tree_shows_and_focuses_it() {
+        let mut state = SidebarState::default();
+        state.mode = SidebarMode::Search;
+        state.focus = SidebarFocus::Editor;
+
+        state.focus_file_tree();
+        assert_eq!(state.mode, SidebarMode::Files);
+        assert_eq!(state.focus, SidebarFocus::Sidebar);
     }
 }

@@ -250,7 +250,7 @@ pub struct FileExplorerConfig {
     /// Enables reading `.git/info/exclude` files.
     /// Whether to hide files listed in .git/info/exclude in file picker and global search results. Defaults to false.
     pub git_exclude: bool,
-    /// Whether to flatten single-child directories in file explorer. Defaults to true.
+    /// Whether to flatten single-child directories in file explorer. Defaults to false.
     pub flatten_dirs: bool,
 }
 
@@ -264,7 +264,7 @@ impl Default for FileExplorerConfig {
             git_ignore: false,
             git_global: false,
             git_exclude: false,
-            flatten_dirs: true,
+            flatten_dirs: false,
         }
     }
 }
@@ -3015,4 +3015,14 @@ pub fn workspace_branch(root: &Path) -> Option<String> {
         .filter(|output| output.status.success())
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
         .filter(|head| !head.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileExplorerConfig;
+
+    #[test]
+    fn file_explorer_keeps_directory_hierarchy_by_default() {
+        assert!(!FileExplorerConfig::default().flatten_dirs);
+    }
 }

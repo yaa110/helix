@@ -1552,9 +1552,13 @@ letters! that is not good grammar. you can fix this.
 
  14.1 FILE TREE AND SIDEBAR
 
- Type space b to show and focus the file tree (press again from
- the editor to hide it). Move with j / k , open with Enter , and
+ Type space b to show or hide the file tree. Press space then Left
+ Arrow to focus the tree. Move with j / k , open with Enter , and
  use Ctrl-w Left / Ctrl-w Right to move between the tree and code.
+
+ The tree keeps the real directory hierarchy instead of collapsing
+ single-child parent directories, so nested paths stay visible. The
+ selected row uses a distinct background while the tree has focus.
 
  Type / to fuzzy-search files in the workspace. While editing the
  query, Enter finishes editing but keeps the filtered rows; press
@@ -1574,6 +1578,8 @@ letters! that is not good grammar. you can fix this.
  Type space / to open the floating search-and-replace window.
  It opens in results mode: press / to edit Find (existing text is
  kept), Tab to switch Find/Replace, and Enter to run the search.
+ Hidden files are included while VCS metadata directories are
+ skipped.
 
  Browse results with normal movement. Enter opens the selected
  match, r replaces the selected result (with preview/confirm), and

@@ -138,6 +138,8 @@
 "ui.tree.ignored" = { fg = "base4" }
 "ui.tree.directory" = { fg = "blue" }
 "ui.tree.selected" = { bg = "base3" }
+"ui.tree.selected.focused" = { bg = "base4" }
+"ui.tree.selected.unfocused" = { bg = "base3" }
 
 # VSCode status bar and widgets
 "ui.statusline" = { fg = "base5", bg = "base1" }

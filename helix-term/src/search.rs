@@ -199,10 +199,25 @@ pub fn spawn_search(
 
     if !capped {
         let open_paths: Vec<PathBuf> = open_docs.into_iter().map(|(path, _)| path).collect();
-        for entry in ignore::WalkBuilder::new(&root)
-            .standard_filters(true)
-            .build()
-        {
+        let mut walker = ignore::WalkBuilder::new(&root);
+        walker
+            // Hidden files (for example `.gdp/config/staging/default.yaml`)
+            // must be searchable. Keep the ignore filters enabled, but skip
+            // VCS metadata explicitly since `.git` is hidden and would
+            // otherwise be traversed now that hidden files are included.
+            .hidden(false)
+            .parents(true)
+            .ignore(true)
+            .git_ignore(true)
+            .git_global(true)
+            .git_exclude(true)
+            .filter_entry(|entry| {
+                !matches!(
+                    entry.file_name().to_str(),
+                    Some(".git" | ".pijul" | ".jj" | ".hg" | ".svn")
+                )
+            });
+        for entry in walker.build() {
             let Ok(entry) = entry else {
                 continue;
             };
@@ -531,5 +546,29 @@ mod tests {
             0
         );
         assert_eq!(std::fs::read(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn spawn_search_includes_hidden_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let hidden_dir = dir.path().join(".gdp");
+        std::fs::create_dir(&hidden_dir).unwrap();
+        let hidden_file = hidden_dir.join("nested.yaml");
+        std::fs::write(&hidden_file, "needle: value\n").unwrap();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        spawn_search(
+            dir.path().to_path_buf(),
+            "needle".to_string(),
+            SearchOptions::default(),
+            Vec::new(),
+            tx,
+            100,
+        );
+
+        let found = rx
+            .iter()
+            .any(|event| matches!(event, SearchEvent::Match(found) if found.path == hidden_file));
+        assert!(found, "hidden files must be included in global search");
     }
 }
