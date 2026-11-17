@@ -1655,6 +1655,15 @@ impl EditorView {
         editor.needs_redraw = true;
     }
 
+    fn focus_view(&mut self, editor: &mut Editor, view_id: ViewId) {
+        // Clear the completion first: `focus` commits the old view's changes, which
+        // invalidates the completion's savepoint.
+        if editor.tree.focus != view_id {
+            self.clear_completion(editor);
+        }
+        editor.focus(view_id);
+    }
+
     pub fn handle_idle_timeout(&mut self, cx: &mut commands::Context) -> EventResult {
         self.sidebar.handle_idle_timeout(cx);
         commands::lsp::update_code_lenses(cx);
@@ -1777,10 +1786,10 @@ impl EditorView {
 
             cxt.editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
             if let Some(view_id) = view_at_screen(cxt.editor, row, column) {
-                cxt.editor.focus(view_id);
+                self.focus_view(cxt.editor, view_id);
             }
             if let Some((pos, view_id)) = pos_and_view(cxt.editor, row, column, true) {
-                cxt.editor.focus(view_id);
+                self.focus_view(cxt.editor, view_id);
                 let doc_id = view!(cxt.editor, view_id).doc;
                 let doc = doc_mut!(cxt.editor, &doc_id);
                 doc.set_selection(view_id, Selection::point(pos));
@@ -1812,10 +1821,9 @@ impl EditorView {
                 editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
 
                 if let Some((pos, view_id)) = pos_and_view(editor, row, column, true) {
-                    editor.focus(view_id);
+                    self.focus_view(editor, view_id);
                     editor.sidebar.focus = helix_view::sidebar::SidebarFocus::Editor;
 
-                    let prev_view_id = view!(editor).id;
                     let doc = doc_mut!(editor, &view!(editor, view_id).doc);
 
                     if modifiers == KeyModifiers::ALT {
@@ -1834,17 +1842,13 @@ impl EditorView {
                         doc.set_selection(view_id, Selection::point(pos));
                     }
 
-                    if view_id != prev_view_id {
-                        self.clear_completion(editor);
-                    }
-
                     editor.ensure_cursor_in_view(view_id);
 
                     return EventResult::Consumed(None);
                 }
 
                 if let Some((coords, view_id)) = gutter_coords_and_view(editor, row, column) {
-                    editor.focus(view_id);
+                    self.focus_view(editor, view_id);
 
                     let (view, doc) = current!(cxt.editor);
 
@@ -1945,7 +1949,7 @@ impl EditorView {
 
             MouseEventKind::Up(MouseButton::Right) => {
                 if let Some((pos, view_id)) = gutter_coords_and_view(cxt.editor, row, column) {
-                    cxt.editor.focus(view_id);
+                    self.focus_view(cxt.editor, view_id);
 
                     if let Some((pos, _)) = pos_and_view(cxt.editor, row, column, true) {
                         doc_mut!(cxt.editor).set_selection(view_id, Selection::point(pos));
@@ -1988,7 +1992,7 @@ impl EditorView {
                 if let Some((pos, view_id)) = pos_and_view(editor, row, column, true) {
                     let doc = doc_mut!(editor, &view!(editor, view_id).doc);
                     doc.set_selection(view_id, Selection::point(pos));
-                    cxt.editor.focus(view_id);
+                    self.focus_view(cxt.editor, view_id);
 
                     commands::paste(
                         cxt.editor,
