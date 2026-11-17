@@ -1184,7 +1184,7 @@ fn request_single_impl<P, F>(
                                 .map(|location_link| {
                                     lsp::Location::new(
                                         location_link.target_uri,
-                                        location_link.target_range,
+                                        location_link.target_selection_range,
                                     )
                                 })
                                 .flat_map(|location| {
