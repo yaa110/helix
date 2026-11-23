@@ -1,0 +1,16 @@
+book/src/editor.md
+  h_20fc4d483d1064 47
+helix-view/src/editor.rs
+  h_20fc4d483d1064 1294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e16c05a66f757278a52577efa4be2142d4480c52",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
