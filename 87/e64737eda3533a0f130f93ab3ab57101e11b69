@@ -1,0 +1,14 @@
+helix-term/src/ui/editor.rs
+  h_20fc4d483d1064 1658-1666,1789,1792,1824,1851,1952,1995
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "87e64737eda3533a0f130f93ab3ab57101e11b69",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
