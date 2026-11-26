@@ -1,0 +1,18 @@
+book/src/keymap.md
+  h_20fc4d483d1064 379
+helix-term/src/ui/sidebar/file_tree.rs
+  h_20fc4d483d1064 1985-1986,2050,2059-2063
+helix-term/tests/test/sidebar.rs
+  h_20fc4d483d1064 86-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dc22eaff615ced959c33e2a07dc612ffb4bfe39d",
+  "prompts": {},
+  "humans": {
+    "h_20fc4d483d1064": {
+      "author": "Navid <3187511+yaa110@users.noreply.github.com>"
+    }
+  }
+}
