@@ -84,6 +84,24 @@ async fn tree_navigation_opens_files_and_moves_focus() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn space_right_returns_focus_to_editor() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir(dir.path().join("sub"))?;
+    let mut app = helpers::AppBuilder::new().build()?;
+    app.editor.workspace_root = dir.path().to_path_buf();
+
+    helpers::send_keys(&mut app, "<space><left>").await?;
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Sidebar);
+    assert_eq!(app.sidebar_row_paths(), vec![dir.path().join("sub")]);
+
+    helpers::send_keys(&mut app, "<space><right>").await?;
+
+    assert_eq!(app.editor.sidebar.focus, SidebarFocus::Editor);
+    assert!(app.editor.sidebar.expanded.is_empty());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn inline_completion_snippet_accepts_with_tab() -> anyhow::Result<()> {
     let mut config = helpers::test_config();
     config.editor.inline_completion.snippets = vec![helix_view::editor::InlineCompletionSnippet {

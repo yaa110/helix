@@ -1982,7 +1982,8 @@ impl FileTree {
             ("j, Down", "Move down"),
             ("k, Up", "Move up"),
             ("h, Left", "Collapse or go to parent"),
-            ("l, Right", "Expand or open"),
+            ("l", "Expand or open"),
+            ("Right", "Focus the editor"),
             ("g / G", "First / last row"),
             ("J / K", "Move ten rows"),
             ("Enter, o", "Open"),
@@ -2046,7 +2047,7 @@ impl FileTree {
             KeyCode::Char('k') | KeyCode::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
             }
-            KeyCode::Char('l') | KeyCode::Right => {
+            KeyCode::Char('l') => {
                 if let Some(row) = self.selected_row().cloned() {
                     if row.kind == EntryKind::Dir && !row.expanded {
                         self.toggle_expand(cx);
@@ -2054,6 +2055,11 @@ impl FileTree {
                         self.open_selected(cx, Action::Replace);
                     }
                 }
+            }
+            KeyCode::Right => {
+                self.leave_command_mode(cx);
+                self.focus_editor(cx);
+                return true;
             }
             KeyCode::Char('h') | KeyCode::Left => self.collapse_or_parent(cx),
             KeyCode::Enter | KeyCode::Char('o') => self.open_selected(cx, Action::Replace),

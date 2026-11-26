@@ -376,6 +376,7 @@ which-key-style hint box.
 | -----             | -----------                                      |
 | `j`, `k`          | Move down / up                                   |
 | `h`, `l`          | Collapse / expand                                |
+| `Right`           | Focus the editor (leave the tree)                |
 | `Enter`, `o`      | Open the file                                    |
 | `s`, `v`          | Open in a horizontal / vertical split            |
 | `a`, `A`          | Create a file / directory                        |
